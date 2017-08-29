@@ -82,7 +82,7 @@
 #pragma comment(lib, "ws2_32.lib")
 
 char* recvbuf;
-int r = 0;
+
 class Sport {
 public:
 	Sport();
