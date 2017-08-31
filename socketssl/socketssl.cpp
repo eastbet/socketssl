@@ -1605,7 +1605,7 @@ void getEvents(time_t sec,int days) {
 
 			if(events[i].id<MAX_EVENTS) events_id[events[i].id] = &events[i]; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEvents%d\r\n", events[i].id);
 			
-		/*	if ((events[i].booked == 2 && booked_num<100) && (events[i].sport_id == 19 || events[i].sport_id == 2 || events[i].sport_id == 32 || events[i].sport_id == 22 || events[i].sport_id == 1|| events[i].sport_id == 4 || events[i].sport_id == 5 || events[i].sport_id == 3)) {postBooked(events[i].id); booked_num++;}*/
+	//	if ((events[i].booked == 2 && booked_num<10 && events[i].start_time>time(nullptr)) && (events[i].sport_id == 21 || events[i].sport_id == 1)) {postBooked(events[i].id); booked_num++;}
 
 			i++;
 
@@ -3508,7 +3508,7 @@ static void run(amqp_connection_state_t conn)
 	char* buf = new char[MAX_PATH];
 	char set_scores[1024];
 	char* maxbuf = new char[1000000];
-	Event* _event;
+	Event* _event=new Event();
 	int i = 0;
 	int k = 0;
 	int j = 0;
@@ -3591,7 +3591,7 @@ static void run(amqp_connection_state_t conn)
 						tournaments[tournaments_l].race = 0;
 						if (getTournament(&tournaments[tournaments_l]) == -1) { std::printf("ERROR!\r\nTournaments season id not found in run %d\r\n", event_id); continue; }
 						else {
-							if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\Tournaments season id not found after succes in getTournament run %d\r\n", event_id); continue; }
+							if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournaments season id not found after succes in getTournament run %d\r\n", event_id); continue; }
 							tournaments_l++; std::printf("fixture_change succes for tournamnet season id=%d\r\n",event_id);
 						}
 						} else if (getTournament(seasons_id[event_id]) == -1) { std::printf("ERROR!\r\n getTournament in fixture_change season id =%d\r\n", event_id); continue; }
@@ -3627,7 +3627,7 @@ static void run(amqp_connection_state_t conn)
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); race = 3; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); race = 1; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); race = 2; }
-				if (event_id == 0) { std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value()); std::printf("\r\n");
+				if (event_id == 0) { std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value()); 
 				continue;
 				}
 
@@ -3682,7 +3682,7 @@ static void run(amqp_connection_state_t conn)
 					std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
 					tournaments[tournaments_l].id = _event->tournament_id;
 					tournaments[tournaments_l].race = _event->race;
-					if (getTournament(&tournaments[tournaments_l]) == -1) { std::printf("ERROR!\r\Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
+					if (getTournament(&tournaments[tournaments_l]) == -1) { std::printf("ERROR!\r\nTournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
 					else tournaments_l++;
 
 
@@ -3701,12 +3701,8 @@ static void run(amqp_connection_state_t conn)
 					std::printf("\r\n***************************************************\r\n");
 				}
 
-
-
 				if (doc.first_node()->first_attribute("timestamp")) _event->timestamp = atoi(doc.first_node()->first_attribute("timestamp")->value());
-
-
-
+				
 				xml_node<> * sport_event_status = doc.first_node()->first_node("sport_event_status");
 				if (sport_event_status != NULL) {
 					if (sport_event_status->first_attribute("status")) _event->status = atoi(sport_event_status->first_attribute("status")->value());
@@ -3719,10 +3715,13 @@ static void run(amqp_connection_state_t conn)
 					if (sport_event_status->first_attribute("over")) _event->over = atoi(sport_event_status->first_attribute("over")->value());
 					if (sport_event_status->first_attribute("current_end")) _event->current_end = atoi(sport_event_status->first_attribute("current_end")->value());
 					if (sport_event_status->first_attribute("position")) _event->position = atoi(sport_event_status->first_attribute("position")->value());
-                    if (sport_event_status->first_attribute("away_yellowcards")) _event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellowcards")->value());
-					if (sport_event_status->first_attribute("home_yellowcards")) _event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellowcards")->value());
-					if (sport_event_status->first_attribute("away_yellow_cards")) _event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellow_cards")->value());
-					if (sport_event_status->first_attribute("home_yellow_cards")) _event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellow_cards")->value());
+					if (sport_event_status->first_attribute("away_yellowcards")) { _event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellowcards")->value()); printf("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz");
+					}
+					if (sport_event_status->first_attribute("home_yellowcards")) { _event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellowcards")->value()); printf("zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"); }
+					if (sport_event_status->first_attribute("away_yellow_cards")) { _event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellow_cards")->value()); printf("yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy");
+					}
+					if (sport_event_status->first_attribute("home_yellow_cards")) { _event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellow_cards")->value()); printf("yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy");
+					}
                     if (sport_event_status->first_attribute("away_redcards")) _event->away_redcards = atoi(sport_event_status->first_attribute("away_redcards")->value());
 					if (sport_event_status->first_attribute("home_redcards")) _event->home_redcards = atoi(sport_event_status->first_attribute("home_redcards")->value());
 					if (sport_event_status->first_attribute("away_dismissals")) _event->away_dismissals = atoi(sport_event_status->first_attribute("away_dismissals")->value());
@@ -3831,16 +3830,16 @@ static void run(amqp_connection_state_t conn)
 
 				}
 
-				
+				if (_event->status > 0) print = true; else print = false;
 
-
-				if (_event->set_scores != NULL) { std::printf("set_scores=%d", _event->set_scores); std::printf(_event->set_scores); }
+				if (print == true) {
+				if (_event->set_scores != NULL) { std::printf("set_scores="); std::printf(_event->set_scores); }
 				if (_event->match_time != NULL) { std::printf("match_time="); std::printf(_event->match_time); std::printf (" ");}
 				if (_event->remaining_time != NULL) { std::printf("remaining_time="); std::printf(_event->remaining_time); std::printf(" "); }
 				if (_event->remaining_time_in_period != NULL) { std::printf("remaining_time_in_period="); std::printf(_event->remaining_time_in_period); std::printf(" "); }
 				if (_event->bases != NULL) { std::printf("bases="); std::printf(_event->bases); std::printf(" "); }
 
-				if (print == true) {
+				
 				std::printf("stopped=%d ", _event->stopped);
 				std::printf("period_length=%d ", _event->period_length);
 				std::printf("numbers of set=%d ", _event->bo);
@@ -3864,63 +3863,38 @@ static void run(amqp_connection_state_t conn)
 						std::printf("betstop_reason=%d ", _event->betstop);
 					}
 
-					
 					_line->event_id = event_id;
 					for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 					{
-						
-
-						
 					    if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 						if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 						if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
 						if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
-
-						
-
 						if (_line->market_id >= MAX_MARKETS) {
 							std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
 						}
-
 						if(markets_id[_line->market_id]==NULL){
 							std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
 						};
-
 						if (markets_id[_line->market_id][0] == NULL) {
 							std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
 						};
-						
-						
-						
-
 						_line->variant = markets_id[_line->market_id][0]->variant;
 						_line->type= markets_id[_line->market_id][0]->type;
-
-						
-
-
 						if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
 							if (_line->specifier[q] != NULL) delete[] _line->specifier[q];
 							if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q];
 						}
 						if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
 						if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
-
 						_line->specifier_number = 0;
-
-
-
 						if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
 							if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
 							if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
 						}
 						if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
 						if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
-
-
 						_line->extended_specifier_number = 0;
-
-
 						if (market_node->first_attribute("specifiers")) {
 							n = 0;
 							m = market_node->first_attribute("specifiers")->value_size();
@@ -4008,48 +3982,16 @@ static void run(amqp_connection_state_t conn)
 								}
 							}
 						}
-
-						
-					
-
-						if (_line->variant > -1) {
-														
-							z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
-							
+						if (_line->variant > -1) {z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 							for ( u = 0; u < MAX_MARKETS_IN; u++) if (markets_id[_line->market_id][u]!=NULL && markets_id[_line->market_id][u]->variable_text!=NULL && std::strcmp(_line->specifier_value[_line->variant] , markets_id[_line->market_id][u]->variable_text)==0) break;
-							
-
-							
-							if (u == MAX_MARKETS_IN) {
-								std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) {
-									std::printf("variant market not found "); continue;
-								}
-							
-
-								for ( u = 0; u < MAX_MARKETS_IN; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-													
-							}
-							
-						
-
+							if (u == MAX_MARKETS_IN) {std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) {	std::printf("variant market not found "); continue;}
+								for ( u = 0; u < MAX_MARKETS_IN; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;}
 							_line->market = markets_id[_line->market_id][u];
-
-
 							if (_line->type == 3) z = 16;
-							
 						}
-						else {
-					   _line->market = markets_id[_line->market_id][0];
-						if (_line->type == 0) z = 0;
-						if (_line->type == 1) z = 10;
-						if (_line->type == 3) z = 16; 
-						
-						}
-
+						else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 						outcome_number=0;
-						
-					
-					
+
 						 for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 
 							 
@@ -4122,15 +4064,8 @@ static void run(amqp_connection_state_t conn)
 								 
 								 replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
 								 if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
-								 /*
-								 if (_line->market_id == 1 || _line->market_id == 100 || _line->market_id == 33 || _line->market_id == 274 || _line->market_id == 27 || _line->market_id == 613 || _line->market_id == 459 || _line->market_id == 76 || _line->market_id == 347) {
-									 std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); printf("------------------------------------------------------------------------------\r\n");
-								 }*/
-							 
-							 
-							
-							/*	 if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) */
-							
+								 if(_event->race>0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
+								 
 							
 								 if (print == true) {
 									 
@@ -4174,6 +4109,7 @@ static void run(amqp_connection_state_t conn)
 
 									 replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 									 if (_event->away_name != NULL) replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+									 if (_event->race>0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 
 
 
@@ -4187,8 +4123,6 @@ static void run(amqp_connection_state_t conn)
 									 
 								 
 								 }
-
-
 
 								 if (_line->type == 1) {
 									 if (_line->outcome_id[i] >= MAX_PLAYERS) {
@@ -4267,6 +4201,7 @@ static void run(amqp_connection_state_t conn)
 
 											 replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 											 replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+											 if (_event->race>0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 
 
 
@@ -4297,6 +4232,45 @@ static void run(amqp_connection_state_t conn)
 								 
 								 }
 
+								 if (_line->type == 2) {
+									 if (_line->outcome_team[i] != 3) {
+										 if (_line->outcome_id[i] >= MAX_COMPETITORS) {
+											 std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d event_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+											 continue;}
+										 if (competitors_id[_line->outcome_id[i]] == NULL) {
+											 std::printf("Competitor id=%d not found in market id=%d in event_id=%d  in run function. getTournament\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+											 tournaments[tournaments_l].id = _event->tournament_id;
+											 tournaments[tournaments_l].race = _event->race;
+											 if (getTournament(tournaments_id[_event->tournament_id]) == -1)
+												 std::printf("ERROR!\r\nTournaments not found in run %d \r\n", _event->tournament_id);}
+
+										 if (competitors_id[_line->outcome_id[i]] == NULL) {
+											 std::printf("\r\nCompetitors id=%d not found in tournament id=%d . Run getCompetitor\r\n", _line->outcome_id[i], _event->tournament_id);
+											 competitors[competitors_l].id = _line->outcome_id[i];
+											 if (getCompetitor(&competitors[competitors_l]) == -1) {
+												 std::printf(" Error get competitors in run function line type= 2 id=%d \r\n", _line->outcome_id[i]);
+												 _line->outcome_name[i] = new char[2];
+												 std::strcpy(_line->outcome_name[i], " ");}
+											 else competitors_l++;}
+
+										 if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name);}
+
+									 } else
+                                         { for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+										 if (u < _line->market->outcome_number) {
+											 _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+											 std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+											 for (int j = 0; j < _line->specifier_number; j++) {
+												 if (j == _line->variant) continue;
+												 replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);}
+											 replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
+											 replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+											 if (_event->race>0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);}
+										 else { _line->outcome_name[i] = new char[2];std::strcpy(_line->outcome_name[i], " ");}}
+                                      if (print == true) { std::printf(_line->outcome_name[i]); std::printf("\t");
+										 std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+										 printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);}
+								 }
 
 								 if (_line->type == 3) {
 									 
@@ -4327,6 +4301,7 @@ static void run(amqp_connection_state_t conn)
 
 									 replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 									 replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+									 if (_event->race>0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 
 
 									 //if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
@@ -4378,10 +4353,10 @@ static void run(amqp_connection_state_t conn)
 
 
 		
-		
+		//if (i < 100 && _event->sport_id == 21 && (envelope.message.body.len > 8000 || status == 1))
 
 
-		if (i < 0 && (envelope.message.body.len > 68000||status==1)) {
+		if (i < 100 &&_event->sport_id==21 && (envelope.message.body.len > 8000||status==1)) {
 			i++;std::strcpy(name, "D://unifeed");
 			_itoa(i, buf, 10);
 			strcat(name, buf);
