@@ -1062,6 +1062,10 @@ void saveEventToFile(Event*);
 void loadEventsFromFiles();
 void saveMarketToFile(Market*);
 void loadMarketsFromFiles();
+void saveTournamentToFile(Tournament*);
+void loadTournamentsFromFiles();
+void saveCategoryToFile(Category*);
+void loadCategoriesFromFiles();
 
 void die(const char *, ...);
 void die_on_error(int, char const*);
@@ -1097,13 +1101,22 @@ int main()
 	for (int i = 0; i <MAX_MATCHSTATUS; i++) matchstatus_id[i] = NULL;
 
 	getSports();
-    getCategoriesTournaments();
+    
 	if(getBetstops()!=-1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if(getMatchstatus()!=-1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
-	if (fullData == false) {  loadMarketsFromFiles(); 
-	getEvents(0, 40);
-	//loadEventsFromFiles();
+	if (fullData == false) {
+	loadMarketsFromFiles();
+	loadCategoriesFromFiles(); 
+	loadTournamentsFromFiles();
+	//getCategoriesTournaments();
+	getEvents(0, 120);
 	
+	for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
+	
+	//for (int i = 0; i < tournaments_l; i++) saveTournamentToFile(&tournaments[i]);
+	//for (int i = 0; i < categories_l; i++) saveCategoryToFile(&categories[i]);
+	//loadCategoriesFromFiles(); loadTournamentsFromFiles();loadMarketsFromFiles(); loadEventsFromFiles();
+	return 0;
 	}
 	
 	//getEvents(0, 10);
@@ -1111,10 +1124,11 @@ int main()
 	//return 0;
 
 	if (fullData == true) {
-		getMarkets();
-		
+		getMarkets(); getCategoriesTournaments();
+		getEvents(0, 120);
 		for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
 		for (int i = 0; i < tournaments_l; i++) getTournament(&tournaments[i],true);
+
 		std::printf("Load competitors success. Numbers of competitors : %d\r\n", competitors_l);
 		std::printf("Load player success. Numbers of players : %d\r\n", players_l);
 	}
@@ -1434,7 +1448,11 @@ void getEvents(time_t sec,int days) {
 				}
 
 				events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 14));
-				//if (events[i].tournament_id == 0) events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 21));
+				if (events[i].tournament_id == 0) {
+					events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 21));
+					events[i].race = 2;
+				} else events[i].race = 0;
+
 				events[i].sport_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
 				events[i].category_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
 
@@ -1477,34 +1495,57 @@ void getEvents(time_t sec,int days) {
 
 
 				if (events[i].tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEvents %d\r\n", events[i].tournament_id); continue; }
+
+				if (events[i].race == 0) {
 					if (tournaments_id[events[i].tournament_id] == NULL) {
 						tournaments_id[events[i].tournament_id] = &tournaments[tournaments_l];
 						tournaments_l++;
 					}
 
 
-						tournaments_id[events[i].tournament_id]->race = events[i].race;
-						tournaments_id[events[i].tournament_id]->id = events[i].tournament_id;
-						tournaments_id[events[i].tournament_id]->category_id = events[i].category_id;
-						tournaments_id[events[i].tournament_id]->sport_id = events[i].sport_id;
+					tournaments_id[events[i].tournament_id]->race = events[i].race;
+					tournaments_id[events[i].tournament_id]->id = events[i].tournament_id;
+					tournaments_id[events[i].tournament_id]->category_id = events[i].category_id;
+					tournaments_id[events[i].tournament_id]->sport_id = events[i].sport_id;
 
-						if (tournaments_id[events[i].tournament_id]->name != NULL) delete[] tournaments_id[events[i].tournament_id]->name;
-						tournaments_id[events[i].tournament_id]->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
-						std::strcpy(tournaments_id[events[i].tournament_id]->name, event_node->first_node("tournament")->first_attribute("name")->value());
+					if (tournaments_id[events[i].tournament_id]->name != NULL) delete[] tournaments_id[events[i].tournament_id]->name;
+					tournaments_id[events[i].tournament_id]->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
+					std::strcpy(tournaments_id[events[i].tournament_id]->name, event_node->first_node("tournament")->first_attribute("name")->value());
+				}
+
+					
+				if (events[i].race == 2) {
+					if (simples_id[events[i].tournament_id] == NULL) {
+						simples_id[events[i].tournament_id] = &tournaments[tournaments_l];
+						tournaments_l++;
+					}
+
+
+					simples_id[events[i].tournament_id]->race = events[i].race;
+					simples_id[events[i].tournament_id]->id = 0;
+					simples_id[events[i].tournament_id]->simple_id = events[i].tournament_id;
+					simples_id[events[i].tournament_id]->category_id = events[i].category_id;
+					simples_id[events[i].tournament_id]->sport_id = events[i].sport_id;
+
+					if (simples_id[events[i].tournament_id]->name != NULL) delete[] simples_id[events[i].tournament_id]->name;
+					simples_id[events[i].tournament_id]->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
+					std::strcpy(simples_id[events[i].tournament_id]->name, event_node->first_node("tournament")->first_attribute("name")->value());
+				}
+
 
 					
 
-
-					
-
-					if (event_node->first_node("seasson")) {
+					if (event_node->first_node("season") && events[i].race==0) {
+						
 						if (tournaments_id[events[i].tournament_id]->season_name != NULL) { delete[] tournaments_id[events[i].tournament_id]->season_name; tournaments_id[events[i].tournament_id]->season_name = NULL; }
-						tournaments_id[events[i].tournament_id]->season_name = new char[strlen(event_node->first_node("seasson")->first_attribute("name")->value()) + 1];
-						std::strcpy(tournaments_id[events[i].tournament_id]->season_name, event_node->first_node("seasson")->first_attribute("name")->value());
+						
+						tournaments_id[events[i].tournament_id]->season_name = new char[strlen(event_node->first_node("season")->first_attribute("name")->value()) + 1];
+						std::strcpy(tournaments_id[events[i].tournament_id]->season_name, event_node->first_node("season")->first_attribute("name")->value());
 
-						tournaments_id[events[i].tournament_id]->season_id = atoi((char*)((char*)event_node->first_node("seasson")->first_attribute("id")->value() + 10));
+						
+						tournaments_id[events[i].tournament_id]->season_id = atoi((char*)((char*)event_node->first_node("season")->first_attribute("id")->value() + 10));
 						seasons_id[tournaments_id[events[i].tournament_id]->season_id] = tournaments_id[events[i].tournament_id];
-
+					
 
 						if (tournaments_id[events[i].tournament_id]->season_id > 0) {
 							if (tournaments_id[events[i].tournament_id]->season_id < MAX_TOURNAMENTS) seasons_id[tournaments_id[events[i].tournament_id]->season_id] = tournaments_id[events[i].tournament_id]; else std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getEvents %d\r\n", tournaments_id[events[i].tournament_id]->season_id);
@@ -1512,8 +1553,8 @@ void getEvents(time_t sec,int days) {
 
 
 
-						if (event_node->first_node("seasson")->first_attribute("start_date")) {
-							strcpy(buf, event_node->first_node("seasson")->first_attribute("start_date")->value());
+						if (event_node->first_node("season")->first_attribute("start_date")) {
+							strcpy(buf, event_node->first_node("season")->first_attribute("start_date")->value());
 							st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
 							sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
 
@@ -1524,8 +1565,8 @@ void getEvents(time_t sec,int days) {
 
 						}
 
-						if (event_node->first_node("seasson")->first_attribute("end_date")) {
-							strcpy(buf, event_node->first_node("seasson")->first_attribute("end_date")->value());
+						if (event_node->first_node("season")->first_attribute("end_date")) {
+							strcpy(buf, event_node->first_node("season")->first_attribute("end_date")->value());
 							st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
 							sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
 
@@ -2361,7 +2402,7 @@ int getEventFixture(Event* event) {
 
 		}
 	}
-	if (event->race == 0) {
+	if (event->race == 0 || event->race == 2) {
 		std::strcpy(buf, root_node->first_node("fixture")->first_attribute("liveodds")->value());
 		if (buf[0] == 'b'&& buf[1] == 'o') event->booked = 1;
 
@@ -2394,7 +2435,7 @@ int getEventFixture(Event* event) {
 		}
 
 		event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 14));
-		if (event->tournament_id == 0) event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 21));
+		if (event->tournament_id == 0) { event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 21)); event->race = 2; } else  event->race = 0;
 
 		event->sport_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
 		event->category_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
@@ -2404,32 +2445,56 @@ int getEventFixture(Event* event) {
 		
 			if (event->tournament_id >= MAX_TOURNAMENTS) std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id);
 			else {
-				if (tournaments_id[event->tournament_id] == NULL) {
-					tournaments_id[event->tournament_id] = &tournaments[tournaments_l];
-					tournaments_l++;
+				if (event->race == 0) {
+
+					if (tournaments_id[event->tournament_id] == NULL) {
+						tournaments_id[event->tournament_id] = &tournaments[tournaments_l];
+						tournaments_l++;
+					}
+
+					tournaments_id[event->tournament_id]->race = event->race;
+					tournaments_id[event->tournament_id]->id = event->tournament_id;
+					tournaments_id[event->tournament_id]->category_id = event->category_id;
+					tournaments_id[event->tournament_id]->sport_id = event->sport_id;
+
+					if (tournaments_id[event->tournament_id]->name != NULL) delete[] tournaments_id[event->tournament_id]->name;
+					tournaments_id[event->tournament_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
+					std::strcpy(tournaments_id[event->tournament_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
 				}
+			
+				if (event->race == 2) {
 
-				tournaments_id[event->tournament_id]->race = event->race;
-				tournaments_id[event->tournament_id]->id = event->tournament_id;
-				tournaments_id[event->tournament_id]->category_id = event->category_id;
-				tournaments_id[event->tournament_id]->sport_id = event->sport_id;
+					if (simples_id[event->tournament_id] == NULL) {
+						simples_id[event->tournament_id] = &tournaments[tournaments_l];
+						tournaments_l++;
+					}
 
-				if (tournaments_id[event->tournament_id]->name != NULL) delete[] tournaments_id[event->tournament_id]->name;
-				tournaments_id[event->tournament_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
-				std::strcpy(tournaments_id[event->tournament_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
+					simples_id[event->tournament_id]->race = event->race;
+					simples_id[event->tournament_id]->id = 0;
+					simples_id[event->tournament_id]->simple_id = event->tournament_id;
+					simples_id[event->tournament_id]->category_id = event->category_id;
+					simples_id[event->tournament_id]->sport_id = event->sport_id;
+
+					if (simples_id[event->tournament_id]->name != NULL) delete[] simples_id[event->tournament_id]->name;
+					simples_id[event->tournament_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
+					std::strcpy(simples_id[event->tournament_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
+				}
+			
+			
+			
 			}
 
 
 
 		
-				if (root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")) {
+				if (root_node->first_node("fixture")->first_node("tournament")->first_node("season") && event->race == 0) {
 					if (tournaments_id[event->tournament_id]->season_name != NULL) { delete[] tournaments_id[event->tournament_id]->season_name; tournaments_id[event->tournament_id]->season_name = NULL; }
-					tournaments_id[event->tournament_id]->season_name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("name")->value()) + 1];
-					std::strcpy(tournaments_id[event->tournament_id]->season_name, root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("name")->value());
+					tournaments_id[event->tournament_id]->season_name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("name")->value()) + 1];
+					std::strcpy(tournaments_id[event->tournament_id]->season_name, root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("name")->value());
 
 
 
-					tournaments_id[event->tournament_id]->season_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("id")->value() + 10));
+					tournaments_id[event->tournament_id]->season_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("id")->value() + 10));
 					seasons_id[tournaments_id[event->tournament_id]->season_id] = tournaments_id[event->tournament_id];
 
 
@@ -2439,8 +2504,8 @@ int getEventFixture(Event* event) {
 
 
 
-					if (root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("start_date")) {
-						strcpy(buf, root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("start_date")->value());
+					if (root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("start_date")) {
+						strcpy(buf, root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("start_date")->value());
 						st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
 						sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
 
@@ -2451,8 +2516,8 @@ int getEventFixture(Event* event) {
 
 					}
 
-					if (root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("end_date")) {
-						strcpy(buf, root_node->first_node("fixture")->first_node("tournament")->first_node("seasson")->first_attribute("end_date")->value());
+					if (root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("end_date")) {
+						strcpy(buf, root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("end_date")->value());
 						st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
 						sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
 
@@ -2560,10 +2625,17 @@ int getEventFixture(Event* event) {
 
 }
 
+
 	delete[] recvbuf;
 	if (event->id<MAX_EVENTS) events_id[event->id] = event; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEventFixture %d\r\n", event->id);
 	if (event->bo == 0 && (event->sport_id == 5 || event->sport_id == 19)) getEventSummary(event);
+	if(event->race == 2) saveTournamentToFile(simples_id[event->tournament_id]);
+	else saveTournamentToFile(tournaments_id[event->tournament_id]);
+
+
+	saveCategoryToFile(categories_id[event->category_id]);
 	saveEventToFile(event);
+
 	return 0;
 }
 int getEventSummary(Event* event) {
@@ -2764,7 +2836,7 @@ int getTournament(Tournament* tournament, bool extended) {
 						categories_id[tournament->category_id] = &categories[categories_l];
 						categories_l++;
 					}
-						
+				               		
 						
 						
 					    categories_id[tournament->category_id]->id = tournament->category_id;
@@ -2837,7 +2909,8 @@ int getTournament(Tournament* tournament, bool extended) {
 
 				competitor->category_id = tournament->category_id;
 				competitor->sport_id = tournament->sport_id;
-
+				saveTournamentToFile(tournament);
+				saveCategoryToFile(categories_id[tournament->category_id]);
 				
 
 				if (root_node->first_node("groups"))
@@ -3167,11 +3240,8 @@ void saveEventToFile(Event* event) {
     std::strcpy(file_path, "D://Betradar//Events//");
 	_itoa(event->id, buf, 10);
 	strcat(file_path, buf);
-    //DeleteFile(name);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
-	//WriteFile(File, file_path, strlen(file_path)+1, &l, NULL);
-	//WriteFile(File, event->home_name, strlen(event->home_name)+1, &l, NULL);
 	WriteFile(File, &event->id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->race, sizeof(int), &l, NULL);
 	WriteFile(File, &event->sport_id, sizeof(int), &l, NULL);
@@ -3317,7 +3387,7 @@ void loadEventsFromFiles() {
 
 	} while (FindNextFile(Hd, &Fd));
 
-
+	FindClose(Hd);
 	std::printf("Events loaded from data files succes. Number of loaded events is %d\r\n", events_l);
 
 
@@ -3417,19 +3487,19 @@ void loadMarketsFromFiles() {
 		ReadFile(File, &markets[k].type, sizeof(int), &l, NULL);
 		ReadFile(File, &markets[k].specifier_number, sizeof(int), &l, NULL);
 		ReadFile(File, &markets[k].outcome_number, sizeof(int), &l, NULL);
-		
-		if (markets[k].name != NULL) { delete[] markets[k].name; markets[k].name = NULL; } 
+
+		if (markets[k].name != NULL) { delete[] markets[k].name; markets[k].name = NULL; }
 		ReadFile(File, &i, sizeof(int), &l, NULL);
-		if (i > 0) { markets[k].name = new char[i]; ReadFile(File, markets[k].name, i, &l, NULL);}
+		if (i > 0) { markets[k].name = new char[i]; ReadFile(File, markets[k].name, i, &l, NULL); }
 
 		if (markets[k].variable_text != NULL) { delete[] markets[k].variable_text; markets[k].variable_text = NULL; }
 		ReadFile(File, &i, sizeof(int), &l, NULL);
 		if (i > 0) { markets[k].variable_text = new char[i]; ReadFile(File, markets[k].variable_text, i, &l, NULL); }
 
-		
+
 		markets[k].outcome_id = new int[markets[k].outcome_number];
-		markets[k].outcome_name=new char*[markets[k].outcome_number];
-		
+		markets[k].outcome_name = new char*[markets[k].outcome_number];
+
 		for (j = 0; j < markets[k].outcome_number; j++) {
 			ReadFile(File, &markets[k].outcome_id[j], sizeof(int), &l, NULL);
 			//if (markets[k].outcome_name[j] != NULL) { delete[] markets[k].outcome_name[j]; markets[k].outcome_name[j] = NULL; }
@@ -3439,12 +3509,11 @@ void loadMarketsFromFiles() {
 
 		}
 
-		//printf("k=%d\r\n", k);
-		//printf("markets[k].id=%d\r\n", markets[k].id);
-
+		if (markets[k].specifier_number > 0) {
 		markets[k].specifier_type = new int[markets[k].specifier_number];
 		markets[k].specifier_name = new char*[markets[k].specifier_number];
 		markets[k].specifier_description = new char*[markets[k].specifier_number];
+	}
 
 		for (j = 0; j < markets[k].specifier_number; j++) {
 			ReadFile(File, &markets[k].specifier_type[j], sizeof(int), &l, NULL);
@@ -3459,10 +3528,16 @@ void loadMarketsFromFiles() {
 			else  markets[k].specifier_description[j] = NULL;
 
 		};
+		
 
 		
-		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
+		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) {
+			markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
+			for (int l = 0; l < MAX_MARKETS_IN; l++) markets_id[markets[k].id][l] = NULL;
+		}
+		
 		if (markets[k].variant > -1 && markets[k].variable_text == NULL) markets_id[markets[k].id][0] = &markets[k];
+		
 		if (markets[k].variant > -1 && markets[k].variable_text != NULL) {
 			for (j = 1; j < max_markets_in[markets[k].id]; j++) {
 				if (markets_id[markets[k].id][j] != NULL && std::strcmp(markets[k].variable_text, markets_id[markets[k].id][j]->variable_text) == 0) break;
@@ -3470,10 +3545,13 @@ void loadMarketsFromFiles() {
 					markets_id[markets[k].id][j] = &markets[k]; break;
 				} }
 
+		
+		
 			if (j == max_markets_in[markets[k].id]) {
 				markets_id[markets[k].id][j] = &markets[k]; max_markets_in[markets[k].id]++;
 			}}
 
+		
 		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
 			
 			
@@ -3487,10 +3565,226 @@ void loadMarketsFromFiles() {
 
 
 	} while (FindNextFile(Hd, &Fd));
-
+	
+	FindClose(Hd);
 
 	std::printf("Markets loaded from data files succes. Number of loaded markets is %d\r\n", markets_l);
 }
+void saveTournamentToFile(Tournament* tournament) {
+	HANDLE File;
+	DWORD l = 0;
+	char buf[20];
+	int i = 0;
+	char file_path[MAX_PATH];
+	std::strcpy(file_path, "D://Betradar//Tournaments//");
+	if (tournament->race == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
+	if (tournament->race == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
+	if (tournament->race == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
+	strcat(file_path, buf);
+	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+	WriteFile(File, &tournament->id, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->race, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->simple_id, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->season_id, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->sport_id, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->category_id, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->sort, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->start_date, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->end_date, sizeof(int), &l, NULL);
+
+	
+	if (tournament->name != NULL) i = strlen(tournament->name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, tournament->name, i, &l, NULL);
+
+	if (tournament->season_name != NULL) i = strlen(tournament->season_name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, tournament->season_name, i, &l, NULL);
+
+	SetEndOfFile(File);
+	CloseHandle(File);
+
+};
+void loadTournamentsFromFiles() {
+	HANDLE File;
+	DWORD l = 0;
+	WIN32_FIND_DATA Fd;
+	HANDLE Hd;
+	char buf[20];
+	int i = 0;
+	int j = 0;
+	int k = 0;
+	char file_path[MAX_PATH];
+	char folder_path[MAX_PATH];
+	char find_path[MAX_PATH];
+	tournaments_l = 0;
+	for (k = 0; k < 3; k++) {
+
+		i = tournaments_l;
+
+		if (k == 0) {
+			std::strcpy(folder_path, "D://Betradar//Tournaments//Championships//");
+			std::strcpy(find_path, "D://Betradar//Tournaments//Championships//*.*");
+		}
+
+		if (k == 1) {
+			std::strcpy(folder_path, "D://Betradar//Tournaments//Race//");
+			std::strcpy(find_path, "D://Betradar//Tournaments//Race//*.*");
+		}
+		if (k == 2) {
+			std::strcpy(folder_path, "D://Betradar//Tournaments//Simple//");
+			std::strcpy(find_path, "D://Betradar//Tournaments//Simple//*.*");
+		}
+
+
+		Hd = FindFirstFile(find_path, &Fd);
+		if (INVALID_HANDLE_VALUE == Hd) {
+			FindClose(Hd);
+			std::printf("Tournaments files not found");
+			return;
+		};
+
+
+
+
+		do {
+			if (Fd.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) continue;
+			std::strcpy(file_path, folder_path); strcat(file_path, Fd.cFileName);
+			File = CreateFile(file_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+			ReadFile(File, &tournaments[i].id, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].race, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].simple_id, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].season_id, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].sport_id, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].category_id, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].sort, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].start_date, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].end_date, sizeof(int), &l, NULL);
+
+
+			if (tournaments[i].name != NULL) { delete[] tournaments[i].name; tournaments[i].name = NULL; }
+			ReadFile(File, &j, sizeof(int), &l, NULL);
+			if (j > 0) {
+				tournaments[i].name = new char[j];
+				ReadFile(File, tournaments[i].name, j, &l, NULL);
+			}
+
+			if (tournaments[i].season_name != NULL) { delete[] tournaments[i].season_name; tournaments[i].season_name = NULL; }
+			ReadFile(File, &j, sizeof(int), &l, NULL);
+			if (j > 0) {
+				tournaments[i].season_name = new char[j];
+				ReadFile(File, tournaments[i].season_name, j, &l, NULL);
+			}
+
+			CloseHandle(File);
+			if (tournaments[i].id > 0) tournaments_id[tournaments[i].id] = &tournaments[i];
+			if (tournaments[i].season_id > 0) seasons_id[tournaments[i].season_id] = &tournaments[i];
+			if (tournaments[i].simple_id > 0) simples_id[tournaments[i].simple_id] = &tournaments[i];
+
+			i++;
+			tournaments_l = i;
+
+		} while (FindNextFile(Hd, &Fd));
+		FindClose(Hd);
+	}
+	  
+		std::printf("Tournaments loaded from data files succes. Number of loaded tournaments is %d\r\n", tournaments_l);
+
+	
+};;
+void saveCategoryToFile(Category* category) {
+	HANDLE File;
+	DWORD l = 0;
+	char buf[20];
+	int i = 0;
+	char file_path[MAX_PATH];
+	std::strcpy(file_path, "D://Betradar//Categories//");
+   _itoa(category->id, buf, 10); 
+	strcat(file_path, buf);
+	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+	WriteFile(File, &category->id, sizeof(int), &l, NULL);
+	WriteFile(File, &category->sport_id, sizeof(int), &l, NULL);
+	WriteFile(File, &category->sort, sizeof(int), &l, NULL);
+	if (category->name != NULL) i = strlen(category->name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, category->name, i, &l, NULL);
+	
+	SetEndOfFile(File);
+	CloseHandle(File);
+
+};
+void loadCategoriesFromFiles() {
+	HANDLE File;
+	DWORD l = 0;
+	WIN32_FIND_DATA Fd;
+	HANDLE Hd;
+	char buf[20];
+	int i = 0;
+	int j = 0;
+	int k = 0;
+	categories_l=0;
+	char file_path[MAX_PATH];
+	char folder_path[MAX_PATH];
+	char find_path[MAX_PATH];
+		i = categories_l;
+			std::strcpy(folder_path, "D://Betradar//Categories//");
+			std::strcpy(find_path, "D://Betradar//Categories//*.*");
+		
+		Hd = FindFirstFile(find_path, &Fd);
+		if (INVALID_HANDLE_VALUE == Hd) {
+			FindClose(Hd);
+			std::printf("Categories files not found");
+			return;
+		};
+
+
+		do {
+			if (Fd.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) continue;
+			std::strcpy(file_path, folder_path); strcat(file_path, Fd.cFileName);
+			File = CreateFile(file_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+			ReadFile(File, &categories[i].id, sizeof(int), &l, NULL);
+			ReadFile(File, &categories[i].sport_id, sizeof(int), &l, NULL);
+			ReadFile(File, &categories[i].sort, sizeof(int), &l, NULL);
+			
+
+			if (categories[i].name != NULL) { delete[] categories[i].name; categories[i].name = NULL; }
+			ReadFile(File, &j, sizeof(int), &l, NULL);
+			if (j > 0) {
+				categories[i].name = new char[j];
+				ReadFile(File, categories[i].name, j, &l, NULL);
+			}
+
+			
+			CloseHandle(File);
+		    categories_id[categories[i].id] = &categories[i];
+			
+			i++;
+			categories_l = i;
+
+		} while (FindNextFile(Hd, &Fd));
+		FindClose(Hd);
+
+
+		std::printf("Categories loaded from data files succes. Number of loaded categories is %d\r\n", categories_l);
+
+	
+};
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -5105,7 +5399,8 @@ static void run(amqp_connection_state_t conn)
 					if (events_id[event_id] == NULL) {
 						std::printf("Event not found. Run getFixture to get event_id=%d race=%d\r\n", event_id, race);
 						events[events_l].id = event_id;
-						events[events_l].race = race; if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", event_id); continue; }
+						events[events_l].race = race; 
+						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", event_id); continue; }
 						events_l++;
 
 					}
@@ -5125,7 +5420,7 @@ static void run(amqp_connection_state_t conn)
 						std::printf(sports_id[_event->sport_id]->name); std::printf("\r\n");
 					}
 					if (_event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->tournament_id); continue; }
-					if (tournaments_id[_event->tournament_id] == NULL) {
+					if (_event->race==0 && tournaments_id[_event->tournament_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
 						tournaments[tournaments_l].id = _event->tournament_id;
 						tournaments[tournaments_l].race = _event->race;
@@ -5134,14 +5429,35 @@ static void run(amqp_connection_state_t conn)
 
 
 					}
+					if (_event->race == 2 && simples_id[_event->tournament_id] == NULL) {
+						std::printf("Simple Tournament not found. Run getTournament(). simples_id=%d\r\n", _event->tournament_id);
+						tournaments[tournaments_l].simple_id = _event->tournament_id;
+						tournaments[tournaments_l].id = 0;
+						tournaments[tournaments_l].race = _event->race;
+						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nSimple Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
+						else tournaments_l++;
+
+
+					}
+
+
 					if (print == true) {
-						std::printf(tournaments_id[_event->tournament_id]->name); std::printf("\r\n");
+						if(_event->race==0) std::printf(tournaments_id[_event->tournament_id]->name);
+						if (_event->race == 2) std::printf(simples_id[_event->tournament_id]->name);
+						std::printf("\r\n");
 					}
 
 					if (_event->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\nsevent category_id out of MAX_CATEGORIES in run %d\r\n", _event->category_id); continue; }
 					if (categories_id[_event->category_id] == NULL) {
 						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _event->category_id);
-						if (getTournament(tournaments_id[_event->tournament_id], false) == -1); if (getEventFixture(_event) == -1) continue;;
+						if (_event->race == 0) {
+							if (getTournament(tournaments_id[_event->tournament_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
+						}
+						if (_event->race == 2) {
+							if (getTournament(simples_id[_event->tournament_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
+						}
+
+
 					}
 					if (print == true) {
 						std::printf(categories_id[_event->category_id]->name); std::printf("\r\n");
@@ -5708,8 +6024,13 @@ static void run(amqp_connection_state_t conn)
 												std::printf("Competitor id=%d not found in market id=%d in event_id=%d  in run function. getTournament\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
 												//tournaments[tournaments_l].id = _event->tournament_id;
 												//tournaments[tournaments_l].race = _event->race;
-												if (getTournament(tournaments_id[_event->tournament_id], false) == -1)
+											
+												if (_event->race == 0 && getTournament(tournaments_id[_event->tournament_id], false) == -1)
 													std::printf("ERROR!\r\nTournaments not found in run %d \r\n", _event->tournament_id);
+											
+												if (_event->race == 2 && getTournament(simples_id[_event->tournament_id], false) == -1)
+													std::printf("ERROR!\r\nSimples Tournaments not found in run %d \r\n", _event->tournament_id);
+											
 											}
 
 											if (competitors_id[_line->outcome_id[i]] == NULL) {
