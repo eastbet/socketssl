@@ -1079,7 +1079,7 @@ static void dump_row(long, int, int *);
 int main()
 
 {
-	bool fullData = true;
+	bool fullData = false;
 	int recvbuflen = DEFAULT_BUFLEN;
 	recvbuf = new char[DEFAULT_BUFLEN];
 	for (int i = 0; i <MAX_EVENTS; i++) events_id[i] = NULL;
@@ -1100,7 +1100,11 @@ int main()
     getCategoriesTournaments();
 	if(getBetstops()!=-1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if(getMatchstatus()!=-1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
-	if (fullData == false) { loadEventsFromFiles(); }
+	if (fullData == false) {  loadMarketsFromFiles(); 
+	getEvents(0, 40);
+	//loadEventsFromFiles();
+	
+	}
 	
 	//getEvents(0, 10);
     //for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
@@ -1108,8 +1112,7 @@ int main()
 
 	if (fullData == true) {
 		getMarkets();
-		return 0;
-		getEvents(0, 2);
+		
 		for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
 		for (int i = 0; i < tournaments_l; i++) getTournament(&tournaments[i],true);
 		std::printf("Load competitors success. Numbers of competitors : %d\r\n", competitors_l);
@@ -3391,17 +3394,17 @@ void loadMarketsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "D://Betradar//Events//");
-	std::strcpy(find_path, "D://Betradar//Events//*.*");
-
+	std::strcpy(folder_path, "D://Betradar//Markets//");
+	std::strcpy(find_path, "D://Betradar//Markets//*.*");
+	
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
 		FindClose(Hd);
-		std::printf("Events files not found");
+		std::printf("Markets files not found");
 		return;
 	};
 
-
+	
 	do {
 		if (Fd.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) continue;
 		std::strcpy(file_path, folder_path); strcat(file_path, Fd.cFileName);
@@ -3414,7 +3417,7 @@ void loadMarketsFromFiles() {
 		ReadFile(File, &markets[k].type, sizeof(int), &l, NULL);
 		ReadFile(File, &markets[k].specifier_number, sizeof(int), &l, NULL);
 		ReadFile(File, &markets[k].outcome_number, sizeof(int), &l, NULL);
-
+		
 		if (markets[k].name != NULL) { delete[] markets[k].name; markets[k].name = NULL; } 
 		ReadFile(File, &i, sizeof(int), &l, NULL);
 		if (i > 0) { markets[k].name = new char[i]; ReadFile(File, markets[k].name, i, &l, NULL);}
@@ -3423,34 +3426,70 @@ void loadMarketsFromFiles() {
 		ReadFile(File, &i, sizeof(int), &l, NULL);
 		if (i > 0) { markets[k].variable_text = new char[i]; ReadFile(File, markets[k].variable_text, i, &l, NULL); }
 
-
+		
+		markets[k].outcome_id = new int[markets[k].outcome_number];
+		markets[k].outcome_name=new char*[markets[k].outcome_number];
+		
 		for (j = 0; j < markets[k].outcome_number; j++) {
 			ReadFile(File, &markets[k].outcome_id[j], sizeof(int), &l, NULL);
-			if (markets[k].outcome_name[j] != NULL) { delete[] markets[k].outcome_name[j]; markets[k].outcome_name[j] = NULL; }
+			//if (markets[k].outcome_name[j] != NULL) { delete[] markets[k].outcome_name[j]; markets[k].outcome_name[j] = NULL; }
 			ReadFile(File, &i, sizeof(int), &l, NULL);
 			if (i > 0) { markets[k].outcome_name[j] = new char[i]; ReadFile(File, markets[k].outcome_name[j], i, &l, NULL); }
+			else markets[k].outcome_name[j] = NULL;
 
 		}
 
+		//printf("k=%d\r\n", k);
+		//printf("markets[k].id=%d\r\n", markets[k].id);
+
+		markets[k].specifier_type = new int[markets[k].specifier_number];
+		markets[k].specifier_name = new char*[markets[k].specifier_number];
+		markets[k].specifier_description = new char*[markets[k].specifier_number];
+
 		for (j = 0; j < markets[k].specifier_number; j++) {
 			ReadFile(File, &markets[k].specifier_type[j], sizeof(int), &l, NULL);
-			if (markets[k].specifier_name[j] != NULL) { delete[] markets[k].specifier_name[j]; markets[k].specifier_name[j] = NULL; }
+			//if (markets[k].specifier_name[j] != NULL) { delete[] markets[k].specifier_name[j]; markets[k].specifier_name[j] = NULL; }
 			ReadFile(File, &i, sizeof(int), &l, NULL);
-			if (i > 0) { markets[k].specifier_name[j] = new char[i]; ReadFile(File, markets[k].specifier_name[j], i, &l, NULL); }
-			if (markets[k].specifier_description[j] != NULL) { delete[] markets[k].specifier_description[j]; markets[k].specifier_description[j] = NULL; }
+			if (i > 0) { markets[k].specifier_name[j] = new char[i]; ReadFile(File, markets[k].specifier_name[j], i, &l, NULL); 
+			}
+			else  markets[k].specifier_name[j] = NULL;
+			//if (markets[k].specifier_description[j] != NULL) { delete[] markets[k].specifier_description[j]; markets[k].specifier_description[j] = NULL; }
 			ReadFile(File, &i, sizeof(int), &l, NULL);
 			if (i > 0) { markets[k].specifier_description[j] = new char[i]; ReadFile(File, markets[k].specifier_description[j], i, &l, NULL); }
+			else  markets[k].specifier_description[j] = NULL;
 
 		};
 
-		k++;
+		
+		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
+		if (markets[k].variant > -1 && markets[k].variable_text == NULL) markets_id[markets[k].id][0] = &markets[k];
+		if (markets[k].variant > -1 && markets[k].variable_text != NULL) {
+			for (j = 1; j < max_markets_in[markets[k].id]; j++) {
+				if (markets_id[markets[k].id][j] != NULL && std::strcmp(markets[k].variable_text, markets_id[markets[k].id][j]->variable_text) == 0) break;
+				if (markets_id[markets[k].id][j] == NULL) {
+					markets_id[markets[k].id][j] = &markets[k]; break;
+				} }
 
+			if (j == max_markets_in[markets[k].id]) {
+				markets_id[markets[k].id][j] = &markets[k]; max_markets_in[markets[k].id]++;
+			}}
+
+		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
+			
+			
+		
+
+		k++;
 		markets_l = k;
+
+
+
+
 
 	} while (FindNextFile(Hd, &Fd));
 
 
-	std::printf("Events loaded from data files succes. Number of loaded events is %d\r\n", events_l);
+	std::printf("Markets loaded from data files succes. Number of loaded markets is %d\r\n", markets_l);
 }
 
 
