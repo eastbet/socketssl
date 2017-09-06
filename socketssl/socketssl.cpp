@@ -124,8 +124,7 @@ public:
 	int competitor_id;
 	int manager;
 	int number;
-
-
+	
 	void operator = (const Player&);
 };
 void Player:: operator = (const Player & rhs) {
@@ -1066,6 +1065,11 @@ void saveTournamentToFile(Tournament*);
 void loadTournamentsFromFiles();
 void saveCategoryToFile(Category*);
 void loadCategoriesFromFiles();
+void saveCompetitorToFile(Competitor*);
+void loadCompetitorsFromFiles();
+void savePlayerToFile(Player*);
+void loadPlayersFromFiles();
+
 
 void die(const char *, ...);
 void die_on_error(int, char const*);
@@ -1108,29 +1112,22 @@ int main()
 	loadMarketsFromFiles();
 	loadCategoriesFromFiles(); 
 	loadTournamentsFromFiles();
-	//getCategoriesTournaments();
-	getEvents(0, 120);
+	loadEventsFromFiles();
+	loadCompetitorsFromFiles();
+	loadPlayersFromFiles();
+
+}
 	
-	for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
-	
-	//for (int i = 0; i < tournaments_l; i++) saveTournamentToFile(&tournaments[i]);
-	//for (int i = 0; i < categories_l; i++) saveCategoryToFile(&categories[i]);
-	//loadCategoriesFromFiles(); loadTournamentsFromFiles();loadMarketsFromFiles(); loadEventsFromFiles();
-	return 0;
-	}
-	
-	//getEvents(0, 10);
-    //for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
-	//return 0;
 
 	if (fullData == true) {
-		getMarkets(); getCategoriesTournaments();
+		getMarkets(); 
+		getCategoriesTournaments();
 		getEvents(0, 120);
+		for (int i = 0; i < tournaments_l; i++) saveTournamentToFile(&tournaments[i]);
+		for (int i = 0; i < categories_l; i++) saveCategoryToFile(&categories[i]);
 		for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
 		for (int i = 0; i < tournaments_l; i++) getTournament(&tournaments[i],true);
 
-		std::printf("Load competitors success. Numbers of competitors : %d\r\n", competitors_l);
-		std::printf("Load player success. Numbers of players : %d\r\n", players_l);
 	}
 
 
@@ -1653,6 +1650,13 @@ void getEvents(time_t sec,int days) {
 
 
 				}
+			
+				if (events[i].tournament_id == 0 && events[i].parent_id > 0 && events_id[events[i].parent_id] != NULL) {
+					events[i].tournament_id = events_id[events[i].parent_id]->tournament_id;
+					events[i].sport_id = events_id[events[i].parent_id]->sport_id;
+					events[i].category_id = events_id[events[i].parent_id]->category_id;
+				}
+			
 			}
 
 			if(events[i].id<MAX_EVENTS) events_id[events[i].id] = &events[i]; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEvents%d\r\n", events[i].id);
@@ -2096,6 +2100,7 @@ int getPlayer(Player* player) {
 		
 	}
 	else if (players_id[player->id] == NULL) players_id[player->id] = player;
+	savePlayerToFile(player);
 	delete[] recvbuf;
 	return 0;
 }
@@ -2156,6 +2161,9 @@ int getCompetitor(Competitor* competitor) {
 	 delete[] recvbuf; delete player; return -1; } else  competitors_id[competitor->id] = competitor;
 		
 //	std::printf("competitors_l=%d\r\n", competitors_l);
+
+	 saveCompetitorToFile(competitor);
+
 
 	xml_node<> * manager_node = root_node->first_node("manager");
 	if (manager_node) {
@@ -2264,9 +2272,10 @@ int getCompetitor(Competitor* competitor) {
 			
 
 
-			
+			savePlayerToFile(player);
 
 		}
+
 
 
 	delete player;
@@ -2279,7 +2288,7 @@ int getEventFixture(Event* event) {
 	char* recvbuf = new char[DEFAULT_BUFLEN];
 	//if (event->race == 1) return;
 	_itoa(event->id, buf, 10);
-	if (event->race == 0) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
+	if (event->race == 0|| event->race == 2) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
 	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:race_event:");
 	std::strcat(buffer, buf);
 	std::strcat(buffer, "/fixture.xml");
@@ -2443,7 +2452,9 @@ int getEventFixture(Event* event) {
 
 
 		
-			if (event->tournament_id >= MAX_TOURNAMENTS) std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id);
+		if (event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id); 
+		delete[] recvbuf; return -1;
+		}
 			else {
 				if (event->race == 0) {
 
@@ -2629,10 +2640,16 @@ int getEventFixture(Event* event) {
 	delete[] recvbuf;
 	if (event->id<MAX_EVENTS) events_id[event->id] = event; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEventFixture %d\r\n", event->id);
 	if (event->bo == 0 && (event->sport_id == 5 || event->sport_id == 19)) getEventSummary(event);
+	
+	
+	if (event->race == 1 && event->tournament_id == 0 && event->parent_id > 0 && events_id[event->parent_id] != NULL) {
+		event->tournament_id = events_id[event->parent_id]->tournament_id;
+		event->sport_id = events_id[event->parent_id]->sport_id;
+		event->category_id = events_id[event->parent_id]->category_id;
+	}
+
 	if(event->race == 2) saveTournamentToFile(simples_id[event->tournament_id]);
 	else saveTournamentToFile(tournaments_id[event->tournament_id]);
-
-
 	saveCategoryToFile(categories_id[event->category_id]);
 	saveEventToFile(event);
 
@@ -2771,7 +2788,7 @@ int getTournament(Tournament* tournament, bool extended) {
 	std::memset(&st, 0, sizeof(st));
 	std::memset(&tm, 0, sizeof(tm));
 
-	
+
 	
 	if(tournament->id ==0 && tournament->season_id == 0 && tournament->simple_id == 0) {
 		delete[] recvbuf; delete competitor; return -1;
@@ -2941,23 +2958,24 @@ int getTournament(Tournament* tournament, bool extended) {
 							
 
 						
-							if (competitor_node->first_node("reference_ids") && competitor_node->first_node("reference_ids")->first_node("reference_id")->first_attribute("value"))
+							if (competitor_node->first_node("reference_ids") && competitor_node->first_node("reference_ids")->first_node("reference_id") && competitor_node->first_node("reference_ids")->first_node("reference_id")->first_attribute("value"))
 							competitor->super_id = atoi(competitor_node->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value());
 
 
 							//std::printf("competitor->super_id=%d\r\n", competitor->super_id);
-
-						
+							
 
 							if (competitor->id >= MAX_COMPETITORS) { std::printf("ERROR DATA!\r\ncompetitors id out of MAX_COMPETITORS in getTournament%d\r\n", competitor->id); continue; }
 							else  if (competitors_id[competitor->id] == NULL) {
 								competitors[competitors_l] = competitor[0];
 								competitors_id[competitor->id] = &competitors[competitors_l];
 								competitors_l++;
+								
+								
 							}
 							else competitors_id[competitor->id][0] = competitor[0];
-							
-							if(extended == true) getCompetitor(competitors_id[competitor->id]);
+							if (extended == false) saveCompetitorToFile(competitors_id[competitor->id]);
+							if (extended == true) getCompetitor(competitors_id[competitor->id]);
 
 
 
@@ -3773,10 +3791,232 @@ void loadCategoriesFromFiles() {
 
 	
 };
+void saveCompetitorToFile(Competitor* competitor) {
+	HANDLE File;
+	DWORD l = 0;
+	char buf[20];
+	int i = 0;
+	char file_path[MAX_PATH];
+	std::strcpy(file_path, "D://Betradar//Competitors//");
+	_itoa(competitor->id, buf, 10);
+	strcat(file_path, buf);
+	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+	WriteFile(File, &competitor->id, sizeof(int), &l, NULL);
+	WriteFile(File, &competitor->sport_id, sizeof(int), &l, NULL);
+	WriteFile(File, &competitor->category_id, sizeof(int), &l, NULL);
+	WriteFile(File, &competitor->super_id, sizeof(int), &l, NULL);
+	if (competitor->name != NULL) i = strlen(competitor->name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, competitor->name, i, &l, NULL);
+	if (competitor->country_name != NULL) i = strlen(competitor->country_name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, competitor->country_name, i, &l, NULL);
+    SetEndOfFile(File);
+	CloseHandle(File);
+
+};
+void loadCompetitorsFromFiles() {
+	HANDLE File;
+	DWORD l = 0;
+	WIN32_FIND_DATA Fd;
+	HANDLE Hd;
+	char buf[20];
+	int i = 0;
+	int j = 0;
+	int k = 0;
+	competitors_l = 0;
+	char file_path[MAX_PATH];
+	char folder_path[MAX_PATH];
+	char find_path[MAX_PATH];
+	i = competitors_l;
+	std::strcpy(folder_path, "D://Betradar//Competitors//");
+	std::strcpy(find_path, "D://Betradar//Competitors//*.*");
+
+	Hd = FindFirstFile(find_path, &Fd);
+	if (INVALID_HANDLE_VALUE == Hd) {
+		FindClose(Hd);
+		std::printf("Competitors files not found");
+		return;
+	};
 
 
+	do {
+		if (Fd.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) continue;
+		std::strcpy(file_path, folder_path); strcat(file_path, Fd.cFileName);
+		File = CreateFile(file_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+		ReadFile(File, &competitors[i].id, sizeof(int), &l, NULL);
+		ReadFile(File, &competitors[i].sport_id, sizeof(int), &l, NULL);
+		ReadFile(File, &competitors[i].category_id, sizeof(int), &l, NULL);
+		ReadFile(File, &competitors[i].super_id, sizeof(int), &l, NULL);
+
+		if (competitors[i].name != NULL) { delete[] competitors[i].name; competitors[i].name = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			competitors[i].name = new char[j];
+			ReadFile(File, competitors[i].name, j, &l, NULL);
+		}
 
 
+		if (competitors[i].country_name != NULL) { delete[] competitors[i].country_name; competitors[i].country_name = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			competitors[i].country_name = new char[j];
+			ReadFile(File, competitors[i].country_name, j, &l, NULL);
+		}
+
+
+		CloseHandle(File);
+		competitors_id[competitors[i].id] = &competitors[i];
+
+		i++;
+		competitors_l = i;
+
+	} while (FindNextFile(Hd, &Fd));
+	FindClose(Hd);
+
+
+	std::printf("Competitors loaded from data files succes. Number of loaded competitors is %d\r\n", competitors_l);
+
+
+};
+void savePlayerToFile(Player* player) {
+	HANDLE File;
+	DWORD l = 0;
+	char buf[20];
+	int i = 0;
+	char file_path[MAX_PATH];
+	std::strcpy(file_path, "D://Betradar//Players//");
+	_itoa(player->id, buf, 10);
+	strcat(file_path, buf);
+	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+	WriteFile(File, &player->id, sizeof(int), &l, NULL);
+	WriteFile(File, &player->competitor_id, sizeof(int), &l, NULL);
+	WriteFile(File, &player->number, sizeof(int), &l, NULL);
+	WriteFile(File, &player->manager, sizeof(int), &l, NULL);
+	WriteFile(File, &player->date_of_birth, sizeof(int), &l, NULL);
+	WriteFile(File, &player->height, sizeof(int), &l, NULL);
+	WriteFile(File, &player->weight, sizeof(int), &l, NULL);
+
+	if (player->name != NULL) i = strlen(player->name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, player->name, i, &l, NULL);
+
+	if (player->full_name != NULL) i = strlen(player->full_name) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, player->full_name, i, &l, NULL);
+
+	if (player->nationality != NULL) i = strlen(player->nationality) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, player->nationality, i, &l, NULL);
+
+	if (player->type != NULL) i = strlen(player->type) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, player->type, i, &l, NULL);
+
+	if (player->country_code != NULL) i = strlen(player->country_code) + 1; else i = 0;
+	WriteFile(File, &i, sizeof(int), &l, NULL);
+	if (i>0) WriteFile(File, player->country_code, i, &l, NULL);
+
+
+	SetEndOfFile(File);
+	CloseHandle(File);
+
+};
+void loadPlayersFromFiles() {
+	HANDLE File;
+	DWORD l = 0;
+	WIN32_FIND_DATA Fd;
+	HANDLE Hd;
+	char buf[20];
+	int i = 0;
+	int j = 0;
+	int k = 0;
+	players_l = 0;
+	char file_path[MAX_PATH];
+	char folder_path[MAX_PATH];
+	char find_path[MAX_PATH];
+	i = players_l;
+	std::strcpy(folder_path, "D://Betradar//Players//");
+	std::strcpy(find_path, "D://Betradar//Players//*.*");
+
+	Hd = FindFirstFile(find_path, &Fd);
+	if (INVALID_HANDLE_VALUE == Hd) {
+		FindClose(Hd);
+		std::printf("Players files not found");
+		return;
+	};
+
+
+	do {
+		if (Fd.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) continue;
+		std::strcpy(file_path, folder_path); strcat(file_path, Fd.cFileName);
+		File = CreateFile(file_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+		ReadFile(File, &players[i].id, sizeof(int), &l, NULL);
+		ReadFile(File, &players[i].competitor_id, sizeof(int), &l, NULL);
+		ReadFile(File, &players[i].number, sizeof(int), &l, NULL);
+		ReadFile(File, &players[i].manager, sizeof(int), &l, NULL);
+		ReadFile(File, &players[i].date_of_birth, sizeof(int), &l, NULL);
+		ReadFile(File, &players[i].height, sizeof(int), &l, NULL);
+		ReadFile(File, &players[i].weight, sizeof(int), &l, NULL);
+
+		if (players[i].name != NULL) { delete[] players[i].name; players[i].name = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			players[i].name = new char[j];
+			ReadFile(File, players[i].name, j, &l, NULL);
+		}
+
+
+		if (players[i].full_name != NULL) { delete[] players[i].full_name; players[i].full_name = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			players[i].full_name = new char[j];
+			ReadFile(File, players[i].full_name, j, &l, NULL);
+		}
+
+		if (players[i].nationality != NULL) { delete[] players[i].nationality; players[i].nationality = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			players[i].nationality = new char[j];
+			ReadFile(File, players[i].nationality, j, &l, NULL);
+
+		}
+
+		if (players[i].type != NULL) { delete[] players[i].type; players[i].type = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			players[i].type = new char[j];
+			ReadFile(File, players[i].type, j, &l, NULL);
+
+		}
+
+		if (players[i].country_code != NULL) { delete[] players[i].country_code; players[i].country_code = NULL; }
+		ReadFile(File, &j, sizeof(int), &l, NULL);
+		if (j > 0) {
+			players[i].country_code = new char[j];
+			ReadFile(File, players[i].country_code, j, &l, NULL);
+
+		}
+
+
+		CloseHandle(File);
+		players_id[players[i].id] = &players[i];
+
+		i++;
+		players_l = i;
+
+	} while (FindNextFile(Hd, &Fd));
+	FindClose(Hd);
+
+
+	std::printf("Players loaded from data files succes. Number of loaded players is %d\r\n", players_l);
+
+
+};
 
 
 
@@ -4276,7 +4516,7 @@ static void run(amqp_connection_state_t conn)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = false;
+	bool print = true;
 	int event_id = 0;
 	int race = 0;
 	int status = 0;
