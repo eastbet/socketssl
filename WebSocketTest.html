@@ -13,7 +13,9 @@ webSocket.binaryType = "arraybuffer";
 function onclose(event){console.log("websocket close");}
 function onerror(event){console.log("websocket error");console.log(event);}
 function onopen(event){console.log("websocket onopen");webSocket.send("PassionBet");}
-function onmessage(event){console.log("websocket onmessage");console.log(event.data);}
+function onmessage(event){console.log("websocket onmessage");//console.log(event.data);
+console.log("event.data.length="+event.data.length);
+}
 
 webSocket.onerror=onerror;
 webSocket.onclose=onclose;
