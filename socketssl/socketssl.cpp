@@ -26,6 +26,9 @@
 #include <openssl/pem.h>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/evp.h>
+#include <openssl/buffer.h>
+
 #include <conio.h>
 #include "rapidxml-1.13/rapidxml.hpp"
 //#include "rapidjson/document.h" 
@@ -51,6 +54,7 @@
 #define KEYF  "/passionbet.key"
 #define MAX_PATH 255
 #define DEFAULT_BUFLEN 67108864
+#define MEDIUM_BUFLEN 4096
 #define PLAYERS_LENTGH 300000
 #define COMPETITORS_LENTGH 150000
 #define NAME_LENTGH 127
@@ -1069,6 +1073,11 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
+void WebSocketServer();
+size_t calcDecodeLength(const char* );
+int Base64Decode(char*, unsigned char**, size_t*);
+int Base64Encode(const unsigned char*, size_t, char**);
+
 
 
 void die(const char *, ...);
@@ -1087,6 +1096,9 @@ static void dump_row(long, int, int *);
 int main()
 
 {
+	WebSocketServer();
+	return 0;
+
 	bool fullData = false;
 	int recvbuflen = DEFAULT_BUFLEN;
 	recvbuf = new char[DEFAULT_BUFLEN];
@@ -4017,8 +4029,54 @@ void loadPlayersFromFiles() {
 
 
 };
+size_t calcDecodeLength(const char* b64input) { //Calculates the length of a decoded string
+	size_t len = strlen(b64input),
+		padding = 0;
 
+	if (b64input[len - 1] == '=' && b64input[len - 2] == '=') //last two chars are =
+		padding = 2;
+	else if (b64input[len - 1] == '=') //last char is =
+		padding = 1;
 
+	return (len * 3) / 4 - padding;
+}
+int Base64Decode(char* b64message, unsigned char** buffer, size_t* length) { //Decodes a base64 encoded string
+	BIO *bio, *b64;
+
+	int decodeLen = calcDecodeLength(b64message);
+	*buffer = (unsigned char*)malloc(decodeLen + 1);
+	(*buffer)[decodeLen] = '\0';
+
+	bio = BIO_new_mem_buf(b64message, -1);
+	b64 = BIO_new(BIO_f_base64());
+	bio = BIO_push(b64, bio);
+
+	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); //Do not use newlines to flush buffer
+	*length = BIO_read(bio, *buffer, strlen(b64message));
+	assert(*length == decodeLen); //length should equal decodeLen, else something went horribly wrong
+	BIO_free_all(bio);
+
+	return (0); //success
+}
+int Base64Encode(const unsigned char* buffer, size_t length, char** b64text) { //Encodes a binary safe base 64 string
+	BIO *bio, *b64;
+	BUF_MEM *bufferPtr;
+
+	b64 = BIO_new(BIO_f_base64());
+	bio = BIO_new(BIO_s_mem());
+	bio = BIO_push(b64, bio);
+
+	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); //Ignore newlines - write everything in one line
+	BIO_write(bio, buffer, length);
+	BIO_flush(bio);
+	BIO_get_mem_ptr(bio, &bufferPtr);
+	BIO_set_close(bio, BIO_NOCLOSE);
+	BIO_free_all(bio);
+
+	*b64text = (*bufferPtr).data;
+
+	return (0); //success
+}
 
 
 
@@ -4332,6 +4390,259 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	return 0;
 
 };
+void WebSocketServer()
+{
+	//addrinfo hints;
+	//addrinfo* result = NULL;
+	//addrinfo* pointer = NULL;
+	uint32_t iResult = 0;
+	SOCKET ListenSocket = INVALID_SOCKET;
+	SOCKET ClientSocket = INVALID_SOCKET;
+	WSADATA wsa_data;
+
+	iResult = WSAStartup(MAKEWORD(2, 2), &wsa_data);
+	if (iResult != 0)
+	{
+		printf(0, "WSAStartup failed %d", iResult);
+	}
+
+
+	sockaddr_in service;
+	ZeroMemory(&service, sizeof(service));
+
+	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);//socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+	if (ListenSocket == INVALID_SOCKET)
+	{
+		//freeaddrinfo(result);
+		WSACleanup();
+		printf(0, "failed socket %d", WSAGetLastError());
+	}
+	service.sin_family = AF_INET;
+	service.sin_port = htons(8080);
+	service.sin_addr.s_addr = inet_addr("127.0.0.1");
+	iResult = bind(ListenSocket, (sockaddr*)&service, sizeof(service));//bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
+	if (iResult == SOCKET_ERROR)
+	{
+		closesocket(ListenSocket);
+		WSACleanup();
+		printf(0, "failed bind %d", WSAGetLastError());
+	}
+
+	iResult = listen(ListenSocket, SOMAXCONN);
+	if (iResult == SOCKET_ERROR)
+	{
+		closesocket(ListenSocket);
+		WSACleanup();
+		printf(0, "failed listen %d", WSAGetLastError());
+	}
+
+	ClientSocket = accept(ListenSocket, NULL, NULL);
+	if (ClientSocket == INVALID_SOCKET)
+	{
+		closesocket(ListenSocket);
+		WSACleanup();
+		printf(0, "failed accept %d", WSAGetLastError());
+	}
+
+	char recvbuf[MEDIUM_BUFLEN];
+	int32_t recvbuflen = MEDIUM_BUFLEN;
+	int32_t iSendResult = 0;
+	char* payload = nullptr;
+	iResult = 0;
+	bool sendHandshake = true;
+	do
+	{
+		ZeroMemory(recvbuf, recvbuflen);
+		iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+		if (iResult > 0)
+		{
+			printf("Bytes received: %d\n", iResult);
+			if (!sendHandshake)
+			{
+
+				char mask[4];
+				uint16_t bits16 = *((uint16_t*)&recvbuf[0]);
+				uint8_t fin = (!!(bits16 & 0b0000000010000000));
+				uint8_t rv1 = (!!(bits16 & 0b0000000001000000));
+				uint8_t rv2 = (!!(bits16 & 0b0000000000100000));
+				uint8_t rv3 = (!!(bits16 & 0b0000000000010000));
+				uint8_t opc = ((bits16 & 0b0000000000001111));
+				uint8_t msk = (!!(bits16 & 0b1000000000000000));
+				uint64_t len = ((bits16 >> 8) & 0b0000000001111111);
+
+				if (opc == 8)
+				{
+					closesocket(ClientSocket);
+					break;
+				}
+
+				if (len <= 125)
+				{
+					printf("small data\n");
+					mask[0] = recvbuf[2];
+					mask[1] = recvbuf[3];
+					mask[2] = recvbuf[4];
+					mask[3] = recvbuf[5];
+					payload = &recvbuf[6];
+				}
+				else if (len == 126)
+				{
+					printf("medium data\n");
+					mask[0] = recvbuf[4];
+					mask[1] = recvbuf[5];
+					mask[2] = recvbuf[6];
+					mask[3] = recvbuf[7];
+					payload = &recvbuf[8];
+					uint32_t bits32 = *((uint32_t*)&recvbuf[0]);
+					len = ((bits32 & 0b00000000111111110000000000000000) >> 8) | ((bits32 & 0b11111111000000000000000000000000) >> 24);
+				}
+				else if (len == 127)
+				{
+					printf("large data\n");
+					mask[0] = recvbuf[10];
+					mask[1] = recvbuf[11];
+					mask[2] = recvbuf[12];
+					mask[3] = recvbuf[13];
+					payload = &recvbuf[14];
+					uint32_t bits64 = *((uint32_t*)&recvbuf[4]);
+					len = bits64 >> 5;
+					len = len;
+				}
+				if (len < recvbuflen)
+				{
+					printf("Payload byte length %d\n", len);
+					for (int i = 0; i < len; ++i)
+					{
+						payload[i] = payload[i] ^ mask[i % 4];
+					}
+
+					printf("client> %s\n", payload);
+				}
+				else
+				{
+					printf("Data to big = %lu\n", len);
+				}
+				{
+					char outText[512];
+					char sendBuffer[512];
+					ZeroMemory(sendBuffer, sizeof(sendBuffer));
+					ZeroMemory(outText, sizeof(outText));
+					uint8_t data_size = 124;
+					sendBuffer[0] = 0b10000001;
+					char get = 0;
+					uint32_t inc = 0;
+					printf("server> ");
+					while (1)
+					{
+						get = getchar();
+						if (!(get == '\n' || get == '\r'))
+						{
+							outText[inc++] = get;
+						}
+						else
+						{
+							break;
+						}
+					}
+					int txt_len = strlen(outText);
+
+					if (txt_len <= 125)
+					{
+						sendBuffer[1] = txt_len;
+						snprintf(&sendBuffer[2], 510, outText);
+					}
+					else
+					{
+						sendBuffer[1] = 126;
+						sendBuffer[2] = ((txt_len >> 8) & 0xFF);
+						sendBuffer[3] = ((txt_len >> 0) & 0xFF);
+						//*((uint32_t*)&sendBuffer[2]) = txt_len;
+						snprintf(&sendBuffer[4], 508, outText);
+					}
+					iSendResult = send(ClientSocket, sendBuffer, (int32_t)strlen(sendBuffer), 0);
+					if (iSendResult == SOCKET_ERROR)
+					{
+						closesocket(ClientSocket);
+						WSACleanup();
+						printf(0, "Failed send %d", WSAGetLastError());
+					}
+				}
+			}
+			else
+			{
+				printf(recvbuf);
+				sendHandshake = false;
+				bool findHandshake = false;
+				uint32_t index = 0;
+				char handshakeTest[] = "Sec-WebSocket-Key: ";
+				char* handshakeHash=new char[120];
+				char handshakeBuffer[MAX_PATH];
+				char* base64EncodeOutput=NULL;
+				//ZeroMemory(base64_hash, sizeof(base64_hash));
+				int handshakeTestLen = strlen(handshakeTest);
+				unsigned char* digest=new unsigned char[SHA_DIGEST_LENGTH];
+
+				for (int i = 0; i < iResult - handshakeTestLen - 20; i++)
+					if (strncmp((char*)((char*)recvbuf + i), handshakeTest, handshakeTestLen) == 0)
+					{
+						for (int j = 0; j < 100; j++) if (recvbuf[j + i + handshakeTestLen] == '\r' && recvbuf[j + i + handshakeTestLen + 1] == '\n')
+						{
+							strncpy(handshakeHash, (char*)((char*)recvbuf + i + handshakeTestLen), j);
+							handshakeHash[j] = 0;
+							//strcpy(handshakeHash, "lpRgKO1IAsqpPeIgIIbpfA==");
+
+							strcat(handshakeHash, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+							findHandshake = true;
+							printf(handshakeHash);
+							printf("\r\n");
+							break;
+						}
+
+
+						break;
+					}
+
+
+				if (findHandshake == true) {
+					SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
+					//printf("Output (sha1): %d\n", strlen(digest));
+					Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
+					printf("Output (base64): %s\r\n", base64EncodeOutput);
+
+				}
+				base64EncodeOutput[strlen(base64EncodeOutput) - 1] = 0;
+
+				strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
+				strcat(handshakeBuffer, base64EncodeOutput);
+				strcat(handshakeBuffer, "\r\n\r\n");
+				printf(handshakeBuffer);
+
+				iSendResult = send(ClientSocket, handshakeBuffer, (int32_t)strlen(handshakeBuffer), 0);
+				if (iSendResult == SOCKET_ERROR)
+				{
+					closesocket(ClientSocket);
+					WSACleanup();
+					printf("Failed send %d\r\n", WSAGetLastError());
+				}
+				else printf("Handshake sent. bytes: %d\n", iSendResult);
+				
+
+
+			}
+	    }
+		else if (iResult == 0)
+		{
+			printf("Connection closed\n");
+		}
+		else
+		{
+			closesocket(ClientSocket);
+			WSACleanup();
+			printf(0, "Failed to receive %d", WSAGetLastError());
+		}
+	} while (iResult > 0);
+}
+
 uint64_t now_microseconds(void)
 {
 	FILETIME ft;
@@ -4506,8 +4817,8 @@ static void run(amqp_connection_state_t conn)
 	char* buf = new char[MAX_PATH];
 	char set_scores[1024];
 	char* maxbuf = new char[1000000];
-	Event* _event=new Event();
-	Tournament* _tournament;
+	Event* _event = nullptr;
+	Tournament* _tournament= nullptr;
 	int i = 0;
 	int k = 0;
 	int j = 0;
