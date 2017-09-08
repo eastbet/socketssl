@@ -1130,14 +1130,14 @@ int main()
 	loadEventsFromFiles();
 	loadCompetitorsFromFiles();
 	loadPlayersFromFiles();
-
+	
 }
 	
 
 	if (fullData == true) {
 		getMarkets(); 
 		getCategoriesTournaments();
-		getEvents(0, 120);
+		getEvents(0, 180);
 		for (int i = 0; i < tournaments_l; i++) saveTournamentToFile(&tournaments[i]);
 		for (int i = 0; i < categories_l; i++) saveCategoryToFile(&categories[i]);
 		for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
@@ -1597,7 +1597,7 @@ void getEvents(time_t sec,int days) {
 			
 			}
 			else {
-				events[i].parent_id = atoi((char*)((char*)event_node->first_node("parent")->first_attribute("id")->value() + 19));
+				events[i].parent_id = atoi((char*)((char*)event_node->first_node("parent")->first_attribute("id")->value() + 14));
 
 				if (events[i].home_name != NULL) {
 					delete[] events[i].home_name; events[i].home_name = NULL;
@@ -2306,6 +2306,7 @@ int getEventFixture(Event* event) {
 	if (event->race == 0|| event->race == 2) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
 	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:race_event:");
 	std::strcat(buffer, buf);
+	
 	std::strcat(buffer, "/fixture.xml");
 	while(httpsRequest("api.betradar.com", buffer, recvbuf, 0)==-1) Sleep(1000);
 	using namespace rapidxml;
@@ -2351,7 +2352,7 @@ int getEventFixture(Event* event) {
 		if (root_node->first_node("fixture")->first_attribute("type") && root_node->first_node("fixture")->first_attribute("type")->value()[0] == 'p') 
 		 event->parent_id = -1;
 		
-		else if	(root_node->first_node("fixture")->first_node("parent")) event->parent_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("parent")->first_attribute("id")->value() + 19));
+		else if	(root_node->first_node("fixture")->first_node("parent")) event->parent_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("parent")->first_attribute("id")->value() + 14));
 
 
 
@@ -2667,7 +2668,6 @@ int getEventFixture(Event* event) {
 	else saveTournamentToFile(tournaments_id[event->tournament_id]);
 	saveCategoryToFile(categories_id[event->category_id]);
 	saveEventToFile(event);
-
 	return 0;
 }
 int getEventSummary(Event* event) {
