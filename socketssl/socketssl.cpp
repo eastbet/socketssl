@@ -44,6 +44,33 @@
 #include <assert.h>
 #include <ctime>
 
+
+
+
+
+#include <stdio.h>
+#include <string.h>
+#include <openssl/ssl.h>
+#include <openssl/crypto.h>
+#include <openssl/err.h>
+#include <fcntl.h>
+#include <sys/types.h>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #ifndef librabbitmq_examples_utils_h
 #define librabbitmq_examples_utils_h
 #endif
@@ -1075,6 +1102,7 @@ void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
 void WebSocketServer();
 void SSLWebSocketServer();
+void AsyncSSLWebSocketServer();
 size_t calcDecodeLength(const char* );
 int Base64Decode(char*, unsigned char**, size_t*);
 int Base64Encode(const unsigned char*, size_t, char**);
@@ -1092,14 +1120,418 @@ static void run(amqp_connection_state_t);
 static int rows_eq(int *, int *);
 static void dump_row(long, int, int *);
 
+typedef enum {
+	CONTINUE,
+	BREAK,
+	NEITHER
+} ACTION;
+ACTION ssl_connect(SSL* ssl, int* wants_tcp_write, int* connecting) {
+	printf("calling SSL_connect\n");
+
+	int result = SSL_connect(ssl);
+	if (result == 0) {
+		long error = ERR_get_error();
+		const char* error_str = ERR_error_string(error, NULL);
+		printf("could not SSL_connect: %s\n", error_str);
+		return BREAK;
+	}
+	else if (result < 0) {
+		int ssl_error = SSL_get_error(ssl, result);
+		if (ssl_error == SSL_ERROR_WANT_WRITE) {
+			printf("SSL_connect wants write\n");
+			*wants_tcp_write = 1;
+			return CONTINUE;
+		}
+
+		if (ssl_error == SSL_ERROR_WANT_READ) {
+			printf("SSL_connect wants read\n");
+			// wants_tcp_read is always 1;
+			return CONTINUE;
+		}
+
+		long error = ERR_get_error();
+		const char* error_string = ERR_error_string(error, NULL);
+		printf("could not SSL_connect %s\n", error_string);
+		return BREAK;
+	}
+	else {
+		printf("connected\n");
+		*connecting = 0;
+		return CONTINUE;
+	}
+
+	return NEITHER;
+}
+ACTION ssl_read(SSL* ssl, int* wants_tcp_write, int* call_ssl_read_instead_of_write) {
+	printf("calling SSL_read\n");
+
+	*call_ssl_read_instead_of_write = 0;
+
+	char buffer[1024];
+	int num = SSL_read(ssl, buffer, sizeof(buffer));
+	if (num == 0) {
+		long error = ERR_get_error();
+		const char* error_str = ERR_error_string(error, NULL);
+		printf("could not SSL_read (returned 0): %s\n", error_str);
+		return BREAK;
+	}
+	else if (num < 0) {
+		int ssl_error = SSL_get_error(ssl, num);
+		if (ssl_error == SSL_ERROR_WANT_WRITE) {
+			printf("SSL_read wants write\n");
+			*wants_tcp_write = 1;
+			*call_ssl_read_instead_of_write = 1;
+			return CONTINUE;
+		}
+
+		if (ssl_error == SSL_ERROR_WANT_READ) {
+			printf("SSL_read wants read\n");
+			// wants_tcp_read is always 1;
+			return CONTINUE;
+		}
+
+		long error = ERR_get_error();
+		const char* error_string = ERR_error_string(error, NULL);
+		printf("could not SSL_read (returned -1) %s\n", error_string);
+		return BREAK;
+	}
+	else {
+		printf("read %d bytesr\n", num);
+		buffer[num] = 0;
+		printf(buffer);
+	}
+
+	return NEITHER;
+}
+ACTION ssl_write(SSL* ssl, int* wants_tcp_write, int* call_ssl_write_instead_of_read,
+	int is_client, int should_start_a_new_write) {
+	printf("calling SSL_write\n");
+
+	static char buffer[1024];
+	memset(buffer, 0, sizeof(buffer));
+	static int to_write = 0;
+	if (!*call_ssl_write_instead_of_read && !to_write && is_client && should_start_a_new_write) {
+		to_write = 1024;
+		printf("decided to write %d bytes\n", to_write);
+	}
+
+	if (*call_ssl_write_instead_of_read && (!to_write || !buffer)) {
+		printf("ssl should not have requested a write from a read if no data was waiting to be written\n");
+		return BREAK;
+	}
+
+	*call_ssl_write_instead_of_read = 0;
+
+	if (!to_write) {
+		return NEITHER;
+	}
+
+	int num = SSL_write(ssl, buffer, to_write);
+	if (num == 0) {
+		long error = ERR_get_error();
+		const char* error_str = ERR_error_string(error, NULL);
+		printf("could not SSL_write (returned 0): %s\n", error_str);
+		return BREAK;
+	}
+	else if (num < 0) {
+		int ssl_error = SSL_get_error(ssl, num);
+		if (ssl_error == SSL_ERROR_WANT_WRITE) {
+			printf("SSL_write wants write\n");
+			*wants_tcp_write = 1;
+			return CONTINUE;
+		}
+
+		if (ssl_error == SSL_ERROR_WANT_READ) {
+			printf("SSL_write wants read\n");
+			*call_ssl_write_instead_of_read = 1;
+			// wants_tcp_read is always 1;
+			return CONTINUE;
+		}
+
+		long error = ERR_get_error();
+		const char* error_string = ERR_error_string(error, NULL);
+		printf("could not SSL_write (returned -1): %s\n", error_string);
+		return BREAK;
+	}
+	else {
+		printf("wrote %d of %d bytes\n", num, to_write);
+		if (to_write < num) {
+			*wants_tcp_write = 1;
+		}
+		else {
+			*wants_tcp_write = 0;
+		}
+		to_write -= num;
+	}
+
+	return NEITHER;
+}
+int main(int argc, char** argv) {
+	/*
+	if (argc != 2 || (strcmp(argv[1], "client") && strcmp(argv[1], "ListenSocket"))) {
+		printf("need parameter 'client' or 'ListenSocket'\n");
+		return 1;
+	}*/
+
+	int is_client = 0;// !strcmp(argv[1], "client");
+	int port = 443;
+
+	WSADATA wsaData;
+
+	 if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+	{
+		printf(0, "WSAStartup failed");
+	}
 
 
-int main()
+	SSL_library_init();
+	SSL_load_error_strings();
+
+	SSL_CTX* ssl_ctx = SSL_CTX_new(is_client ?
+		SSLv23_client_method() :
+		SSLv23_server_method());
+	if (!ssl_ctx) {
+		printf("could not SSL_CTX_new\n");
+		WSACleanup();
+		return 1;
+	}
+
+	SOCKET ClientSocket = INVALID_SOCKET;
+	if (is_client) {
+		ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		if (ClientSocket == INVALID_SOCKET) {
+			printf("could not create socket\n");
+			WSACleanup();
+			return 1;
+		}
+	}
+	else {
+		//const char* certificate = "./cert.pem";
+		
+		if (SSL_CTX_use_certificate_file(ssl_ctx, CERTF, SSL_FILETYPE_PEM) != 1) {
+			printf("could not SSL_CTX_use_certificate_file\n");
+			WSACleanup();
+			return 1;
+		}
+
+		if (SSL_CTX_use_PrivateKey_file(ssl_ctx, KEYF, SSL_FILETYPE_PEM) != 1) {
+			printf("could not SSL_CTX_use_PrivateKey_file\n");
+			WSACleanup();
+			return 1;
+		}
+
+	SOCKET ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+		if (ListenSocket == INVALID_SOCKET) {
+			wprintf(L"socket function failed with error: %ld\n", WSAGetLastError());
+			WSACleanup();
+			return 1;
+		}
+		
+	
+
+		int on = 1;
+		if (setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&on, sizeof(int))) {
+			WSACleanup();
+			closesocket(ListenSocket);
+			printf("could not setsockopt\n");
+			return 1;
+		}
+
+
+
+		// Bind on any interface.
+		struct sockaddr_in addr;
+		ZeroMemory(&addr, sizeof(addr));
+		addr.sin_family = AF_INET;
+		addr.sin_port = htons(port);
+
+		if (bind(ListenSocket, (struct sockaddr*)(&addr),
+			sizeof(addr))) {
+			printf("could not bind\n");
+			WSACleanup();
+			closesocket(ListenSocket);
+			return 1;
+		}
+
+		if (listen(ListenSocket, SOMAXCONN)) {
+			printf("could not listen\n");
+			WSACleanup();
+			closesocket(ListenSocket);
+			return 1;
+		}
+
+
+
+		ClientSocket = accept(ListenSocket, NULL, NULL);
+		if (ClientSocket == INVALID_SOCKET) {
+			wprintf(L"accept failed: %d\n", WSAGetLastError());
+			closesocket(ClientSocket);
+			WSACleanup();
+			return 1;
+		}
+	}
+
+	SSL* ssl = SSL_new(ssl_ctx);
+	if (!ssl) {
+		printf("could not SSL_new\n");
+		return 1;
+	}
+
+	// Set the socket to be non blocking.
+	
+	u_long ulBlock = 1;
+	if(ioctlsocket(ClientSocket, FIONBIO, &ulBlock)== SOCKET_ERROR)
+	{
+		printf("could not fcntl\n");
+		closesocket(ClientSocket);
+		return 1;
+	}
+
+
+	int one = 1;
+	if (setsockopt(ClientSocket, IPPROTO_TCP, TCP_NODELAY, (const char* )&one, sizeof(int))) {
+		printf("could not setsockopt\n");
+		closesocket(ClientSocket);
+		return 1;
+	}
+
+	if (is_client) {
+		struct sockaddr_in addr;
+		memset(&addr, 0, sizeof(addr));
+		addr.sin_family = AF_INET;
+		addr.sin_port = htons(port);
+		addr.sin_addr.s_addr = inet_addr("127.0.0.1");// htonl((in_addr_t)(0x7f000001));
+
+
+
+
+		if (connect(ClientSocket, (struct sockaddr*)(&addr), sizeof(addr)) && errno != EINPROGRESS) {
+			printf("could not connect\n");
+			return 1;
+		}
+	}
+
+	if (!SSL_set_fd(ssl, ClientSocket)) {
+		closesocket(ClientSocket);
+		printf("could not SSL_set_fd\n");
+		return 1;
+	}
+
+	int connecting = 1;
+	if (is_client) {
+		SSL_set_connect_state(ssl);
+	}
+	else {
+		SSL_set_accept_state(ssl);
+		connecting = 0;
+	}
+
+	fd_set read_fds, write_fds;
+	int wants_tcp_read = 1, wants_tcp_write = is_client;
+	int call_ssl_read_instead_of_write = 0;
+	int call_ssl_write_instead_of_read = 0;
+
+	for (;;) {
+		printf("selecting\n");
+		FD_ZERO(&read_fds);
+		FD_ZERO(&write_fds);
+		if (wants_tcp_read) {
+			FD_SET(ClientSocket, &read_fds);
+		}
+
+		if (wants_tcp_write) {
+			FD_SET(ClientSocket, &write_fds);
+		}
+
+		struct timeval timeout = { 1, 0 };
+
+		if (select(ClientSocket + 1, &read_fds, &write_fds, NULL, &timeout)) {
+			if (FD_ISSET(ClientSocket, &read_fds)) {
+				printf("readable ClientSocket = %d\r\n");
+
+				if (connecting) {
+					ACTION action = ssl_connect(ssl, &wants_tcp_write, &connecting);
+					if (action == CONTINUE) {///
+						continue;
+					}
+					else if (action == BREAK) {
+						break;
+					}
+				}
+				else {
+					ACTION action;
+					if (call_ssl_write_instead_of_read) {
+						action = ssl_write(ssl, &wants_tcp_write, &call_ssl_write_instead_of_read, is_client, 0);
+					}
+					else {
+						action = ssl_read(ssl, &wants_tcp_write, &call_ssl_read_instead_of_write);
+					}
+
+					if (action == CONTINUE) {
+						continue;
+					}
+					else if (action == BREAK) {
+						break;
+					}
+				}
+			}
+
+			if (FD_ISSET(ClientSocket, &write_fds)) {
+				printf("writable\n");
+
+				if (connecting) {
+					wants_tcp_write = 0;
+
+					ACTION action = ssl_connect(ssl, &wants_tcp_write, &connecting);
+					if (action == CONTINUE) {
+						continue;
+					}
+					else if (action == BREAK) {
+						break;
+					}
+				}
+				else {
+					ACTION action;
+					if (call_ssl_read_instead_of_write) {
+						action = ssl_read(ssl, &wants_tcp_write, &call_ssl_read_instead_of_write);
+					}
+					else {
+						action = ssl_write(ssl, &wants_tcp_write, &call_ssl_write_instead_of_read, is_client, 0);
+					}
+
+					if (action == CONTINUE) {
+						continue;
+					}
+					else if (action == BREAK) {
+						break;
+					}
+				}
+			}
+		}
+		else if (is_client & !connecting && !call_ssl_write_instead_of_read) {
+			ACTION action = ssl_write(ssl, &wants_tcp_write, &call_ssl_write_instead_of_read, is_client, 1);
+			if (action == CONTINUE) {
+				continue;
+			}
+			else if (action == BREAK) {
+				break;
+			}
+		}
+	}
+
+	SSL_CTX_free(ssl_ctx);
+
+	return 0;
+}
+
+int main2()
 
 {
 	//httpsServer();
 	//WebSocketServer();
-	SSLWebSocketServer();
+	//SSLWebSocketServer();
+	AsyncSSLWebSocketServer();
+	
 	return 0;
 
 	bool fullData = false;
@@ -3210,7 +3642,6 @@ return split_array;
 	delete[] string;
 	string = retValue;
 }
-
 void replace_substr(char* &string, char* sub, char* value) {
 	int i = 0;
 	int j = 0;
@@ -4811,6 +5242,417 @@ void SSLWebSocketServer()
 		iResult = SSL_get_error(ssl, iResult);
 		wprintf(L"SSL error: %d\n", iResult);
 		return ;
+	}
+
+	cert = SSL_get_peer_certificate(ssl);
+	if (cert != NULL) {
+		printf("Client certificate:\n");
+
+		str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
+		printf("\t subject: %s\n", str);
+		OPENSSL_free(str);
+
+		str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
+		printf("\t issuer: %s\n", str);
+		OPENSSL_free(str);
+
+		/* We could do all sorts of certificate verification stuff here before
+		deallocating the certificate. */
+
+		X509_free(cert);
+	}
+	else
+		printf("Client does not have certificate.\n");
+
+
+
+	int iSendResult = 0;
+	char* payload = nullptr;
+	iResult = 0;
+	bool sendHandshake = true;
+	do
+	{
+		ZeroMemory(recvbuf, recvbuflen);
+		//iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
+		iResult = SSL_read(ssl, recvbuf, recvbuflen);
+		if (iResult > 0)
+		{
+			printf("Bytes received: %d\n", iResult);
+			if (!sendHandshake)
+			{
+
+				char mask[4];
+				uint16_t bits16 = *((uint16_t*)&recvbuf[0]);
+				uint8_t fin = (!!(bits16 & 0b0000000010000000));
+				uint8_t rv1 = (!!(bits16 & 0b0000000001000000));
+				uint8_t rv2 = (!!(bits16 & 0b0000000000100000));
+				uint8_t rv3 = (!!(bits16 & 0b0000000000010000));
+				uint8_t opc = ((bits16 & 0b0000000000001111));
+				uint8_t msk = (!!(bits16 & 0b1000000000000000));
+				uint64_t len = ((bits16 >> 8) & 0b0000000001111111);
+
+				if (opc == 8)
+				{
+					closesocket(ClientSocket);
+					break;
+				}
+
+				if (len <= 125)
+				{
+					printf("small data\n");
+					mask[0] = recvbuf[2];
+					mask[1] = recvbuf[3];
+					mask[2] = recvbuf[4];
+					mask[3] = recvbuf[5];
+					payload = &recvbuf[6];
+				}
+				else if (len == 126)
+				{
+					printf("medium data\n");
+					mask[0] = recvbuf[4];
+					mask[1] = recvbuf[5];
+					mask[2] = recvbuf[6];
+					mask[3] = recvbuf[7];
+					payload = &recvbuf[8];
+					uint32_t bits32 = *((uint32_t*)&recvbuf[0]);
+					len = ((bits32 & 0b00000000111111110000000000000000) >> 8) | ((bits32 & 0b11111111000000000000000000000000) >> 24);
+				}
+				else if (len == 127)
+				{
+					printf("large data\n");
+					mask[0] = recvbuf[10];
+					mask[1] = recvbuf[11];
+					mask[2] = recvbuf[12];
+					mask[3] = recvbuf[13];
+					payload = &recvbuf[14];
+					uint32_t bits64 = *((uint32_t*)&recvbuf[4]);
+					len = bits64 >> 5;
+					len = len;
+				}
+				if (len < recvbuflen)
+				{
+					printf("Payload byte length %d\n", len);
+					for (int i = 0; i < len; ++i)
+					{
+						payload[i] = payload[i] ^ mask[i % 4];
+					}
+
+					printf("client> %s\n", payload);
+				}
+				else
+				{
+					printf("Data to big = %lu\n", len);
+				}
+				{
+					char* outText = new char[1000000];
+					char* sendBuffer = nullptr;
+					//ZeroMemory(sendBuffer, sizeof(sendBuffer));
+					ZeroMemory(outText, sizeof(outText));
+					//sendBuffer[0] = 129;// text;//130 binary
+					char get = 0;
+					int j = 0;
+					uint32_t inc = 0;
+					unsigned long long ull = 0;
+					size_t totalLength;
+					printf("server> ");
+					while (1)
+					{
+						get = getchar();
+						if (!(get == '\n' || get == '\r'))
+						{
+							outText[inc++] = get;
+						}
+						else
+						{
+							break;
+						}
+					}
+
+
+					for (int i = 0; i < 70000; i++) outText[i] = 'v';
+
+
+					long bufferLength = strlen(outText);
+
+
+
+
+					if (bufferLength <= 125) {
+						// int payloadLength = bufferLength;
+						totalLength = bufferLength + 2;
+						sendBuffer = new char[totalLength];
+						sendBuffer[0] = 129;//fin | opcode;
+						sendBuffer[1] = bufferLength;
+						//memcpy(sendBuffer + 2, message.c_str(), message.size());
+						CopyMemory(sendBuffer + 2, outText, bufferLength);
+					}
+					else if (bufferLength <= 65535) {
+						// int payloadLength = WS_PAYLOAD_LENGTH_16;
+						totalLength = bufferLength + 4;
+						sendBuffer = new char[totalLength];
+						sendBuffer[0] = 129;// fin | opcode;
+						sendBuffer[1] = 126;
+						sendBuffer[2] = bufferLength >> 8;
+						sendBuffer[3] = bufferLength;
+						//memcpy(buf + 4, message.c_str(), message.size());
+						CopyMemory(sendBuffer + 4, outText, bufferLength);
+
+					}
+					else {
+						// int payloadLength = WS_PAYLOAD_LENGTH_63;
+						totalLength = bufferLength + 10;
+						sendBuffer = new char[totalLength];
+						sendBuffer[0] = 129;
+						sendBuffer[1] = 127;
+						sendBuffer[2] = 0;
+						sendBuffer[3] = 0;
+						sendBuffer[4] = 0;
+						sendBuffer[5] = 0;
+						sendBuffer[6] = bufferLength >> 24;
+						sendBuffer[7] = bufferLength >> 16;
+						sendBuffer[8] = bufferLength >> 8;
+						sendBuffer[9] = bufferLength;
+						CopyMemory(sendBuffer + 10, outText, bufferLength);
+					}
+
+
+
+
+
+
+
+
+
+					//CopyMemory(piowi->pbDATAFromClient, piowi->pecb->lpbData, piowi->cbReadSoFar);
+
+
+					/*
+					if (bufferLength >= 126) {
+					int num_bytes;
+					if (bufferLength > 0xffff) {
+					num_bytes = 8;
+					sendBuffer[1] = 127;
+					}
+					else {
+					num_bytes = 2;
+					sendBuffer[1] = 126;
+					}
+
+					for (int c = num_bytes - 1; c >= 0; c--) {
+					ull= (static_cast<unsigned long long>(bufferLength) >> (8 * c)) % 256;
+					strncat(sendBuffer, (char*)&ull, sizeof(unsigned long long));
+
+					}
+					}
+					else sendBuffer[1] = bufferLength;
+					strcat(sendBuffer, outText);
+					*/
+
+
+
+
+
+
+
+
+
+
+
+
+					//iSendResult = send(ClientSocket, sendBuffer, totalLength, 0);
+					iSendResult = SSL_write(ssl, sendBuffer, totalLength);
+
+					if (iSendResult == SOCKET_ERROR)
+					{
+						closesocket(ClientSocket);
+						WSACleanup();
+						printf(0, "Failed send %d", WSAGetLastError());
+					}
+				}
+			}
+			else
+			{
+				printf(recvbuf);
+				sendHandshake = false;
+				bool findHandshake = false;
+				uint32_t index = 0;
+				char handshakeTest[] = "Sec-WebSocket-Key: ";
+				char* handshakeHash = new char[120];
+				char handshakeBuffer[MAX_PATH];
+				char* base64EncodeOutput = NULL;
+				//ZeroMemory(base64_hash, sizeof(base64_hash));
+				int handshakeTestLen = strlen(handshakeTest);
+				unsigned char* digest = new unsigned char[SHA_DIGEST_LENGTH];
+
+				for (int i = 0; i < iResult - handshakeTestLen - 20; i++)
+					if (strncmp((char*)((char*)recvbuf + i), handshakeTest, handshakeTestLen) == 0)
+					{
+						for (int j = 0; j < 100; j++) if (recvbuf[j + i + handshakeTestLen] == '\r' && recvbuf[j + i + handshakeTestLen + 1] == '\n')
+						{
+							strncpy(handshakeHash, (char*)((char*)recvbuf + i + handshakeTestLen), j);
+							handshakeHash[j] = 0;
+							//strcpy(handshakeHash, "lpRgKO1IAsqpPeIgIIbpfA==");
+
+							strcat(handshakeHash, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+							findHandshake = true;
+							printf(handshakeHash);
+							printf("\r\n");
+							break;
+						}
+
+
+						break;
+					}
+
+
+				if (findHandshake == true) {
+					SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
+					//printf("Output (sha1): %d\n", strlen(digest));
+					Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
+					printf("Output (base64): %s\r\n", base64EncodeOutput);
+
+				}
+				base64EncodeOutput[strlen(base64EncodeOutput)] = 0;
+
+				strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
+				strcat(handshakeBuffer, base64EncodeOutput);
+				strcat(handshakeBuffer, "\r\n\r\n");
+				printf(handshakeBuffer);
+
+				//iSendResult = send(ClientSocket, handshakeBuffer, (int32_t)strlen(handshakeBuffer), 0);
+				iSendResult = SSL_write(ssl, handshakeBuffer, (int32_t)strlen(handshakeBuffer));
+
+				if (iSendResult == SOCKET_ERROR)
+				{
+					closesocket(ClientSocket);
+					WSACleanup();
+					printf("Failed send %d\r\n", WSAGetLastError());
+				}
+				else printf("Handshake sent. bytes: %d\n", iSendResult);
+
+
+
+			}
+		}
+		else if (iResult == 0)
+		{
+			printf("Connection closed\n");
+			SSL_shutdown(ssl);  /* send SSL/TLS close_notify */
+
+								/* Clean up. */
+
+			SSL_free(ssl);
+			SSL_CTX_free(ctx);
+			delete[] recvbuf;
+		}
+		else
+		{
+			closesocket(ClientSocket);
+			WSACleanup();
+			printf(0, "Failed to receive %d", WSAGetLastError());
+		}
+	} while (iResult > 0);
+}
+void AsyncSSLWebSocketServer()
+{
+	WSADATA wsaData;
+	int iResult = 0;
+	X509*  cert;
+	SSL_CTX *ctx;
+	SSL *ssl;
+	SOCKET ListenSocket = INVALID_SOCKET;
+	SOCKET ClientSocket = INVALID_SOCKET;
+	char* str;
+	DWORD dwError;
+	//int32_t recvbuflen = DEFAULT_BUFLEN;
+	//char recvbuf [DEFAULT_BUFLEN];
+	char* recvbuf = new char[DEFAULT_BUFLEN];
+	int32_t recvbuflen = DEFAULT_BUFLEN;
+
+	int i = 0;
+	SSL_load_error_strings();
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	ctx = SSL_CTX_new(SSLv23_server_method());
+	if (!ctx) { wprintf(L"Error init ssl\n"); return; }
+	iResult = SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM);
+	if (iResult <= 0) { wprintf(L"Error ssl certificate file %d\n", iResult); SSL_CTX_free(ctx); return; }
+	iResult = SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM);
+	if (iResult <= 0) { wprintf(L"Error Private Key file %d\n", iResult); SSL_CTX_free(ctx); return; }
+	iResult = SSL_CTX_check_private_key(ctx);
+	if (!iResult) { wprintf(L"Private key does not match the certificate public key %d\n", iResult); SSL_CTX_free(ctx); return; }
+	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (iResult != NO_ERROR) { wprintf(L"WSAStartup() failed with error: %d\n", iResult); SSL_CTX_free(ctx); return; }
+
+
+	sockaddr_in service;
+	ZeroMemory(&service, sizeof(service));
+
+	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);//socket(result->ai_family, result->ai_socktype, result->ai_protocol);
+	if (ListenSocket == INVALID_SOCKET)
+	{
+		//freeaddrinfo(result);
+		WSACleanup();
+		printf("failed socket %d", WSAGetLastError());
+		return;
+	}
+
+	int yes = 1;
+	iResult = setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int));
+	
+	if (iResult == SOCKET_ERROR)
+	{
+		closesocket(ListenSocket);
+		WSACleanup();
+		printf("setsockopt %d", WSAGetLastError());
+		return;
+	}
+
+	service.sin_family = AF_INET;
+	service.sin_port = htons(443);
+	service.sin_addr.s_addr = inet_addr("127.0.0.1");
+	iResult = bind(ListenSocket, (sockaddr*)&service, sizeof(service));//bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
+	if (iResult == SOCKET_ERROR)
+	{
+		closesocket(ListenSocket);
+		WSACleanup();
+		printf("failed bind %d", WSAGetLastError());
+		return;
+	}
+
+	iResult = listen(ListenSocket, SOMAXCONN);
+	if (iResult == SOCKET_ERROR)
+	{
+		closesocket(ListenSocket);
+		WSACleanup();
+		printf(0, "failed listen %d", WSAGetLastError());
+	}
+
+	ClientSocket = accept(ListenSocket, NULL, NULL);
+	if (ClientSocket == INVALID_SOCKET)
+	{  closesocket(ListenSocket);
+		WSACleanup();
+		printf(0, "failed accept %d", WSAGetLastError());
+	}
+
+
+
+	ssl = SSL_new(ctx);
+	SSL_set_fd(ssl, ClientSocket);
+	iResult = SSL_accept(ssl);
+
+
+	if (!iResult) {
+		wprintf(L"SSL connect error\nretval: %d\n", iResult);
+		iResult = closesocket(ClientSocket);
+		if (iResult == SOCKET_ERROR)
+			wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
+		WSACleanup();
+		return;
+
+		iResult = SSL_get_error(ssl, iResult);
+		wprintf(L"SSL error: %d\n", iResult);
+		return;
 	}
 
 	cert = SSL_get_peer_certificate(ssl);
