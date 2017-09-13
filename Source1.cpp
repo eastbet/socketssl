@@ -688,6 +688,8 @@ void webSocket::startServer(int port) {
 		exit(1);
 	}
 
+
+
 	fdmax = ListenSocket;
 	fd_set read_fds;
 	FD_ZERO(&fds);

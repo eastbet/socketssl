@@ -1,12 +1,4 @@
-// ConsoleApplication1.cpp: определяет точку входа для консольного приложения.
-//
-//openssl req - x509 - newkey rsa : 4096 - sha256 - nodes - keyout example.key - out example.crt - subj "/CN=localhost" - days 365
 
-/*
-#ifndef UNICODE
-#define UNICODE
-#endif
-*/
 #undef _UNICODE
 #undef UNICODE
 
@@ -19,7 +11,20 @@
 #include <stdio.h>
 #include <string.h>  
 #include <stdlib.h> 
+#include <stdint.h>
 #include <iostream>
+#include <sstream>
+#include <fstream>
+#include <conio.h>
+#include <time.h>
+#include <ctime>
+#include <vector>
+#include "windows.h"
+#include <assert.h>
+#include <fcntl.h>
+#include <map>
+#include <math.h>
+#include <iphlpapi.h>
 #include <openssl/bio.h>
 #include <openssl/crypto.h>
 #include <openssl/x509.h>
@@ -28,55 +33,55 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
-
-#include <conio.h>
 #include "rapidxml-1.13/rapidxml.hpp"
-//#include "rapidjson/document.h" 
-//#include "rapidjson/writer.h" 
-//#include "rapidjson/reader.h" 
-//#include "rapidjson/stringbuffer.h" 
-#include <fstream>
-#include <vector>
-#include "windows.h"
-#include <stdint.h>
 #include <amqp_ssl_socket.h>
 #include <amqp_framing.h>
-#include <assert.h>
-#include <ctime>
 
 
 
+#define WEBSOCKET_H
 
-
-#include <stdio.h>
-#include <string.h>
-#include <openssl/ssl.h>
-#include <openssl/crypto.h>
-#include <openssl/err.h>
-#include <fcntl.h>
-#include <sys/types.h>
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "iphlpapi.lib")
+#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
+#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
 
 
 
+using namespace std;
 
+typedef void(*nullCallback)();
+typedef void(*defaultCallback)(int);
+typedef void(*messageCallback)(int, string);
 
+#define WS_FIN 128
+#define WS_MASK 128
 
+#define WS_OPCODE_CONTINUATION 0
+#define WS_OPCODE_TEXT         1
+#define WS_OPCODE_BINARY       2
+#define WS_OPCODE_CLOSE        8
+#define WS_OPCODE_PING         9
+#define WS_OPCODE_PONG         10
 
+#define WS_PAYLOAD_LENGTH_16 126
+#define WS_PAYLOAD_LENGTH_63 127
 
+#define WS_READY_STATE_CONNECTING 0
+#define WS_READY_STATE_OPEN       1
+#define WS_READY_STATE_CLOSING    2
+#define WS_READY_STATE_CLOSED     3
 
+#define WS_STATUS_NORMAL_CLOSE             1000
+#define WS_STATUS_GONE_AWAY                1001
+#define WS_STATUS_PROTOCOL_ERROR           1002
+#define WS_STATUS_UNSUPPORTED_MESSAGE_TYPE 1003
+#define WS_STATUS_MESSAGE_TOO_BIG          1004
 
+#define WS_STATUS_TIMEOUT 3000
 
-
-
-
-
-
-#ifndef librabbitmq_examples_utils_h
-#define librabbitmq_examples_utils_h
-#endif
-
-//#define CERTF  "/cert.pem"
-//#define KEYF  "/key.pem"
+#define WS_TIMEOUT_RECV 10
+#define WS_TIMEOUT_PONG 5
 #define CERTF  "/passionbet.crt"
 #define KEYF  "/passionbet.key"
 #define MAX_PATH 255
@@ -109,11 +114,937 @@
 #define MAX_MARKETS_IN 2000
 #define MAX_BETSTOPS 200
 #define MAX_MATCHSTATUS 1000
+
+
+
+using namespace std;
+class wsClient {
+public:
+	wsClient(int _socket, SSL* _ssl, in_addr _addr) {
+		socket = _socket;
+		ssl = _ssl;
+		MessageBuffer.clear();
+		ReadyState = WS_READY_STATE_CONNECTING;
+		LastRecvTime = time(NULL);
+		PingSentTime = 0;
+		CloseStatus = 0;
+		addr = _addr;
+		FramePayloadDataLength = 0;
+		FrameBytesRead = 0;
+		FrameBuffer.clear();
+		MessageOpcode = 0;
+		MessageBufferLength = 0;
+	}
+
+	int socket;                            // client socket
+	SSL* ssl;                              //client ssl 
+	string MessageBuffer;                  // a blank string when there's no incoming frames
+	int ReadyState;                        // between 0 and 3
+	time_t LastRecvTime;                   // set to time() when the client is added
+	time_t PingSentTime;                   // 0 when the server is not waiting for a pong
+	int CloseStatus;                       // close status that wsOnClose() will be called with
+	in_addr addr;
+	size_t FramePayloadDataLength;         // length of a frame's payload data.
+	int FrameBytesRead;                    // amount of bytes read for a frame, reset to 0 when all frame data has been read
+	string FrameBuffer;                    // joined onto end as a frame's data comes in, reset to blank string when all frame data has been read
+	unsigned char MessageOpcode;           // stored by the first frame for fragmented messages, default value is 0
+	size_t MessageBufferLength;            // the payload data length of MessageBuffer
+};
+class webSocket {
+public:
+	webSocket() {
+		callOnOpen = NULL;
+		callOnClose = NULL;
+		callOnMessage = NULL;
+		callPeriodic = NULL;
+	}
+
+	void setOpenHandler(defaultCallback callback);
+	void setCloseHandler(defaultCallback callback);
+	void setMessageHandler(messageCallback callback);
+	void setPeriodicHandler(nullCallback callback);
+	void startServer(int port);
+	void stopServer();
+	bool wsSend(int clientID, string message, bool binary = false);
+	void wsClose(int clientID);
+	vector<int> getClientIDs();
+	string getClientIP(int clientID);
+private:
+	vector<wsClient *> wsClients;
+	map<int, int> socketIDmap;
+	fd_set fds;
+	int fdmax;
+	int ListenSocket;
+	SSL_CTX *ctx;
+	void wsCheckIdleClients();
+	bool wsSendClientMessage(int clientID, unsigned char opcode, string message);
+	void wsSendClientClose(int clientID, unsigned short status = -1);
+	bool wsCheckSizeClientFrame(int clientID);
+	void wsRemoveClient(int clientID);
+	bool wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength);
+	bool wsProcessClientFrame(int clientID);
+	bool wsBuildClientFrame(int clientID, char *buffer, int bufferLength);
+	bool wsProcessClientHandshake(int clientID, char *buffer);
+	bool wsProcessClient(int clientID, char *buffer, int bufferLength);
+	int wsGetNextClientID();
+	void wsAddClient(int socket, SSL*, in_addr ip);
+
+	defaultCallback callOnOpen;
+	defaultCallback callOnClose;
+	messageCallback callOnMessage;
+	nullCallback callPeriodic;
+};
+
+int Base64Decode(char*, unsigned char**, size_t*);
+int Base64Encode(const unsigned char*, size_t, char**);
+
+void showAvailableIP() {
+
+#ifdef __linux__
+
+	char name[INET_ADDRSTRLEN];
+	struct ifaddrs *iflist;
+	if (getifaddrs(&iflist) < 0) {
+		cout << "Error on getting available IP!" << endl;
+	}
+
+	cout << "Available IP:" << endl;
+
+	struct in_addr addr;
+	for (struct ifaddrs *p = iflist; p; p = p->ifa_next) {
+		if (p->ifa_addr->sa_family == AF_INET) {
+			addr = ((struct sockaddr_in*)p->ifa_addr)->sin_addr;
+			if (inet_ntop(AF_INET, &addr, name, sizeof(name)) == NULL)
+				continue;
+
+			cout << "    " << p->ifa_name << " " << name << endl;
+		}
+	}
+
+#elif _WIN32
+
+	/* Variables used by GetIpAddrTable */
+	PMIB_IPADDRTABLE pIPAddrTable;
+	DWORD dwSize = 0;
+	DWORD dwRetVal = 0;
+	IN_ADDR IPAddr;
+
+	/* Variables used to return error message */
+	LPVOID lpMsgBuf;
+
+	// Before calling AddIPAddress we use GetIpAddrTable to get
+	// an adapter to which we can add the IP.
+	pIPAddrTable = (MIB_IPADDRTABLE *)MALLOC(sizeof(MIB_IPADDRTABLE));
+
+	if (pIPAddrTable) {
+		// Make an initial call to GetIpAddrTable to get the
+		// necessary size into the dwSize variable
+		if (GetIpAddrTable(pIPAddrTable, &dwSize, 0) ==
+			ERROR_INSUFFICIENT_BUFFER) {
+			FREE(pIPAddrTable);
+			pIPAddrTable = (MIB_IPADDRTABLE *)MALLOC(dwSize);
+
+		}
+		if (pIPAddrTable == NULL) {
+			printf("Memory allocation failed for GetIpAddrTable\n");
+			return;
+		}
+	}
+	// Make a second call to GetIpAddrTable to get the
+	// actual data we want
+	if ((dwRetVal = GetIpAddrTable(pIPAddrTable, &dwSize, 0)) != NO_ERROR) {
+		printf("GetIpAddrTable failed with error %d\n", dwRetVal);
+		if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwRetVal, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),       // Default language
+			(LPTSTR)& lpMsgBuf, 0, NULL)) {
+			printf("\tError: %s", lpMsgBuf);
+			LocalFree(lpMsgBuf);
+		}
+		return;
+	}
+
+	cout << "Available IP:" << endl;
+
+	for (int i = 0; i < (int)pIPAddrTable->dwNumEntries; i++) {
+		IPAddr.S_un.S_addr = (u_long)pIPAddrTable->table[i].dwAddr;
+		cout << "    " << i << ": " << inet_ntoa(IPAddr) << endl;
+	}
+
+	if (pIPAddrTable) {
+		FREE(pIPAddrTable);
+		pIPAddrTable = NULL;
+	}
+
+#endif
+}
+vector<int> webSocket::getClientIDs() {
+	vector<int> clientIDs;
+	for (int i = 0; i < wsClients.size(); i++) {
+		if (wsClients[i] != NULL)
+			clientIDs.push_back(i);
+	}
+
+	return clientIDs;
+}
+string webSocket::getClientIP(int clientID) {
+	return string(inet_ntoa(wsClients[clientID]->addr));
+}
+void webSocket::wsCheckIdleClients() {
+	time_t current = time(NULL);
+	for (int i = 0; i < wsClients.size(); i++) {
+		if (wsClients[i] != NULL && wsClients[i]->ReadyState != WS_READY_STATE_CLOSED) {
+			if (wsClients[i]->PingSentTime != 0) {
+				if (difftime(current, wsClients[i]->PingSentTime) >= WS_TIMEOUT_PONG) {
+					wsSendClientClose(i, WS_STATUS_TIMEOUT);
+					wsRemoveClient(i);
+				}
+			}
+			else if (difftime(current, wsClients[i]->LastRecvTime) != WS_TIMEOUT_RECV) {
+				if (wsClients[i]->ReadyState != WS_READY_STATE_CONNECTING) {
+					wsClients[i]->PingSentTime = time(NULL);
+					wsSendClientMessage(i, WS_OPCODE_PING, "");
+				}
+				else
+					wsRemoveClient(i);
+			}
+		}
+	}
+}
+bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string message) {
+	// check if client ready state is already closing or closed
+	if (clientID >= wsClients.size())
+		return false;
+
+	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
+		return true;
+
+	// fetch message length
+	int messageLength = message.size();
+
+	// set max payload length per frame
+	int bufferSize = 4096;
+
+	// work out amount of frames to send, based on $bufferSize
+	int frameCount = ceil((float)messageLength / bufferSize);
+	if (frameCount == 0)
+		frameCount = 1;
+
+	// set last frame variables
+	int maxFrame = frameCount - 1;
+	int lastFrameBufferLength = (messageLength % bufferSize) != 0 ? (messageLength % bufferSize) : (messageLength != 0 ? bufferSize : 0);
+
+	// loop around all frames to send
+	for (int i = 0; i < frameCount; i++) {
+		// fetch fin, opcode and buffer length for frame
+		unsigned char fin = i != maxFrame ? 0 : WS_FIN;
+		opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
+
+		size_t bufferLength = i != maxFrame ? bufferSize : lastFrameBufferLength;
+		char *buf;
+		size_t totalLength;
+
+		// set payload length variables for frame
+		if (bufferLength <= 125) {
+			// int payloadLength = bufferLength;
+			totalLength = bufferLength + 2;
+			buf = new char[totalLength];
+			buf[0] = fin | opcode;
+			buf[1] = bufferLength;
+			memcpy(buf + 2, message.c_str(), message.size());
+		}
+		else if (bufferLength <= 65535) {
+			// int payloadLength = WS_PAYLOAD_LENGTH_16;
+			totalLength = bufferLength + 4;
+			buf = new char[totalLength];
+			buf[0] = fin | opcode;
+			buf[1] = WS_PAYLOAD_LENGTH_16;
+			buf[2] = bufferLength >> 8;
+			buf[3] = bufferLength;
+			memcpy(buf + 4, message.c_str(), message.size());
+		}
+		else {
+			// int payloadLength = WS_PAYLOAD_LENGTH_63;
+			totalLength = bufferLength + 10;
+			buf = new char[totalLength];
+			buf[0] = fin | opcode;
+			buf[1] = WS_PAYLOAD_LENGTH_63;
+			buf[2] = 0;
+			buf[3] = 0;
+			buf[4] = 0;
+			buf[5] = 0;
+			buf[6] = bufferLength >> 24;
+			buf[7] = bufferLength >> 16;
+			buf[8] = bufferLength >> 8;
+			buf[9] = bufferLength;
+			memcpy(buf + 10, message.c_str(), message.size());
+		}
+
+		// send frame
+		int left = totalLength;
+		char *buf2 = buf;
+		do {
+			//int sent = send(wsClients[clientID]->socket, buf2, left, 0);
+			int sent = SSL_write(wsClients[clientID]->ssl, buf2, left);
+
+			//SSL_write(ssl, sendBuf, strlen(sendBuf));
+
+			if (sent == -1)
+				return false;
+
+			left -= sent;
+			if (sent > 0)
+				buf2 += sent;
+		} while (left > 0);
+
+		delete buf;
+	}
+
+	return true;
+}
+bool webSocket::wsSend(int clientID, string message, bool binary) {
+	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message);
+}
+void webSocket::wsSendClientClose(int clientID, unsigned short status) {
+	// check if client ready state is already closing or closed
+	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
+		return;
+
+	// store close status
+	wsClients[clientID]->ReadyState = status;
+
+	// send close frame to client
+	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "");
+
+	// set client ready state to closing
+	wsClients[clientID]->ReadyState = WS_READY_STATE_CLOSING;
+}
+void webSocket::wsClose(int clientID) {
+	wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
+}
+bool webSocket::wsCheckSizeClientFrame(int clientID) {
+	wsClient *client = wsClients[clientID];
+	// check if at least 2 bytes have been stored in the frame buffer
+	if (client->FrameBytesRead > 1) {
+		// fetch payload length in byte 2, max will be 127
+		size_t payloadLength = (unsigned char)client->FrameBuffer.at(1) & 127;
+
+		if (payloadLength <= 125) {
+			// actual payload length is <= 125
+			client->FramePayloadDataLength = payloadLength;
+		}
+		else if (payloadLength == 126) {
+			// actual payload length is <= 65,535
+			if (client->FrameBuffer.size() >= 4) {
+				std::vector<unsigned char> length_bytes;
+				length_bytes.resize(2);
+				memcpy((char*)&length_bytes[0], client->FrameBuffer.substr(2, 2).c_str(), 2);
+
+				size_t length = 0;
+				int num_bytes = 2;
+				for (int c = 0; c < num_bytes; c++)
+					length += length_bytes[c] << (8 * (num_bytes - 1 - c));
+				client->FramePayloadDataLength = length;
+			}
+		}
+		else {
+			if (client->FrameBuffer.size() >= 10) {
+				std::vector<unsigned char> length_bytes;
+				length_bytes.resize(8);
+				memcpy((char*)&length_bytes[0], client->FrameBuffer.substr(2, 8).c_str(), 8);
+
+				size_t length = 0;
+				int num_bytes = 8;
+				for (int c = 0; c < num_bytes; c++)
+					length += length_bytes[c] << (8 * (num_bytes - 1 - c));
+				client->FramePayloadDataLength = length;
+			}
+		}
+
+		return true;
+	}
+
+	return false;
+}
+void webSocket::wsRemoveClient(int clientID) {
+	if (callOnClose != NULL)
+		callOnClose(clientID);
+
+	wsClient *client = wsClients[clientID];
+
+	// fetch close status (which could be false), and call wsOnClose
+	int closeStatus = wsClients[clientID]->CloseStatus;
+
+	SSL_free(client->ssl);
+	SSL_shutdown(client->ssl);
+	closesocket(client->socket);
+
+
+	WSACleanup();
+	FD_CLR(client->socket, &fds);
+	socketIDmap.erase(wsClients[clientID]->socket);
+	wsClients[clientID] = NULL;
+	delete client;
+}
+bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
+	wsClient *client = wsClients[clientID];
+	// check opcodes
+	if (opcode == WS_OPCODE_PING) {
+		// received ping message
+		return wsSendClientMessage(clientID, WS_OPCODE_PONG, data);
+	}
+	else if (opcode == WS_OPCODE_PONG) {
+		// received pong message (it's valid if the server did not send a ping request for this pong message)
+		if (client->PingSentTime != 0) {
+			client->PingSentTime = 0;
+		}
+	}
+	else if (opcode == WS_OPCODE_CLOSE) {
+		// received close message
+		if (client->ReadyState == WS_READY_STATE_CLOSING) {
+			// the server already sent a close frame to the client, this is the client's close frame reply
+			// (no need to send another close frame to the client)
+			client->ReadyState = WS_READY_STATE_CLOSED;
+		}
+		else {
+			// the server has not already sent a close frame to the client, send one now
+			wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
+		}
+
+		wsRemoveClient(clientID);
+	}
+	else if (opcode == WS_OPCODE_TEXT || opcode == WS_OPCODE_BINARY) {
+		if (callOnMessage != NULL)
+			callOnMessage(clientID, data.substr(0, dataLength));
+	}
+	else {
+		// unknown opcode
+		return false;
+	}
+
+	return true;
+}
+bool webSocket::wsProcessClientFrame(int clientID) {
+	wsClient *client = wsClients[clientID];
+	// store the time that data was last received from the client
+	client->LastRecvTime = time(NULL);
+
+	// check at least 6 bytes are set (first 2 bytes and 4 bytes for the mask key)
+	if (client->FrameBuffer.size() < 6)
+		return false;
+
+	// fetch first 2 bytes of header
+	unsigned char octet0 = client->FrameBuffer.at(0);
+	unsigned char octet1 = client->FrameBuffer.at(1);
+
+	unsigned char fin = octet0 & WS_FIN;
+	unsigned char opcode = octet0 & 0x0f;
+
+	//unsigned char mask = octet1 & WS_MASK;
+	if (octet1 < 128)
+		return false; // close socket, as no mask bit was sent from the client
+
+					  // fetch byte position where the mask key starts
+	int seek = client->FrameBytesRead <= 125 ? 2 : (client->FrameBytesRead <= 65535 ? 4 : 10);
+
+	// read mask key
+	char maskKey[4];
+	memcpy(maskKey, client->FrameBuffer.substr(seek, 4).c_str(), 4);
+
+	seek += 4;
+
+	// decode payload data
+	string data;
+	for (int i = seek; i < client->FrameBuffer.size(); i++) {
+		//data.append((char)(((int)client->FrameBuffer.at(i)) ^ maskKey[(i - seek) % 4]));
+		char c = client->FrameBuffer.at(i);
+		c = c ^ maskKey[(i - seek) % 4];
+		data += c;
+	}
+
+	// check if this is not a continuation frame and if there is already data in the message buffer
+	if (opcode != WS_OPCODE_CONTINUATION && client->MessageBufferLength > 0) {
+		// clear the message buffer
+		client->MessageBufferLength = 0;
+		client->MessageBuffer.clear();
+	}
+
+	// check if the frame is marked as the final frame in the message
+	if (fin == WS_FIN) {
+		// check if this is the first frame in the message
+		if (opcode != WS_OPCODE_CONTINUATION) {
+			// process the message
+			return wsProcessClientMessage(clientID, opcode, data, client->FramePayloadDataLength);
+		}
+		else {
+			// increase message payload data length
+			client->MessageBufferLength += client->FramePayloadDataLength;
+
+			// push frame payload data onto message buffer
+			client->MessageBuffer.append(data);
+
+			// process the message
+			bool result = wsProcessClientMessage(clientID, client->MessageOpcode, client->MessageBuffer, client->MessageBufferLength);
+
+			// check if the client wasn't removed, then reset message buffer and message opcode
+			if (wsClients[clientID] != NULL) {
+				client->MessageBuffer.clear();
+				client->MessageOpcode = 0;
+				client->MessageBufferLength = 0;
+			}
+
+			return result;
+		}
+	}
+	else {
+		// check if the frame is a control frame, control frames cannot be fragmented
+		if (opcode & 8)
+			return false;
+
+		// increase message payload data length
+		client->MessageBufferLength += client->FramePayloadDataLength;
+
+		// push frame payload data onto message buffer
+		client->MessageBuffer.append(data);
+
+		// if this is the first frame in the message, store the opcode
+		if (opcode != WS_OPCODE_CONTINUATION) {
+			client->MessageOpcode = opcode;
+		}
+	}
+
+	return true;
+}
+bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength) {
+	wsClient *client = wsClients[clientID];
+	// increase number of bytes read for the frame, and join buffer onto end of the frame buffer
+	client->FrameBytesRead += bufferLength;
+	client->FrameBuffer.append(buffer, bufferLength);
+
+	// check if the length of the frame's payload data has been fetched, if not then attempt to fetch it from the frame buffer
+	if (wsCheckSizeClientFrame(clientID) == true) {
+		// work out the header length of the frame
+		int headerLength = (client->FramePayloadDataLength <= 125 ? 0 : (client->FramePayloadDataLength <= 65535 ? 2 : 8)) + 6;
+
+		// check if all bytes have been received for the frame
+		int frameLength = client->FramePayloadDataLength + headerLength;
+		if (client->FrameBytesRead >= frameLength) {
+			char *nextFrameBytes= nullptr;
+			// check if too many bytes have been read for the frame (they are part of the next frame)
+			int nextFrameBytesLength = client->FrameBytesRead - frameLength;
+			if (nextFrameBytesLength > 0) {
+				client->FrameBytesRead -= nextFrameBytesLength;
+				nextFrameBytes = buffer + frameLength;
+				client->FrameBuffer = client->FrameBuffer.substr(0, frameLength);
+			}
+
+			// process the frame
+			bool result = wsProcessClientFrame(clientID);
+
+			// check if the client wasn't removed, then reset frame data
+			if (wsClients[clientID] != NULL) {
+				client->FramePayloadDataLength = -1;
+				client->FrameBytesRead = 0;
+				client->FrameBuffer.clear();
+			}
+
+			// if there's no extra bytes for the next frame, or processing the frame failed, return the result of processing the frame
+			if (nextFrameBytesLength <= 0 || !result)
+				return result;
+
+			// build the next frame with the extra bytes
+			return wsBuildClientFrame(clientID, nextFrameBytes, nextFrameBytesLength);
+		}
+	}
+
+	return true;
+}
+bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
+	// fetch headers and request line
+	string buf(buffer);
+	size_t sep = buf.find("\r\n\r\n");
+	if (sep == string::npos)
+		return false;
+
+	string headers = buf.substr(0, sep);
+
+	string request = headers.substr(0, headers.find("\r\n"));
+	if (request.size() == 0)
+		return false;
+
+	string part;
+	part = request.substr(0, request.find(" "));
+	if (part.compare("GET") != 0 && part.compare("get") != 0 && part.compare("Get") != 0)
+		return false;
+
+	part = request.substr(request.rfind("/") + 1);
+	if (atof(part.c_str()) < 1.1)
+		return false;
+
+	string host;
+	string ws_key;
+	string ws_version;
+	headers = headers.substr(headers.find("\r\n") + 2);
+	while (headers.size() > 0) {
+		request = headers.substr(0, headers.find("\r\n"));
+		if (request.find(":") != string::npos) {
+			string key = request.substr(0, request.find(":"));
+			if (key.find_first_not_of(" ") != string::npos)
+				key = key.substr(key.find_first_not_of(" "));
+			if (key.find_last_not_of(" ") != string::npos)
+				key = key.substr(0, key.find_last_not_of(" ") + 1);
+
+			string value = request.substr(request.find(":") + 1);
+			if (value.find_first_not_of(" ") != string::npos)
+				value = value.substr(value.find_first_not_of(" "));
+			if (value.find_last_not_of(" ") != string::npos)
+				value = value.substr(0, value.find_last_not_of(" ") + 1);
+
+			if (key.compare("Host") == 0) {
+				host = value;
+			}
+			else if (key.compare("Sec-WebSocket-Key") == 0) {
+				ws_key = value;
+			}
+			else if (key.compare("Sec-WebSocket-Version") == 0) {
+				ws_version = value;
+			}
+		}
+		if (headers.find("\r\n") == string::npos)
+			break;
+		headers = headers.substr(headers.find("\r\n") + 2);
+	}
+
+
+	unsigned char* decode_key = NULL;
+	size_t key_l;
+
+	Base64Decode((char*) ws_key.c_str(), &decode_key, &key_l);
+
+
+	if (host.size() == 0)
+		return false;
+
+	if (ws_key.size() == 0 || key_l != 16)
+		return false;
+
+	if (ws_version.size() == 0 || atoi(ws_version.c_str()) < 7)
+		return false;
+
+	unsigned char hash[20];
+	ws_key.append("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+	SHA1((unsigned char *)ws_key.c_str(), ws_key.size(), hash);
+	//string encoded_hash = base64_encode(hash, 20);
+	char* encoded_key = NULL;
+
+	Base64Encode((unsigned char*)hash, 20, &encoded_key);
+	string encoded_hash(encoded_key);
+
+
+	string message = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ";
+	message.append(encoded_hash);
+	message.append("\r\n\r\n");
+
+	int socket = wsClients[clientID]->socket;
+	SSL* ssl = wsClients[clientID]->ssl;
+
+	int left = message.size();
+	do {
+		//int sent = send(socket, message.c_str(), message.size(), 0);
+		int sent = SSL_write(ssl, message.c_str(), message.size());
+		
+
+		if (sent == false) return false;
+
+		left -= sent;
+		if (sent > 0)
+			message = message.substr(sent);
+	} while (left > 0);
+
+	return true;
+}
+bool webSocket::wsProcessClient(int clientID, char *buffer, int bufferLength) {
+	bool result;
+
+	if (clientID >= wsClients.size() || wsClients[clientID] == NULL)
+		return false;
+
+	if (wsClients[clientID]->ReadyState == WS_READY_STATE_OPEN) {
+		// handshake completed
+		result = wsBuildClientFrame(clientID, buffer, bufferLength);
+	}
+	else if (wsClients[clientID]->ReadyState == WS_READY_STATE_CONNECTING) {
+		// handshake not completed
+		result = wsProcessClientHandshake(clientID, buffer);
+		if (result) {
+			if (callOnOpen != NULL)
+				callOnOpen(clientID);
+
+			wsClients[clientID]->ReadyState = WS_READY_STATE_OPEN;
+		}
+	}
+	else {
+		// ready state is set to closed
+		result = false;
+	}
+
+	return result;
+}
+int webSocket::wsGetNextClientID() {
+	int i;
+	for (i = 0; i < wsClients.size(); i++) {
+		if (wsClients[i] == NULL)
+			break;
+	}
+	return i;
+}
+void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
+	FD_SET(socket, &fds);
+	if (socket > fdmax)
+		fdmax = socket;
+
+	int clientID = wsGetNextClientID();
+	wsClient *newClient = new wsClient(socket, ssl, ip);
+	if (clientID >= wsClients.size()) {
+		wsClients.push_back(newClient);
+	}
+	else {
+		wsClients[clientID] = newClient;
+	}
+	socketIDmap[socket] = clientID;
+}
+void webSocket::setOpenHandler(defaultCallback callback) {
+	callOnOpen = callback;
+}
+void webSocket::setCloseHandler(defaultCallback callback) {
+	callOnClose = callback;
+}
+void webSocket::setMessageHandler(messageCallback callback) {
+	callOnMessage = callback;
+}
+void webSocket::setPeriodicHandler(nullCallback callback) {
+	callPeriodic = callback;
+}
+void webSocket::startServer(int port) {
+	showAvailableIP();
+
+	int yes = 1;
+	char buf[4096];
+	struct sockaddr_in serv_addr, cli_addr;
+
+	memset(&serv_addr, '0', sizeof(serv_addr));
+	memset(&cli_addr, '0', sizeof(cli_addr));
+	serv_addr.sin_family = AF_INET;
+	//serv_addr.sin_addr.s_addr = inet_addr(ip);
+	serv_addr.sin_addr.s_addr = INADDR_ANY;
+	serv_addr.sin_port = htons(port);
+
+	WSADATA wsaData;
+	WSAStartup(MAKEWORD(2, 2), &wsaData);
+	int iResult = 0;
+	X509*  cert;
+    SSL *ssl=nullptr;
+	SOCKET ListenSocket = INVALID_SOCKET;
+	SOCKET ClientSocket = INVALID_SOCKET;
+	char* str;
+	DWORD dwError;
+	SSL_load_error_strings();
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	ctx = SSL_CTX_new(SSLv23_server_method());
+	if (!ctx) { wprintf(L"Error init ssl\n"); exit(1);}
+	iResult = SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM);
+	if (iResult <= 0) { wprintf(L"Error ssl certificate file %d\n", iResult); SSL_CTX_free(ctx); exit(1);}
+	iResult = SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM);
+	if (iResult <= 0) { wprintf(L"Error Private Key file %d\n", iResult); SSL_CTX_free(ctx); exit(1);}
+	iResult = SSL_CTX_check_private_key(ctx);
+	if (!iResult) { wprintf(L"Private key does not match the certificate public key %d\n", iResult); SSL_CTX_free(ctx); exit(1);}
+	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+	if (iResult != NO_ERROR) { wprintf(L"WSAStartup() failed with error: %d\n", iResult); SSL_CTX_free(ctx); exit(1); }
+
+
+
+
+	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (ListenSocket == INVALID_SOCKET)
+	{	WSACleanup();
+		printf("failed socket %d", WSAGetLastError());
+		exit(1);
+	}
+
+	iResult = setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int));
+	
+  if (iResult == SOCKET_ERROR){
+	    closesocket(ListenSocket);
+		WSACleanup();
+		printf("failed setsockopt %d", WSAGetLastError());
+		exit(1);
+	}
+
+	iResult = bind(ListenSocket, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
+	if (iResult == SOCKET_ERROR)
+	{	closesocket(ListenSocket);
+		WSACleanup();
+		printf("failed bind %d", WSAGetLastError());
+		exit(1);
+	}
+
+
+
+	iResult = listen(ListenSocket, SOMAXCONN);
+	
+	if (iResult == SOCKET_ERROR)
+	{	closesocket(ListenSocket);
+		WSACleanup();
+		printf(0, "failed listen %d", WSAGetLastError());
+		exit(1);
+	}
+
+
+	fdmax = ListenSocket;
+	fd_set read_fds;
+	FD_ZERO(&fds);
+	FD_SET(ListenSocket, &fds);
+	FD_ZERO(&read_fds);
+
+	struct timeval timeout;
+	time_t nextPingTime = time(NULL) + 20;
+	while (FD_ISSET(ListenSocket, &fds)) {
+		read_fds = fds;
+		timeout.tv_sec = 0;
+		timeout.tv_usec = 10000;
+		//if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) 
+			if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) != SOCKET_ERROR)
+		{
+			
+			for (int i = 0; i <= fdmax; i++) {
+				if (FD_ISSET(i, &read_fds)) {
+					if (i == ListenSocket) {
+						socklen_t addrlen = sizeof(cli_addr);
+						int ClientSocket = accept(ListenSocket, (struct sockaddr*)&cli_addr, &addrlen);
+						if (ClientSocket != INVALID_SOCKET) {
+							/* add new client */
+							ssl = SSL_new(ctx);
+							SSL_set_fd(ssl, ClientSocket);
+							iResult = SSL_accept(ssl);
+
+							if (!iResult) {
+								wprintf(L"SSL connect error\nretval: %d\n", iResult);
+								iResult = closesocket(ClientSocket);
+								if (iResult == SOCKET_ERROR) {
+									printf("closesocket function failed with error: %ld\n", WSAGetLastError());
+									WSACleanup();
+									continue;
+								}
+								else {
+									iResult = SSL_get_error(ssl, iResult);
+									printf("SSL error: %d\n", iResult);
+									WSACleanup();
+									continue;
+								}
+							}
+
+							cert = SSL_get_peer_certificate(ssl);
+							if (cert != NULL) {
+								printf("Client certificate:\n");
+
+								str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
+								printf("\t subject: %s\n", str);
+								OPENSSL_free(str);
+
+								str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
+								printf("\t issuer: %s\n", str);
+								OPENSSL_free(str);
+
+								/* We could do all sorts of certificate verification stuff here before
+								deallocating the certificate. */
+
+								X509_free(cert);
+							}
+							else
+								printf("Client does not have certificate.\n");
+							wsAddClient(ClientSocket, ssl, cli_addr.sin_addr);
+							ssl = nullptr;
+							printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
+						}
+					}
+					else {
+						//int nbytes = recv(i, buf, sizeof(buf), 0);
+						
+
+					//	iResult = SSL_read(ssl, recvbuf, recvbuflen);
+
+						if (socketIDmap.find(i) != socketIDmap.end()) {
+							int nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
+							if (nbytes < 0)
+								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+							else if (nbytes == 0)
+								wsRemoveClient(socketIDmap[i]);
+							else {
+								if (!wsProcessClient(socketIDmap[i], buf, nbytes))
+									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		if (time(NULL) >= nextPingTime) {
+			wsCheckIdleClients();
+			nextPingTime = time(NULL) + 20;
+		}
+
+		if (callPeriodic != NULL)
+			callPeriodic();
+	}
+}
+void webSocket::stopServer() {
+	for (int i = 0; i < wsClients.size(); i++) {
+		if (wsClients[i] != NULL) {
+			if (wsClients[i]->ReadyState != WS_READY_STATE_CONNECTING)
+				wsSendClientClose(i, WS_STATUS_GONE_AWAY);
+      			closesocket(wsClients[i]->socket);
+				SSL_shutdown(wsClients[i]->ssl);
+				SSL_free(wsClients[i]->ssl);
+				
+
+		}
+	}
+
+	closesocket(ListenSocket);
+	SSL_CTX_free(ctx);
+	wsClients.clear();
+	socketIDmap.clear();
+	FD_ZERO(&fds);
+	fdmax = 0;
+	WSACleanup();
+}
+
+
+
+
+
+
+
+
+
+#ifndef librabbitmq_examples_utils_h
+#define librabbitmq_examples_utils_h
+#endif
+
+//#define CERTF  "/cert.pem"
+//#define KEYF  "/key.pem"
 // Need to link with Ws2_32.lib
-#pragma comment(lib, "ws2_32.lib")
+
+
+
+
+
+
+
+
 
 char* recvbuf;
-  
+
 
 
 class Sport {
@@ -1052,7 +1983,7 @@ int matchstatus_l = 0;
 
 
 int i = 0;
-
+webSocket server;
 
 Event** events_id = new Event*[MAX_EVENTS];
 Line** lines_id = new Line*[MAX_LINES];
@@ -1084,7 +2015,6 @@ int getMatchstatus();
 int getVariantMarkets(Market*, char*);
 int httpsRequest(char*, char*, char*, int);
 int httpsServer();
-void sdkSocket();
 char** split(char*, char*);
 void replace(char* &,char*, char*);
 void replace_substr(char* &, char*, char*);
@@ -1100,12 +2030,17 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
-void WebSocketServer();
-void SSLWebSocketServer();
-void AsyncSSLWebSocketServer();
 size_t calcDecodeLength(const char* );
-int Base64Decode(char*, unsigned char**, size_t*);
-int Base64Encode(const unsigned char*, size_t, char**);
+/* called when a client connects */
+void openHandler(int);
+/* called when a client disconnects */
+void closeHandler(int);
+/* called when a client sends a message to the server */
+void messageHandler(int,string );
+/* called once per select() loop */
+void periodicHandler();
+
+
 
 
 
@@ -1120,418 +2055,32 @@ static void run(amqp_connection_state_t);
 static int rows_eq(int *, int *);
 static void dump_row(long, int, int *);
 
-typedef enum {
-	CONTINUE,
-	BREAK,
-	NEITHER
-} ACTION;
-ACTION ssl_connect(SSL* ssl, int* wants_tcp_write, int* connecting) {
-	printf("calling SSL_connect\n");
-
-	int result = SSL_connect(ssl);
-	if (result == 0) {
-		long error = ERR_get_error();
-		const char* error_str = ERR_error_string(error, NULL);
-		printf("could not SSL_connect: %s\n", error_str);
-		return BREAK;
-	}
-	else if (result < 0) {
-		int ssl_error = SSL_get_error(ssl, result);
-		if (ssl_error == SSL_ERROR_WANT_WRITE) {
-			printf("SSL_connect wants write\n");
-			*wants_tcp_write = 1;
-			return CONTINUE;
-		}
-
-		if (ssl_error == SSL_ERROR_WANT_READ) {
-			printf("SSL_connect wants read\n");
-			// wants_tcp_read is always 1;
-			return CONTINUE;
-		}
-
-		long error = ERR_get_error();
-		const char* error_string = ERR_error_string(error, NULL);
-		printf("could not SSL_connect %s\n", error_string);
-		return BREAK;
-	}
-	else {
-		printf("connected\n");
-		*connecting = 0;
-		return CONTINUE;
-	}
-
-	return NEITHER;
-}
-ACTION ssl_read(SSL* ssl, int* wants_tcp_write, int* call_ssl_read_instead_of_write) {
-	printf("calling SSL_read\n");
-
-	*call_ssl_read_instead_of_write = 0;
-
-	char buffer[1024];
-	int num = SSL_read(ssl, buffer, sizeof(buffer));
-	if (num == 0) {
-		long error = ERR_get_error();
-		const char* error_str = ERR_error_string(error, NULL);
-		printf("could not SSL_read (returned 0): %s\n", error_str);
-		return BREAK;
-	}
-	else if (num < 0) {
-		int ssl_error = SSL_get_error(ssl, num);
-		if (ssl_error == SSL_ERROR_WANT_WRITE) {
-			printf("SSL_read wants write\n");
-			*wants_tcp_write = 1;
-			*call_ssl_read_instead_of_write = 1;
-			return CONTINUE;
-		}
-
-		if (ssl_error == SSL_ERROR_WANT_READ) {
-			printf("SSL_read wants read\n");
-			// wants_tcp_read is always 1;
-			return CONTINUE;
-		}
-
-		long error = ERR_get_error();
-		const char* error_string = ERR_error_string(error, NULL);
-		printf("could not SSL_read (returned -1) %s\n", error_string);
-		return BREAK;
-	}
-	else {
-		printf("read %d bytesr\n", num);
-		buffer[num] = 0;
-		printf(buffer);
-	}
-
-	return NEITHER;
-}
-ACTION ssl_write(SSL* ssl, int* wants_tcp_write, int* call_ssl_write_instead_of_read,
-	int is_client, int should_start_a_new_write) {
-	printf("calling SSL_write\n");
-
-	static char buffer[1024];
-	memset(buffer, 0, sizeof(buffer));
-	static int to_write = 0;
-	if (!*call_ssl_write_instead_of_read && !to_write && is_client && should_start_a_new_write) {
-		to_write = 1024;
-		printf("decided to write %d bytes\n", to_write);
-	}
-
-	if (*call_ssl_write_instead_of_read && (!to_write || !buffer)) {
-		printf("ssl should not have requested a write from a read if no data was waiting to be written\n");
-		return BREAK;
-	}
-
-	*call_ssl_write_instead_of_read = 0;
-
-	if (!to_write) {
-		return NEITHER;
-	}
-
-	int num = SSL_write(ssl, buffer, to_write);
-	if (num == 0) {
-		long error = ERR_get_error();
-		const char* error_str = ERR_error_string(error, NULL);
-		printf("could not SSL_write (returned 0): %s\n", error_str);
-		return BREAK;
-	}
-	else if (num < 0) {
-		int ssl_error = SSL_get_error(ssl, num);
-		if (ssl_error == SSL_ERROR_WANT_WRITE) {
-			printf("SSL_write wants write\n");
-			*wants_tcp_write = 1;
-			return CONTINUE;
-		}
-
-		if (ssl_error == SSL_ERROR_WANT_READ) {
-			printf("SSL_write wants read\n");
-			*call_ssl_write_instead_of_read = 1;
-			// wants_tcp_read is always 1;
-			return CONTINUE;
-		}
-
-		long error = ERR_get_error();
-		const char* error_string = ERR_error_string(error, NULL);
-		printf("could not SSL_write (returned -1): %s\n", error_string);
-		return BREAK;
-	}
-	else {
-		printf("wrote %d of %d bytes\n", num, to_write);
-		if (to_write < num) {
-			*wants_tcp_write = 1;
-		}
-		else {
-			*wants_tcp_write = 0;
-		}
-		to_write -= num;
-	}
-
-	return NEITHER;
-}
-int main(int argc, char** argv) {
-	/*
-	if (argc != 2 || (strcmp(argv[1], "client") && strcmp(argv[1], "ListenSocket"))) {
-		printf("need parameter 'client' or 'ListenSocket'\n");
-		return 1;
-	}*/
-
-	int is_client = 0;// !strcmp(argv[1], "client");
-	int port = 443;
-
-	WSADATA wsaData;
-
-	 if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-	{
-		printf(0, "WSAStartup failed");
-	}
 
 
-	SSL_library_init();
-	SSL_load_error_strings();
+int main(){
+using namespace std;
 
-	SSL_CTX* ssl_ctx = SSL_CTX_new(is_client ?
-		SSLv23_client_method() :
-		SSLv23_server_method());
-	if (!ssl_ctx) {
-		printf("could not SSL_CTX_new\n");
-		WSACleanup();
-		return 1;
-	}
+int port = 443;
+//cout << "Please set server port: ";
+//cin >> port;
+/* set event handler */
+server.setOpenHandler(openHandler);
+server.setCloseHandler(closeHandler);
+server.setMessageHandler(messageHandler);
+//server.setPeriodicHandler(periodicHandler);
 
-	SOCKET ClientSocket = INVALID_SOCKET;
-	if (is_client) {
-		ClientSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (ClientSocket == INVALID_SOCKET) {
-			printf("could not create socket\n");
-			WSACleanup();
-			return 1;
-		}
-	}
-	else {
-		//const char* certificate = "./cert.pem";
-		
-		if (SSL_CTX_use_certificate_file(ssl_ctx, CERTF, SSL_FILETYPE_PEM) != 1) {
-			printf("could not SSL_CTX_use_certificate_file\n");
-			WSACleanup();
-			return 1;
-		}
+/* start the chatroom server, listen to ip '127.0.0.1' and port '8000' */
+server.startServer(port);
 
-		if (SSL_CTX_use_PrivateKey_file(ssl_ctx, KEYF, SSL_FILETYPE_PEM) != 1) {
-			printf("could not SSL_CTX_use_PrivateKey_file\n");
-			WSACleanup();
-			return 1;
-		}
+return 1;
 
-	SOCKET ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-		if (ListenSocket == INVALID_SOCKET) {
-			wprintf(L"socket function failed with error: %ld\n", WSAGetLastError());
-			WSACleanup();
-			return 1;
-		}
-		
-	
-
-		int on = 1;
-		if (setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&on, sizeof(int))) {
-			WSACleanup();
-			closesocket(ListenSocket);
-			printf("could not setsockopt\n");
-			return 1;
-		}
-
-
-
-		// Bind on any interface.
-		struct sockaddr_in addr;
-		ZeroMemory(&addr, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(port);
-
-		if (bind(ListenSocket, (struct sockaddr*)(&addr),
-			sizeof(addr))) {
-			printf("could not bind\n");
-			WSACleanup();
-			closesocket(ListenSocket);
-			return 1;
-		}
-
-		if (listen(ListenSocket, SOMAXCONN)) {
-			printf("could not listen\n");
-			WSACleanup();
-			closesocket(ListenSocket);
-			return 1;
-		}
-
-
-
-		ClientSocket = accept(ListenSocket, NULL, NULL);
-		if (ClientSocket == INVALID_SOCKET) {
-			wprintf(L"accept failed: %d\n", WSAGetLastError());
-			closesocket(ClientSocket);
-			WSACleanup();
-			return 1;
-		}
-	}
-
-	SSL* ssl = SSL_new(ssl_ctx);
-	if (!ssl) {
-		printf("could not SSL_new\n");
-		return 1;
-	}
-
-	// Set the socket to be non blocking.
-	
-	u_long ulBlock = 1;
-	if(ioctlsocket(ClientSocket, FIONBIO, &ulBlock)== SOCKET_ERROR)
-	{
-		printf("could not fcntl\n");
-		closesocket(ClientSocket);
-		return 1;
-	}
-
-
-	int one = 1;
-	if (setsockopt(ClientSocket, IPPROTO_TCP, TCP_NODELAY, (const char* )&one, sizeof(int))) {
-		printf("could not setsockopt\n");
-		closesocket(ClientSocket);
-		return 1;
-	}
-
-	if (is_client) {
-		struct sockaddr_in addr;
-		memset(&addr, 0, sizeof(addr));
-		addr.sin_family = AF_INET;
-		addr.sin_port = htons(port);
-		addr.sin_addr.s_addr = inet_addr("127.0.0.1");// htonl((in_addr_t)(0x7f000001));
-
-
-
-
-		if (connect(ClientSocket, (struct sockaddr*)(&addr), sizeof(addr)) && errno != EINPROGRESS) {
-			printf("could not connect\n");
-			return 1;
-		}
-	}
-
-	if (!SSL_set_fd(ssl, ClientSocket)) {
-		closesocket(ClientSocket);
-		printf("could not SSL_set_fd\n");
-		return 1;
-	}
-
-	int connecting = 1;
-	if (is_client) {
-		SSL_set_connect_state(ssl);
-	}
-	else {
-		SSL_set_accept_state(ssl);
-		connecting = 0;
-	}
-
-	fd_set read_fds, write_fds;
-	int wants_tcp_read = 1, wants_tcp_write = is_client;
-	int call_ssl_read_instead_of_write = 0;
-	int call_ssl_write_instead_of_read = 0;
-
-	for (;;) {
-		printf("selecting\n");
-		FD_ZERO(&read_fds);
-		FD_ZERO(&write_fds);
-		if (wants_tcp_read) {
-			FD_SET(ClientSocket, &read_fds);
-		}
-
-		if (wants_tcp_write) {
-			FD_SET(ClientSocket, &write_fds);
-		}
-
-		struct timeval timeout = { 1, 0 };
-
-		if (select(ClientSocket + 1, &read_fds, &write_fds, NULL, &timeout)) {
-			if (FD_ISSET(ClientSocket, &read_fds)) {
-				printf("readable ClientSocket = %d\r\n");
-
-				if (connecting) {
-					ACTION action = ssl_connect(ssl, &wants_tcp_write, &connecting);
-					if (action == CONTINUE) {///
-						continue;
-					}
-					else if (action == BREAK) {
-						break;
-					}
-				}
-				else {
-					ACTION action;
-					if (call_ssl_write_instead_of_read) {
-						action = ssl_write(ssl, &wants_tcp_write, &call_ssl_write_instead_of_read, is_client, 0);
-					}
-					else {
-						action = ssl_read(ssl, &wants_tcp_write, &call_ssl_read_instead_of_write);
-					}
-
-					if (action == CONTINUE) {
-						continue;
-					}
-					else if (action == BREAK) {
-						break;
-					}
-				}
-			}
-
-			if (FD_ISSET(ClientSocket, &write_fds)) {
-				printf("writable\n");
-
-				if (connecting) {
-					wants_tcp_write = 0;
-
-					ACTION action = ssl_connect(ssl, &wants_tcp_write, &connecting);
-					if (action == CONTINUE) {
-						continue;
-					}
-					else if (action == BREAK) {
-						break;
-					}
-				}
-				else {
-					ACTION action;
-					if (call_ssl_read_instead_of_write) {
-						action = ssl_read(ssl, &wants_tcp_write, &call_ssl_read_instead_of_write);
-					}
-					else {
-						action = ssl_write(ssl, &wants_tcp_write, &call_ssl_write_instead_of_read, is_client, 0);
-					}
-
-					if (action == CONTINUE) {
-						continue;
-					}
-					else if (action == BREAK) {
-						break;
-					}
-				}
-			}
-		}
-		else if (is_client & !connecting && !call_ssl_write_instead_of_read) {
-			ACTION action = ssl_write(ssl, &wants_tcp_write, &call_ssl_write_instead_of_read, is_client, 1);
-			if (action == CONTINUE) {
-				continue;
-			}
-			else if (action == BREAK) {
-				break;
-			}
-		}
-	}
-
-	SSL_CTX_free(ssl_ctx);
-
-	return 0;
-}
-
-int main2()
-
-{
 	//httpsServer();
 	//WebSocketServer();
 	//SSLWebSocketServer();
-	AsyncSSLWebSocketServer();
-	
+	//AsyncSSLWebSocketServer();
+	//SSLWebSocketServer();
+
+
 	return 0;
 
 	bool fullData = false;
@@ -4511,6 +5060,53 @@ int Base64Encode(const unsigned char* buffer, size_t length, char** b64text) { /
 
 	return (0); //success
 }
+void openHandler(int clientID) {
+	ostringstream os;
+	os << "Stranger " << clientID << " has joined.";
+
+	vector<int> clientIDs = server.getClientIDs();
+	for (int i = 0; i < clientIDs.size(); i++) {
+		if (clientIDs[i] != clientID)
+			server.wsSend(clientIDs[i], os.str());
+	}
+	server.wsSend(clientID, "Welcome!");
+}
+void closeHandler(int clientID) {
+	ostringstream os;
+	os << "Stranger " << clientID << " has leaved.";
+
+	vector<int> clientIDs = server.getClientIDs();
+	for (int i = 0; i < clientIDs.size(); i++) {
+		if (clientIDs[i] != clientID)
+			server.wsSend(clientIDs[i], os.str());
+	}
+}
+void messageHandler(int clientID, string message) {
+	ostringstream os;
+	os << "Stranger " << clientID << " says: " << message;
+
+	vector<int> clientIDs = server.getClientIDs();
+	for (int i = 0; i < clientIDs.size(); i++) {
+		if (clientIDs[i] != clientID)
+			server.wsSend(clientIDs[i], os.str());
+	}
+}
+void periodicHandler() {
+	static time_t next = time(NULL) + 10;
+	time_t current = time(NULL);
+	if (current >= next) {
+		ostringstream os;
+		string timestring = ctime(&current);
+		timestring = timestring.substr(0, timestring.size() - 1);
+		os << timestring;
+
+		vector<int> clientIDs = server.getClientIDs();
+		for (int i = 0; i < clientIDs.size(); i++)
+			server.wsSend(clientIDs[i], os.str());
+
+		next = time(NULL) + 10;
+	}
+}
 
 
 
@@ -4824,1146 +5420,6 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	return 0;
 
 };
-void WebSocketServer()
-{
-	//addrinfo hints;
-	//addrinfo* result = NULL;
-	//addrinfo* pointer = NULL;
-	uint32_t iResult = 0;
-	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
-	WSADATA wsaData;
-
-	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (iResult != 0)
-	{
-		printf(0, "WSAStartup failed %d", iResult);
-	}
-
-
-	sockaddr_in service;
-	ZeroMemory(&service, sizeof(service));
-
-	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);//socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-	if (ListenSocket == INVALID_SOCKET)
-	{
-		//freeaddrinfo(result);
-		WSACleanup();
-		printf(0, "failed socket %d", WSAGetLastError());
-	}
-	service.sin_family = AF_INET;
-	service.sin_port = htons(8080);
-	service.sin_addr.s_addr = inet_addr("127.0.0.1");
-	iResult = bind(ListenSocket, (sockaddr*)&service, sizeof(service));//bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed bind %d", WSAGetLastError());
-	}
-
-	iResult = listen(ListenSocket, SOMAXCONN);
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed listen %d", WSAGetLastError());
-	}
-
-	ClientSocket = accept(ListenSocket, NULL, NULL);
-	if (ClientSocket == INVALID_SOCKET)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed accept %d", WSAGetLastError());
-	}
-
-	char recvbuf[MEDIUM_BUFLEN];
-	int32_t recvbuflen = MEDIUM_BUFLEN;
-	int32_t iSendResult = 0;
-	char* payload = nullptr;
-	iResult = 0;
-	bool sendHandshake = true;
-	do
-	{
-		ZeroMemory(recvbuf, recvbuflen);
-		iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-		if (iResult > 0)
-		{
-			printf("Bytes received: %d\n", iResult);
-			if (!sendHandshake)
-			{
-
-				char mask[4];
-				uint16_t bits16 = *((uint16_t*)&recvbuf[0]);
-				uint8_t fin = (!!(bits16 & 0b0000000010000000));
-				uint8_t rv1 = (!!(bits16 & 0b0000000001000000));
-				uint8_t rv2 = (!!(bits16 & 0b0000000000100000));
-				uint8_t rv3 = (!!(bits16 & 0b0000000000010000));
-				uint8_t opc = ((bits16 & 0b0000000000001111));
-				uint8_t msk = (!!(bits16 & 0b1000000000000000));
-				uint64_t len = ((bits16 >> 8) & 0b0000000001111111);
-
-				if (opc == 8)
-				{
-					closesocket(ClientSocket);
-					break;
-				}
-
-				if (len <= 125)
-				{
-					printf("small data\n");
-					mask[0] = recvbuf[2];
-					mask[1] = recvbuf[3];
-					mask[2] = recvbuf[4];
-					mask[3] = recvbuf[5];
-					payload = &recvbuf[6];
-				}
-				else if (len == 126)
-				{
-					printf("medium data\n");
-					mask[0] = recvbuf[4];
-					mask[1] = recvbuf[5];
-					mask[2] = recvbuf[6];
-					mask[3] = recvbuf[7];
-					payload = &recvbuf[8];
-					uint32_t bits32 = *((uint32_t*)&recvbuf[0]);
-					len = ((bits32 & 0b00000000111111110000000000000000) >> 8) | ((bits32 & 0b11111111000000000000000000000000) >> 24);
-				}
-				else if (len == 127)
-				{
-					printf("large data\n");
-					mask[0] = recvbuf[10];
-					mask[1] = recvbuf[11];
-					mask[2] = recvbuf[12];
-					mask[3] = recvbuf[13];
-					payload = &recvbuf[14];
-					uint32_t bits64 = *((uint32_t*)&recvbuf[4]);
-					len = bits64 >> 5;
-					len = len;
-				}
-				if (len < recvbuflen)
-				{
-					printf("Payload byte length %d\n", len);
-					for (int i = 0; i < len; ++i)
-					{
-						payload[i] = payload[i] ^ mask[i % 4];
-					}
-
-					printf("client> %s\n", payload);
-				}
-				else
-				{
-					printf("Data to big = %lu\n", len);
-				}
-				{
-					char* outText=new char[1000000];
-					char* sendBuffer=nullptr;
-					//ZeroMemory(sendBuffer, sizeof(sendBuffer));
-					ZeroMemory(outText, sizeof(outText));
-					//sendBuffer[0] = 129;// text;//130 binary
-					char get = 0;
-					int j = 0;
-					uint32_t inc = 0;
-					unsigned long long ull = 0;
-					size_t totalLength;
-					printf("server> ");
-					while (1)
-					{
-						get = getchar();
-						if (!(get == '\n' || get == '\r'))
-						{
-							outText[inc++] = get;
-						}
-						else
-						{
-							break;
-						}
-					}
-
-
-					for (int i = 0; i < 70000; i++) outText[i] = 'v';
-
-					
-					long bufferLength = strlen(outText);
-
-				
-
-
-					if (bufferLength <= 125) {
-						// int payloadLength = bufferLength;
-						totalLength = bufferLength + 2;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;//fin | opcode;
-						sendBuffer[1] = bufferLength;
-						//memcpy(sendBuffer + 2, message.c_str(), message.size());
-						CopyMemory(sendBuffer + 2, outText, bufferLength);
-					}
-					else if (bufferLength <= 65535) {
-						// int payloadLength = WS_PAYLOAD_LENGTH_16;
-						totalLength = bufferLength + 4;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;// fin | opcode;
-						sendBuffer[1] = 126;
-						sendBuffer[2] = bufferLength >> 8;
-						sendBuffer[3] = bufferLength;
-						//memcpy(buf + 4, message.c_str(), message.size());
-						CopyMemory(sendBuffer + 4, outText, bufferLength);
-						
-					}
-					else {
-						// int payloadLength = WS_PAYLOAD_LENGTH_63;
-						totalLength = bufferLength + 10;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;
-						sendBuffer[1] = 127;
-						sendBuffer[2] = 0;
-						sendBuffer[3] = 0;
-						sendBuffer[4] = 0;
-						sendBuffer[5] = 0;
-						sendBuffer[6] = bufferLength >> 24;
-						sendBuffer[7] = bufferLength >> 16;
-						sendBuffer[8] = bufferLength >> 8;
-						sendBuffer[9] = bufferLength;
-						CopyMemory(sendBuffer + 10, outText, bufferLength);
-					}
-
-
-
-
-
-
-
-
-
-					//CopyMemory(piowi->pbDATAFromClient, piowi->pecb->lpbData, piowi->cbReadSoFar);
-
-					
-					/*
-					if (bufferLength >= 126) {
-					int num_bytes;
-					if (bufferLength > 0xffff) {
-					num_bytes = 8;
-					sendBuffer[1] = 127;
-					}
-					else {
-					num_bytes = 2;
-					sendBuffer[1] = 126;
-					}
-
-					for (int c = num_bytes - 1; c >= 0; c--) {
-						ull= (static_cast<unsigned long long>(bufferLength) >> (8 * c)) % 256;
-						strncat(sendBuffer, (char*)&ull, sizeof(unsigned long long));
-
-					}
-					}
-					else sendBuffer[1] = bufferLength;
-					strcat(sendBuffer, outText);
-					*/
-
-					
-
-
-
-
-
-
-
-
-
-
-					iSendResult = send(ClientSocket, sendBuffer, totalLength, 0);
-					if (iSendResult == SOCKET_ERROR)
-					{
-						closesocket(ClientSocket);
-						WSACleanup();
-						printf(0, "Failed send %d", WSAGetLastError());
-					}
-				}
-			}
-			else
-			{
-				printf(recvbuf);
-				sendHandshake = false;
-				bool findHandshake = false;
-				uint32_t index = 0;
-				char handshakeTest[] = "Sec-WebSocket-Key: ";
-				char* handshakeHash=new char[120];
-				char handshakeBuffer[MAX_PATH];
-				char* base64EncodeOutput=NULL;
-				//ZeroMemory(base64_hash, sizeof(base64_hash));
-				int handshakeTestLen = strlen(handshakeTest);
-				unsigned char* digest=new unsigned char[SHA_DIGEST_LENGTH];
-
-				for (int i = 0; i < iResult - handshakeTestLen - 20; i++)
-					if (strncmp((char*)((char*)recvbuf + i), handshakeTest, handshakeTestLen) == 0)
-					{
-						for (int j = 0; j < 100; j++) if (recvbuf[j + i + handshakeTestLen] == '\r' && recvbuf[j + i + handshakeTestLen + 1] == '\n')
-						{
-							strncpy(handshakeHash, (char*)((char*)recvbuf + i + handshakeTestLen), j);
-							handshakeHash[j] = 0;
-							//strcpy(handshakeHash, "lpRgKO1IAsqpPeIgIIbpfA==");
-
-							strcat(handshakeHash, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-							findHandshake = true;
-							printf(handshakeHash);
-							printf("\r\n");
-							break;
-						}
-
-
-						break;
-					}
-
-
-				if (findHandshake == true) {
-					SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
-					//printf("Output (sha1): %d\n", strlen(digest));
-					Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
-					printf("Output (base64): %s\r\n", base64EncodeOutput);
-
-				}
-				base64EncodeOutput[strlen(base64EncodeOutput) - 1] = 0;
-
-				strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
-				strcat(handshakeBuffer, base64EncodeOutput);
-				strcat(handshakeBuffer, "\r\n\r\n");
-				printf(handshakeBuffer);
-
-				iSendResult = send(ClientSocket, handshakeBuffer, (int32_t)strlen(handshakeBuffer), 0);
-				if (iSendResult == SOCKET_ERROR)
-				{
-					closesocket(ClientSocket);
-					WSACleanup();
-					printf("Failed send %d\r\n", WSAGetLastError());
-				}
-				else printf("Handshake sent. bytes: %d\n", iSendResult);
-				
-
-
-			}
-	    }
-		else if (iResult == 0)
-		{
-			printf("Connection closed\n");
-		}
-		else
-		{
-			closesocket(ClientSocket);
-			WSACleanup();
-			printf(0, "Failed to receive %d", WSAGetLastError());
-		}
-	} while (iResult > 0);
-}
-void SSLWebSocketServer()
-{
-	WSADATA wsaData;
-	int iResult = 0;
-	X509*  cert;
-	SSL_CTX *ctx;
-	SSL *ssl;
-	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
-	char* str;
-	DWORD dwError;
-	//int32_t recvbuflen = DEFAULT_BUFLEN;
-	//char recvbuf [DEFAULT_BUFLEN];
-	char* recvbuf=new char[DEFAULT_BUFLEN];
-	int32_t recvbuflen = DEFAULT_BUFLEN;
-	
-	int i = 0;
-	SSL_load_error_strings();
-	SSL_library_init();
-	OpenSSL_add_all_algorithms();
-	ctx = SSL_CTX_new(SSLv23_server_method());
-	if (!ctx) { wprintf(L"Error init ssl\n"); return; }
-	iResult = SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM);
-	if (iResult <= 0) { wprintf(L"Error ssl certificate file %d\n", iResult); SSL_CTX_free(ctx); return; }
-	iResult = SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM);
-	if (iResult <= 0) { wprintf(L"Error Private Key file %d\n", iResult); SSL_CTX_free(ctx); return ; }
-	iResult = SSL_CTX_check_private_key(ctx);
-	if (!iResult) { wprintf(L"Private key does not match the certificate public key %d\n", iResult); SSL_CTX_free(ctx); return; }
-	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (iResult != NO_ERROR) { wprintf(L"WSAStartup() failed with error: %d\n", iResult); SSL_CTX_free(ctx); return ; }
-
-	
-	sockaddr_in service;
-	ZeroMemory(&service, sizeof(service));
-
-	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);//socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-	if (ListenSocket == INVALID_SOCKET)
-	{
-		//freeaddrinfo(result);
-		WSACleanup();
-		printf(0, "failed socket %d", WSAGetLastError());
-	}
-	service.sin_family = AF_INET;
-	service.sin_port = htons(443);
-	service.sin_addr.s_addr = inet_addr("127.0.0.1");
-	iResult = bind(ListenSocket, (sockaddr*)&service, sizeof(service));//bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed bind %d", WSAGetLastError());
-	}
-
-	iResult = listen(ListenSocket, SOMAXCONN);
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed listen %d", WSAGetLastError());
-	}
-
-	ClientSocket = accept(ListenSocket, NULL, NULL);
-	if (ClientSocket == INVALID_SOCKET)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed accept %d", WSAGetLastError());
-	}
-
-
-
-	ssl = SSL_new(ctx);
-	SSL_set_fd(ssl, ClientSocket);
-	iResult = SSL_accept(ssl);
-
-
-	if (!iResult) {
-		wprintf(L"SSL connect error\nretval: %d\n", iResult);
-		iResult = closesocket(ClientSocket);
-		if (iResult == SOCKET_ERROR)
-			wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
-		WSACleanup();
-		return ;
-
-		iResult = SSL_get_error(ssl, iResult);
-		wprintf(L"SSL error: %d\n", iResult);
-		return ;
-	}
-
-	cert = SSL_get_peer_certificate(ssl);
-	if (cert != NULL) {
-		printf("Client certificate:\n");
-
-		str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
-		printf("\t subject: %s\n", str);
-		OPENSSL_free(str);
-
-		str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-		printf("\t issuer: %s\n", str);
-		OPENSSL_free(str);
-
-		/* We could do all sorts of certificate verification stuff here before
-		deallocating the certificate. */
-
-		X509_free(cert);
-	}
-	else
-		printf("Client does not have certificate.\n");
-
-
-
-	int iSendResult = 0;
-	char* payload = nullptr;
-	iResult = 0;
-	bool sendHandshake = true;
-	do
-	{
-		ZeroMemory(recvbuf, recvbuflen);
-		//iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-		iResult = SSL_read(ssl, recvbuf, recvbuflen);
-		if (iResult > 0)
-		{
-			printf("Bytes received: %d\n", iResult);
-			if (!sendHandshake)
-			{
-
-				char mask[4];
-				uint16_t bits16 = *((uint16_t*)&recvbuf[0]);
-				uint8_t fin = (!!(bits16 & 0b0000000010000000));
-				uint8_t rv1 = (!!(bits16 & 0b0000000001000000));
-				uint8_t rv2 = (!!(bits16 & 0b0000000000100000));
-				uint8_t rv3 = (!!(bits16 & 0b0000000000010000));
-				uint8_t opc = ((bits16 & 0b0000000000001111));
-				uint8_t msk = (!!(bits16 & 0b1000000000000000));
-				uint64_t len = ((bits16 >> 8) & 0b0000000001111111);
-
-				if (opc == 8)
-				{
-					closesocket(ClientSocket);
-					break;
-				}
-
-				if (len <= 125)
-				{
-					printf("small data\n");
-					mask[0] = recvbuf[2];
-					mask[1] = recvbuf[3];
-					mask[2] = recvbuf[4];
-					mask[3] = recvbuf[5];
-					payload = &recvbuf[6];
-				}
-				else if (len == 126)
-				{
-					printf("medium data\n");
-					mask[0] = recvbuf[4];
-					mask[1] = recvbuf[5];
-					mask[2] = recvbuf[6];
-					mask[3] = recvbuf[7];
-					payload = &recvbuf[8];
-					uint32_t bits32 = *((uint32_t*)&recvbuf[0]);
-					len = ((bits32 & 0b00000000111111110000000000000000) >> 8) | ((bits32 & 0b11111111000000000000000000000000) >> 24);
-				}
-				else if (len == 127)
-				{
-					printf("large data\n");
-					mask[0] = recvbuf[10];
-					mask[1] = recvbuf[11];
-					mask[2] = recvbuf[12];
-					mask[3] = recvbuf[13];
-					payload = &recvbuf[14];
-					uint32_t bits64 = *((uint32_t*)&recvbuf[4]);
-					len = bits64 >> 5;
-					len = len;
-				}
-				if (len < recvbuflen)
-				{
-					printf("Payload byte length %d\n", len);
-					for (int i = 0; i < len; ++i)
-					{
-						payload[i] = payload[i] ^ mask[i % 4];
-					}
-
-					printf("client> %s\n", payload);
-				}
-				else
-				{
-					printf("Data to big = %lu\n", len);
-				}
-				{
-					char* outText = new char[1000000];
-					char* sendBuffer = nullptr;
-					//ZeroMemory(sendBuffer, sizeof(sendBuffer));
-					ZeroMemory(outText, sizeof(outText));
-					//sendBuffer[0] = 129;// text;//130 binary
-					char get = 0;
-					int j = 0;
-					uint32_t inc = 0;
-					unsigned long long ull = 0;
-					size_t totalLength;
-					printf("server> ");
-					while (1)
-					{
-						get = getchar();
-						if (!(get == '\n' || get == '\r'))
-						{
-							outText[inc++] = get;
-						}
-						else
-						{
-							break;
-						}
-					}
-
-
-					for (int i = 0; i < 70000; i++) outText[i] = 'v';
-
-
-					long bufferLength = strlen(outText);
-
-
-
-
-					if (bufferLength <= 125) {
-						// int payloadLength = bufferLength;
-						totalLength = bufferLength + 2;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;//fin | opcode;
-						sendBuffer[1] = bufferLength;
-						//memcpy(sendBuffer + 2, message.c_str(), message.size());
-						CopyMemory(sendBuffer + 2, outText, bufferLength);
-					}
-					else if (bufferLength <= 65535) {
-						// int payloadLength = WS_PAYLOAD_LENGTH_16;
-						totalLength = bufferLength + 4;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;// fin | opcode;
-						sendBuffer[1] = 126;
-						sendBuffer[2] = bufferLength >> 8;
-						sendBuffer[3] = bufferLength;
-						//memcpy(buf + 4, message.c_str(), message.size());
-						CopyMemory(sendBuffer + 4, outText, bufferLength);
-
-					}
-					else {
-						// int payloadLength = WS_PAYLOAD_LENGTH_63;
-						totalLength = bufferLength + 10;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;
-						sendBuffer[1] = 127;
-						sendBuffer[2] = 0;
-						sendBuffer[3] = 0;
-						sendBuffer[4] = 0;
-						sendBuffer[5] = 0;
-						sendBuffer[6] = bufferLength >> 24;
-						sendBuffer[7] = bufferLength >> 16;
-						sendBuffer[8] = bufferLength >> 8;
-						sendBuffer[9] = bufferLength;
-						CopyMemory(sendBuffer + 10, outText, bufferLength);
-					}
-
-
-
-
-
-
-
-
-
-					//CopyMemory(piowi->pbDATAFromClient, piowi->pecb->lpbData, piowi->cbReadSoFar);
-
-
-					/*
-					if (bufferLength >= 126) {
-					int num_bytes;
-					if (bufferLength > 0xffff) {
-					num_bytes = 8;
-					sendBuffer[1] = 127;
-					}
-					else {
-					num_bytes = 2;
-					sendBuffer[1] = 126;
-					}
-
-					for (int c = num_bytes - 1; c >= 0; c--) {
-					ull= (static_cast<unsigned long long>(bufferLength) >> (8 * c)) % 256;
-					strncat(sendBuffer, (char*)&ull, sizeof(unsigned long long));
-
-					}
-					}
-					else sendBuffer[1] = bufferLength;
-					strcat(sendBuffer, outText);
-					*/
-
-
-
-
-
-
-
-
-
-
-
-
-					//iSendResult = send(ClientSocket, sendBuffer, totalLength, 0);
-					iSendResult = SSL_write(ssl, sendBuffer, totalLength);
-
-					if (iSendResult == SOCKET_ERROR)
-					{
-						closesocket(ClientSocket);
-						WSACleanup();
-						printf(0, "Failed send %d", WSAGetLastError());
-					}
-				}
-			}
-			else
-			{
-				printf(recvbuf);
-				sendHandshake = false;
-				bool findHandshake = false;
-				uint32_t index = 0;
-				char handshakeTest[] = "Sec-WebSocket-Key: ";
-				char* handshakeHash = new char[120];
-				char handshakeBuffer[MAX_PATH];
-				char* base64EncodeOutput = NULL;
-				//ZeroMemory(base64_hash, sizeof(base64_hash));
-				int handshakeTestLen = strlen(handshakeTest);
-				unsigned char* digest = new unsigned char[SHA_DIGEST_LENGTH];
-
-				for (int i = 0; i < iResult - handshakeTestLen - 20; i++)
-					if (strncmp((char*)((char*)recvbuf + i), handshakeTest, handshakeTestLen) == 0)
-					{
-						for (int j = 0; j < 100; j++) if (recvbuf[j + i + handshakeTestLen] == '\r' && recvbuf[j + i + handshakeTestLen + 1] == '\n')
-						{
-							strncpy(handshakeHash, (char*)((char*)recvbuf + i + handshakeTestLen), j);
-							handshakeHash[j] = 0;
-							//strcpy(handshakeHash, "lpRgKO1IAsqpPeIgIIbpfA==");
-
-							strcat(handshakeHash, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-							findHandshake = true;
-							printf(handshakeHash);
-							printf("\r\n");
-							break;
-						}
-
-
-						break;
-					}
-
-
-				if (findHandshake == true) {
-					SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
-					//printf("Output (sha1): %d\n", strlen(digest));
-					Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
-					printf("Output (base64): %s\r\n", base64EncodeOutput);
-
-				}
-				base64EncodeOutput[strlen(base64EncodeOutput)] = 0;
-
-				strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
-				strcat(handshakeBuffer, base64EncodeOutput);
-				strcat(handshakeBuffer, "\r\n\r\n");
-				printf(handshakeBuffer);
-
-				//iSendResult = send(ClientSocket, handshakeBuffer, (int32_t)strlen(handshakeBuffer), 0);
-				iSendResult = SSL_write(ssl, handshakeBuffer, (int32_t)strlen(handshakeBuffer));
-
-				if (iSendResult == SOCKET_ERROR)
-				{
-					closesocket(ClientSocket);
-					WSACleanup();
-					printf("Failed send %d\r\n", WSAGetLastError());
-				}
-				else printf("Handshake sent. bytes: %d\n", iSendResult);
-
-
-
-			}
-		}
-		else if (iResult == 0)
-		{
-			printf("Connection closed\n");
-			SSL_shutdown(ssl);  /* send SSL/TLS close_notify */
-
-								/* Clean up. */
-
-			SSL_free(ssl);
-			SSL_CTX_free(ctx);
-			delete[] recvbuf;
-		}
-		else
-		{
-			closesocket(ClientSocket);
-			WSACleanup();
-			printf(0, "Failed to receive %d", WSAGetLastError());
-		}
-	} while (iResult > 0);
-}
-void AsyncSSLWebSocketServer()
-{
-	WSADATA wsaData;
-	int iResult = 0;
-	X509*  cert;
-	SSL_CTX *ctx;
-	SSL *ssl;
-	SOCKET ListenSocket = INVALID_SOCKET;
-	SOCKET ClientSocket = INVALID_SOCKET;
-	char* str;
-	DWORD dwError;
-	//int32_t recvbuflen = DEFAULT_BUFLEN;
-	//char recvbuf [DEFAULT_BUFLEN];
-	char* recvbuf = new char[DEFAULT_BUFLEN];
-	int32_t recvbuflen = DEFAULT_BUFLEN;
-
-	int i = 0;
-	SSL_load_error_strings();
-	SSL_library_init();
-	OpenSSL_add_all_algorithms();
-	ctx = SSL_CTX_new(SSLv23_server_method());
-	if (!ctx) { wprintf(L"Error init ssl\n"); return; }
-	iResult = SSL_CTX_use_certificate_file(ctx, CERTF, SSL_FILETYPE_PEM);
-	if (iResult <= 0) { wprintf(L"Error ssl certificate file %d\n", iResult); SSL_CTX_free(ctx); return; }
-	iResult = SSL_CTX_use_PrivateKey_file(ctx, KEYF, SSL_FILETYPE_PEM);
-	if (iResult <= 0) { wprintf(L"Error Private Key file %d\n", iResult); SSL_CTX_free(ctx); return; }
-	iResult = SSL_CTX_check_private_key(ctx);
-	if (!iResult) { wprintf(L"Private key does not match the certificate public key %d\n", iResult); SSL_CTX_free(ctx); return; }
-	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (iResult != NO_ERROR) { wprintf(L"WSAStartup() failed with error: %d\n", iResult); SSL_CTX_free(ctx); return; }
-
-
-	sockaddr_in service;
-	ZeroMemory(&service, sizeof(service));
-
-	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);//socket(result->ai_family, result->ai_socktype, result->ai_protocol);
-	if (ListenSocket == INVALID_SOCKET)
-	{
-		//freeaddrinfo(result);
-		WSACleanup();
-		printf("failed socket %d", WSAGetLastError());
-		return;
-	}
-
-	int yes = 1;
-	iResult = setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int));
-	
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf("setsockopt %d", WSAGetLastError());
-		return;
-	}
-
-	service.sin_family = AF_INET;
-	service.sin_port = htons(443);
-	service.sin_addr.s_addr = inet_addr("127.0.0.1");
-	iResult = bind(ListenSocket, (sockaddr*)&service, sizeof(service));//bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf("failed bind %d", WSAGetLastError());
-		return;
-	}
-
-	iResult = listen(ListenSocket, SOMAXCONN);
-	if (iResult == SOCKET_ERROR)
-	{
-		closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed listen %d", WSAGetLastError());
-	}
-
-	ClientSocket = accept(ListenSocket, NULL, NULL);
-	if (ClientSocket == INVALID_SOCKET)
-	{  closesocket(ListenSocket);
-		WSACleanup();
-		printf(0, "failed accept %d", WSAGetLastError());
-	}
-
-
-
-	ssl = SSL_new(ctx);
-	SSL_set_fd(ssl, ClientSocket);
-	iResult = SSL_accept(ssl);
-
-
-	if (!iResult) {
-		wprintf(L"SSL connect error\nretval: %d\n", iResult);
-		iResult = closesocket(ClientSocket);
-		if (iResult == SOCKET_ERROR)
-			wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
-		WSACleanup();
-		return;
-
-		iResult = SSL_get_error(ssl, iResult);
-		wprintf(L"SSL error: %d\n", iResult);
-		return;
-	}
-
-	cert = SSL_get_peer_certificate(ssl);
-	if (cert != NULL) {
-		printf("Client certificate:\n");
-
-		str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
-		printf("\t subject: %s\n", str);
-		OPENSSL_free(str);
-
-		str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-		printf("\t issuer: %s\n", str);
-		OPENSSL_free(str);
-
-		/* We could do all sorts of certificate verification stuff here before
-		deallocating the certificate. */
-
-		X509_free(cert);
-	}
-	else
-		printf("Client does not have certificate.\n");
-
-
-
-	int iSendResult = 0;
-	char* payload = nullptr;
-	iResult = 0;
-	bool sendHandshake = true;
-	do
-	{
-		ZeroMemory(recvbuf, recvbuflen);
-		//iResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
-		iResult = SSL_read(ssl, recvbuf, recvbuflen);
-		if (iResult > 0)
-		{
-			printf("Bytes received: %d\n", iResult);
-			if (!sendHandshake)
-			{
-
-				char mask[4];
-				uint16_t bits16 = *((uint16_t*)&recvbuf[0]);
-				uint8_t fin = (!!(bits16 & 0b0000000010000000));
-				uint8_t rv1 = (!!(bits16 & 0b0000000001000000));
-				uint8_t rv2 = (!!(bits16 & 0b0000000000100000));
-				uint8_t rv3 = (!!(bits16 & 0b0000000000010000));
-				uint8_t opc = ((bits16 & 0b0000000000001111));
-				uint8_t msk = (!!(bits16 & 0b1000000000000000));
-				uint64_t len = ((bits16 >> 8) & 0b0000000001111111);
-
-				if (opc == 8)
-				{
-					closesocket(ClientSocket);
-					break;
-				}
-
-				if (len <= 125)
-				{
-					printf("small data\n");
-					mask[0] = recvbuf[2];
-					mask[1] = recvbuf[3];
-					mask[2] = recvbuf[4];
-					mask[3] = recvbuf[5];
-					payload = &recvbuf[6];
-				}
-				else if (len == 126)
-				{
-					printf("medium data\n");
-					mask[0] = recvbuf[4];
-					mask[1] = recvbuf[5];
-					mask[2] = recvbuf[6];
-					mask[3] = recvbuf[7];
-					payload = &recvbuf[8];
-					uint32_t bits32 = *((uint32_t*)&recvbuf[0]);
-					len = ((bits32 & 0b00000000111111110000000000000000) >> 8) | ((bits32 & 0b11111111000000000000000000000000) >> 24);
-				}
-				else if (len == 127)
-				{
-					printf("large data\n");
-					mask[0] = recvbuf[10];
-					mask[1] = recvbuf[11];
-					mask[2] = recvbuf[12];
-					mask[3] = recvbuf[13];
-					payload = &recvbuf[14];
-					uint32_t bits64 = *((uint32_t*)&recvbuf[4]);
-					len = bits64 >> 5;
-					len = len;
-				}
-				if (len < recvbuflen)
-				{
-					printf("Payload byte length %d\n", len);
-					for (int i = 0; i < len; ++i)
-					{
-						payload[i] = payload[i] ^ mask[i % 4];
-					}
-
-					printf("client> %s\n", payload);
-				}
-				else
-				{
-					printf("Data to big = %lu\n", len);
-				}
-				{
-					char* outText = new char[1000000];
-					char* sendBuffer = nullptr;
-					//ZeroMemory(sendBuffer, sizeof(sendBuffer));
-					ZeroMemory(outText, sizeof(outText));
-					//sendBuffer[0] = 129;// text;//130 binary
-					char get = 0;
-					int j = 0;
-					uint32_t inc = 0;
-					unsigned long long ull = 0;
-					size_t totalLength;
-					printf("server> ");
-					while (1)
-					{
-						get = getchar();
-						if (!(get == '\n' || get == '\r'))
-						{
-							outText[inc++] = get;
-						}
-						else
-						{
-							break;
-						}
-					}
-
-
-					for (int i = 0; i < 70000; i++) outText[i] = 'v';
-
-
-					long bufferLength = strlen(outText);
-
-
-
-
-					if (bufferLength <= 125) {
-						// int payloadLength = bufferLength;
-						totalLength = bufferLength + 2;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;//fin | opcode;
-						sendBuffer[1] = bufferLength;
-						//memcpy(sendBuffer + 2, message.c_str(), message.size());
-						CopyMemory(sendBuffer + 2, outText, bufferLength);
-					}
-					else if (bufferLength <= 65535) {
-						// int payloadLength = WS_PAYLOAD_LENGTH_16;
-						totalLength = bufferLength + 4;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;// fin | opcode;
-						sendBuffer[1] = 126;
-						sendBuffer[2] = bufferLength >> 8;
-						sendBuffer[3] = bufferLength;
-						//memcpy(buf + 4, message.c_str(), message.size());
-						CopyMemory(sendBuffer + 4, outText, bufferLength);
-
-					}
-					else {
-						// int payloadLength = WS_PAYLOAD_LENGTH_63;
-						totalLength = bufferLength + 10;
-						sendBuffer = new char[totalLength];
-						sendBuffer[0] = 129;
-						sendBuffer[1] = 127;
-						sendBuffer[2] = 0;
-						sendBuffer[3] = 0;
-						sendBuffer[4] = 0;
-						sendBuffer[5] = 0;
-						sendBuffer[6] = bufferLength >> 24;
-						sendBuffer[7] = bufferLength >> 16;
-						sendBuffer[8] = bufferLength >> 8;
-						sendBuffer[9] = bufferLength;
-						CopyMemory(sendBuffer + 10, outText, bufferLength);
-					}
-
-
-
-
-
-
-
-
-
-					//CopyMemory(piowi->pbDATAFromClient, piowi->pecb->lpbData, piowi->cbReadSoFar);
-
-
-					/*
-					if (bufferLength >= 126) {
-					int num_bytes;
-					if (bufferLength > 0xffff) {
-					num_bytes = 8;
-					sendBuffer[1] = 127;
-					}
-					else {
-					num_bytes = 2;
-					sendBuffer[1] = 126;
-					}
-
-					for (int c = num_bytes - 1; c >= 0; c--) {
-					ull= (static_cast<unsigned long long>(bufferLength) >> (8 * c)) % 256;
-					strncat(sendBuffer, (char*)&ull, sizeof(unsigned long long));
-
-					}
-					}
-					else sendBuffer[1] = bufferLength;
-					strcat(sendBuffer, outText);
-					*/
-
-
-
-
-
-
-
-
-
-
-
-
-					//iSendResult = send(ClientSocket, sendBuffer, totalLength, 0);
-					iSendResult = SSL_write(ssl, sendBuffer, totalLength);
-
-					if (iSendResult == SOCKET_ERROR)
-					{
-						closesocket(ClientSocket);
-						WSACleanup();
-						printf(0, "Failed send %d", WSAGetLastError());
-					}
-				}
-			}
-			else
-			{
-				printf(recvbuf);
-				sendHandshake = false;
-				bool findHandshake = false;
-				uint32_t index = 0;
-				char handshakeTest[] = "Sec-WebSocket-Key: ";
-				char* handshakeHash = new char[120];
-				char handshakeBuffer[MAX_PATH];
-				char* base64EncodeOutput = NULL;
-				//ZeroMemory(base64_hash, sizeof(base64_hash));
-				int handshakeTestLen = strlen(handshakeTest);
-				unsigned char* digest = new unsigned char[SHA_DIGEST_LENGTH];
-
-				for (int i = 0; i < iResult - handshakeTestLen - 20; i++)
-					if (strncmp((char*)((char*)recvbuf + i), handshakeTest, handshakeTestLen) == 0)
-					{
-						for (int j = 0; j < 100; j++) if (recvbuf[j + i + handshakeTestLen] == '\r' && recvbuf[j + i + handshakeTestLen + 1] == '\n')
-						{
-							strncpy(handshakeHash, (char*)((char*)recvbuf + i + handshakeTestLen), j);
-							handshakeHash[j] = 0;
-							//strcpy(handshakeHash, "lpRgKO1IAsqpPeIgIIbpfA==");
-
-							strcat(handshakeHash, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-							findHandshake = true;
-							printf(handshakeHash);
-							printf("\r\n");
-							break;
-						}
-
-
-						break;
-					}
-
-
-				if (findHandshake == true) {
-					SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
-					//printf("Output (sha1): %d\n", strlen(digest));
-					Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
-					printf("Output (base64): %s\r\n", base64EncodeOutput);
-
-				}
-				base64EncodeOutput[strlen(base64EncodeOutput)] = 0;
-
-				strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
-				strcat(handshakeBuffer, base64EncodeOutput);
-				strcat(handshakeBuffer, "\r\n\r\n");
-				printf(handshakeBuffer);
-
-				//iSendResult = send(ClientSocket, handshakeBuffer, (int32_t)strlen(handshakeBuffer), 0);
-				iSendResult = SSL_write(ssl, handshakeBuffer, (int32_t)strlen(handshakeBuffer));
-
-				if (iSendResult == SOCKET_ERROR)
-				{
-					closesocket(ClientSocket);
-					WSACleanup();
-					printf("Failed send %d\r\n", WSAGetLastError());
-				}
-				else printf("Handshake sent. bytes: %d\n", iSendResult);
-
-
-
-			}
-		}
-		else if (iResult == 0)
-		{
-			printf("Connection closed\n");
-			SSL_shutdown(ssl);  /* send SSL/TLS close_notify */
-
-								/* Clean up. */
-
-			SSL_free(ssl);
-			SSL_CTX_free(ctx);
-			delete[] recvbuf;
-		}
-		else
-		{
-			closesocket(ClientSocket);
-			WSACleanup();
-			printf(0, "Failed to receive %d", WSAGetLastError());
-		}
-	} while (iResult > 0);
-}
 uint64_t now_microseconds(void)
 {
 	FILETIME ft;
@@ -8259,77 +7715,7 @@ void rabbitmqssl() {
 
 	return;
 }
-void sdkSocket() {
-	// Initialize Winsock
-	WSADATA wsaData;
-	int iResult = 0;
-	int recvbuflen = DEFAULT_BUFLEN;
-	char *sendBuf = new char[recvbuflen];
-	char *recvbuf = new char[recvbuflen];
-	int i = 0;
-	SOCKET sdkSocket;
-	sockaddr_in sdkService;
-	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
-	if (iResult != NO_ERROR) {
-		wprintf(L"WSAStartup() failed with error: %d\n", iResult);
-		return;
-	}
 
-	sdkSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-	if (sdkSocket == INVALID_SOCKET) {
-		wprintf(L"socket function failed with error: %ld\n", WSAGetLastError());
-		WSACleanup();
-		return;
-	}
-
-	sdkService.sin_family = AF_INET;
-	sdkService.sin_addr.s_addr = inet_addr("137.74.195.97");
-	sdkService.sin_port = htons(8080);
-
-	iResult = connect(sdkSocket, (SOCKADDR *)& sdkService, sizeof(sdkService));
-	if (iResult == SOCKET_ERROR) {
-		wprintf(L"connect function failed with error: %ld\n", WSAGetLastError());
-		iResult = closesocket(sdkSocket);
-		if (iResult == SOCKET_ERROR)
-			wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
-		WSACleanup();
-		return;
-	}
-
-	wprintf(L"Connected to server.\n");
-	//createRecovery();
-	//	iResult = send(sdkSocket, sendBuf, (int)strlen(sendBuf), 0);
-
-	i = 0;
-	do {
-		i++;
-
-		iResult = recv(sdkSocket, recvbuf, recvbuflen, 0);
-		//printf("length: %d\n", iResult);
-
-		//if(i==200) createRecovery();
-
-		if (iResult > 0) {
-			//if(iResult > 200000)
-			printf("Bytes received: %d\n", iResult);
-
-			//json.Parse<0>(recvbuf);
-			recvbuf[100] = '\0';
-			printf("%s", recvbuf);
-
-		}
-		else if (iResult == -1)
-			printf("Connection closed\n");
-		else
-			printf("recv failed with error: %d\n", WSAGetLastError());
-		//	iResult = -2;
-
-	} while (iResult > -1);
-
-
-
-
-};
 
 
 
