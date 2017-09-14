@@ -172,7 +172,8 @@ public:
 private:
 	vector<wsClient *> wsClients;
 	map<int, int> socketIDmap;
-	fd_set fds;
+	fd_set r_fds;
+	fd_set w_fds;
 	int fdmax;
 	int ListenSocket;
 	SSL_CTX *ctx;
@@ -199,29 +200,6 @@ int Base64Decode(char*, unsigned char**, size_t*);
 int Base64Encode(const unsigned char*, size_t, char**);
 
 void showAvailableIP() {
-
-#ifdef __linux__
-
-	char name[INET_ADDRSTRLEN];
-	struct ifaddrs *iflist;
-	if (getifaddrs(&iflist) < 0) {
-		cout << "Error on getting available IP!" << endl;
-	}
-
-	cout << "Available IP:" << endl;
-
-	struct in_addr addr;
-	for (struct ifaddrs *p = iflist; p; p = p->ifa_next) {
-		if (p->ifa_addr->sa_family == AF_INET) {
-			addr = ((struct sockaddr_in*)p->ifa_addr)->sin_addr;
-			if (inet_ntop(AF_INET, &addr, name, sizeof(name)) == NULL)
-				continue;
-
-			cout << "    " << p->ifa_name << " " << name << endl;
-		}
-	}
-
-#elif _WIN32
 
 	/* Variables used by GetIpAddrTable */
 	PMIB_IPADDRTABLE pIPAddrTable;
@@ -274,7 +252,7 @@ void showAvailableIP() {
 		pIPAddrTable = NULL;
 	}
 
-#endif
+
 }
 vector<int> webSocket::getClientIDs() {
 	vector<int> clientIDs;
@@ -479,7 +457,7 @@ void webSocket::wsRemoveClient(int clientID) {
 
 
 	WSACleanup();
-	FD_CLR(client->socket, &fds);
+	FD_CLR(client->socket, &r_fds);
 	socketIDmap.erase(wsClients[clientID]->socket);
 	wsClients[clientID] = NULL;
 	delete client;
@@ -762,13 +740,15 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 	return true;
 }
 bool webSocket::wsProcessClient(int clientID, char *buffer, int bufferLength) {
+	
 	bool result;
 
 	if (clientID >= wsClients.size() || wsClients[clientID] == NULL)
 		return false;
 
-	if (wsClients[clientID]->ReadyState == WS_READY_STATE_OPEN) {
+		if (wsClients[clientID]->ReadyState == WS_READY_STATE_OPEN) {
 		// handshake completed
+		
 		result = wsBuildClientFrame(clientID, buffer, bufferLength);
 	}
 	else if (wsClients[clientID]->ReadyState == WS_READY_STATE_CONNECTING) {
@@ -797,7 +777,8 @@ int webSocket::wsGetNextClientID() {
 	return i;
 }
 void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
-	FD_SET(socket, &fds);
+	FD_SET(socket, &r_fds);
+	//FD_SET(socket, &w_fds);
 	if (socket > fdmax)
 		fdmax = socket;
 
@@ -824,6 +805,8 @@ void webSocket::setPeriodicHandler(nullCallback callback) {
 	callPeriodic = callback;
 }
 void webSocket::startServer(int port) {
+	
+	
 	showAvailableIP();
 
 	int yes = 1;
@@ -871,13 +854,31 @@ void webSocket::startServer(int port) {
 	}
 
 	iResult = setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int));
-	
+
+
+
   if (iResult == SOCKET_ERROR){
 	    closesocket(ListenSocket);
 		WSACleanup();
 		printf("failed setsockopt %d", WSAGetLastError());
 		exit(1);
 	}
+
+
+
+  u_long ulBlock = 1;
+  if (ioctlsocket(ListenSocket, FIONBIO, &ulBlock) == SOCKET_ERROR)
+  {
+	  printf("could not fcntl\n");
+	  closesocket(ClientSocket);
+	  WSACleanup();
+	  exit(1);
+
+
+  }
+  
+
+
 
 	iResult = bind(ListenSocket, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 	if (iResult == SOCKET_ERROR)
@@ -901,22 +902,34 @@ void webSocket::startServer(int port) {
 
 	fdmax = ListenSocket;
 	fd_set read_fds;
-	FD_ZERO(&fds);
-	FD_SET(ListenSocket, &fds);
+	//fd_set write_fds;
+	FD_ZERO(&r_fds);
+	//FD_ZERO(&w_fds);
+	FD_SET(ListenSocket, &r_fds);
+	//FD_SET(ListenSocket, &w_fds);
 	FD_ZERO(&read_fds);
-
+	//FD_ZERO(&write_fds);
+	printf(" ListenSocket=%d\r\n", ListenSocket);
 	struct timeval timeout;
 	time_t nextPingTime = time(NULL) + 20;
-	while (FD_ISSET(ListenSocket, &fds)) {
-		read_fds = fds;
+	while (FD_ISSET(ListenSocket, &r_fds)) {
+		read_fds = r_fds;
+		//write_fds = w_fds;
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 10000;
 		//if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) 
+		
 			if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) != SOCKET_ERROR)
 		{
-			
+				
 			for (int i = 0; i <= fdmax; i++) {
+				
+			
 				if (FD_ISSET(i, &read_fds)) {
+				
+					
+				
+				
 					if (i == ListenSocket) {
 						socklen_t addrlen = sizeof(cli_addr);
 						int ClientSocket = accept(ListenSocket, (struct sockaddr*)&cli_addr, &addrlen);
@@ -924,9 +937,28 @@ void webSocket::startServer(int port) {
 							/* add new client */
 							ssl = SSL_new(ctx);
 							SSL_set_fd(ssl, ClientSocket);
-							iResult = SSL_accept(ssl);
+							
+							
+						/*	do { 
+								printf("SSL_accept");
+								iResult = SSL_accept(ssl); 
+								if (iResult == -1) {
+									const int nCode = SSL_get_error(ssl, iResult);
+									if ((nCode != SSL_ERROR_WANT_READ) && (nCode != SSL_ERROR_WANT_WRITE))
+									{
+										iResult = 0; break;
+									}
+								}
+								
+							
+							} while (iResult == -1);
+								// iResult = SSL_accept(ssl);
 
-							if (!iResult) {
+								*/
+							SSL_set_accept_state(ssl);
+
+							/*
+							if (iResult==0) {
 								wprintf(L"SSL connect error\nretval: %d\n", iResult);
 								iResult = closesocket(ClientSocket);
 								if (iResult == SOCKET_ERROR) {
@@ -940,7 +972,7 @@ void webSocket::startServer(int port) {
 									WSACleanup();
 									continue;
 								}
-							}
+							}*/
 
 							cert = SSL_get_peer_certificate(ssl);
 							if (cert != NULL) {
@@ -956,29 +988,59 @@ void webSocket::startServer(int port) {
 
 								/* We could do all sorts of certificate verification stuff here before
 								deallocating the certificate. */
-
+							
 								X509_free(cert);
 							}
 							else
 								printf("Client does not have certificate.\n");
+					
 							wsAddClient(ClientSocket, ssl, cli_addr.sin_addr);
-							ssl = nullptr;
+							//ssl = nullptr;
 							printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
 						}
 					}
 					else {
-						//int nbytes = recv(i, buf, sizeof(buf), 0);
-						
-
-					//	iResult = SSL_read(ssl, recvbuf, recvbuflen);
+					
+					
 
 						if (socketIDmap.find(i) != socketIDmap.end()) {
+							
 							int nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
+
+							if (nbytes == 0) {
+								long error = ERR_get_error();
+								const char* error_str = ERR_error_string(error, NULL);
+								//printf("could not SSL_read (returned 0): %s\n", error_str);
+								
+							}
+							else if (nbytes < 0) {
+								int ssl_error = SSL_get_error(ssl, nbytes);
+								if (ssl_error == SSL_ERROR_WANT_WRITE) {
+									//printf("SSL_read wants write\n");
+									continue;
+								}
+
+								if (ssl_error == SSL_ERROR_WANT_READ) {
+									//printf("SSL_read wants read\n");
+									// wants_tcp_read is always 1;
+									continue;
+								}
+	
+								long error = ERR_get_error();
+								const char* error_string = ERR_error_string(error, NULL);
+								//printf("could not SSL_read (returned -1) %s\n", error_string);
+							
+							
+							}
+
+
+							
 							if (nbytes < 0)
 								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
 							else if (nbytes == 0)
 								wsRemoveClient(socketIDmap[i]);
 							else {
+								
 								if (!wsProcessClient(socketIDmap[i], buf, nbytes))
 									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
 							}
@@ -987,15 +1049,18 @@ void webSocket::startServer(int port) {
 				}
 			}
 		}
-
+		
+			
 		if (time(NULL) >= nextPingTime) {
 			wsCheckIdleClients();
 			nextPingTime = time(NULL) + 20;
 		}
-
+		
 		if (callPeriodic != NULL)
 			callPeriodic();
 	}
+
+
 }
 void webSocket::stopServer() {
 	for (int i = 0; i < wsClients.size(); i++) {
@@ -1014,7 +1079,7 @@ void webSocket::stopServer() {
 	SSL_CTX_free(ctx);
 	wsClients.clear();
 	socketIDmap.clear();
-	FD_ZERO(&fds);
+	FD_ZERO(&r_fds);
 	fdmax = 0;
 	WSACleanup();
 }
@@ -7717,6 +7782,56 @@ void rabbitmqssl() {
 }
 
 
+
+
+
+
+
+//int read_blocked = 0;
+
+/*		do {
+//read_blocked = 0;
+nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
+printf("1nbytes=%d\r\n");
+int ssl_error = SSL_get_error(wsClients[socketIDmap[i]]->ssl, nbytes);
+//check SSL errors
+printf("ssl_error=%d\r\n", ssl_error);
+
+switch (ssl_error)
+{
+case SSL_ERROR_NONE:
+printf("do our stuff with buffer_array here\r\n");
+break;
+
+case SSL_ERROR_ZERO_RETURN:
+printf("connection closed by client, clean up\r\n");
+break;
+
+case SSL_ERROR_WANT_READ:
+printf("the operation did not complete, block the read\r\n");
+//read_blocked = 1;
+break;
+
+case SSL_ERROR_WANT_WRITE:
+printf("the operation did not complete\r\n");
+break;
+
+case SSL_ERROR_SYSCALL:
+printf("some I/O error occured (could be caused by false start in Chrome for instance), disconnect the client and clean up\r\n");
+break;
+
+default:
+
+printf("some other error, clean up\r\n");
+break;
+}
+
+} while (SSL_pending(wsClients[socketIDmap[i]]->ssl) && read_blocked==0);
+
+
+
+
+printf("2nbytes=%d\r\n");*/
 
 
 
