@@ -134,17 +134,20 @@ public:
 		FrameBuffer.clear();
 		MessageOpcode = 0;
 		MessageBufferLength = 0;
-		MessageQueue = new char*[QUEUE_LENGTH];
-		MessageQueueLength = new size_t[QUEUE_LENGTH];
-		for (int i = 0; i < QUEUE_LENGTH; i++) {
-			MessageQueueLength[i] = -1; MessageQueue[i] = nullptr;
-		}
-		LastMessageQueue = -1;
+		MessageQueue = new char[DEFAULT_BUFLEN];
+		MessagePing = NULL;
+		MessagePong = NULL;
+		MessageClose = NULL;
+		MessagePingLength = 0;
+		MessagePongLength = 0;
+		MessageCloseLength = 0;
+		MessageQueueLength = 0;
 		HandshakeMessage = nullptr;
         flag = false;
 
 	}
-	~wsClient() { for (int i = 0; i < QUEUE_LENGTH; i++) if (MessageQueue[i] != NULL) delete[] MessageQueue[i]; delete[] MessageQueue; delete[] MessageQueueLength;
+	~wsClient() {  if (MessageQueue != NULL) delete[] MessageQueue; if (MessagePing != NULL) delete[] MessagePing; if (MessagePong != NULL) delete[] MessagePong;
+	if (MessageClose != NULL) delete[] MessageClose;
 	}
 
 	int socket;                            // client socket
@@ -160,10 +163,14 @@ public:
 	string FrameBuffer;                    // joined onto end as a frame's data comes in, reset to blank string when all frame data has been read
 	unsigned char MessageOpcode;           // stored by the first frame for fragmented messages, default value is 0
 	size_t MessageBufferLength;            // the payload data length of MessageBuffer
-	size_t* MessageQueueLength;
-	size_t LastMessageQueue;
-	size_t NumQueue;
-	char** MessageQueue;
+	size_t MessageQueueLength;
+	char* MessageQueue;
+	char* MessagePing;
+	char* MessagePong;
+	char* MessageClose;
+	size_t MessagePingLength;
+	size_t MessagePongLength;
+	size_t MessageCloseLength;
 	char* HandshakeMessage;
 	bool flag;
 
@@ -201,7 +208,8 @@ private:
 	int ListenSocket;
 	SSL_CTX *ctx;
 	void wsCheckIdleClients();
-	bool wsSendClientMessage(int clientID, unsigned char opcode, string message);
+	bool wsSendClientMessage(int clientID, unsigned char opcode, string);
+	bool wsEncodeClientMessage(int clientID, unsigned char opcode, char*,size_t, char* &, size_t &);
 	void wsSendClientClose(int clientID, unsigned short status = -1);
 	bool wsCheckSizeClientFrame(int clientID);
 	void wsRemoveClient(int clientID);
@@ -321,6 +329,119 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 	// fetch message length
 	int messageLength = message.size();
 
+	if (opcode == WS_OPCODE_PING || opcode == WS_OPCODE_PONG || opcode == WS_OPCODE_CLOSE) {
+
+
+		// set max payload length per frame
+		int bufferSize = DEFAULT_BUFLEN;
+
+		// work out amount of frames to send, based on $bufferSize
+		int frameCount = ceil((float)messageLength / bufferSize);
+		if (frameCount == 0)
+			frameCount = 1;
+
+		// set last frame variables
+		int maxFrame = frameCount - 1;
+		int lastFrameBufferLength = (messageLength % bufferSize) != 0 ? (messageLength % bufferSize) : (messageLength != 0 ? bufferSize : 0);
+
+		// loop around all frames to send
+
+		char *buf = nullptr;
+
+
+		for (int i = 0; i < frameCount; i++) {
+			// fetch fin, opcode and buffer length for frame
+			unsigned char fin = i != maxFrame ? 0 : WS_FIN;
+			opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
+
+			size_t bufferLength = i != maxFrame ? bufferSize : lastFrameBufferLength;
+
+			size_t totalLength;
+
+			// set payload length variables for frame
+			if (bufferLength <= 125) {
+				// int payloadLength = bufferLength;
+				totalLength = bufferLength + 2;
+				buf = new char[totalLength];
+				buf[0] = fin | opcode;
+				buf[1] = bufferLength;
+				memcpy(buf + 2, message.c_str(), message.size());
+			}
+			else if (bufferLength <= 65535) {
+				// int payloadLength = WS_PAYLOAD_LENGTH_16;
+				totalLength = bufferLength + 4;
+				buf = new char[totalLength];
+				buf[0] = fin | opcode;
+				buf[1] = WS_PAYLOAD_LENGTH_16;
+				buf[2] = bufferLength >> 8;
+				buf[3] = bufferLength;
+				memcpy(buf + 4, message.c_str(), message.size());
+			}
+			else {
+				// int payloadLength = WS_PAYLOAD_LENGTH_63;
+				totalLength = bufferLength + 10;
+				buf = new char[totalLength];
+				buf[0] = fin | opcode;
+				buf[1] = WS_PAYLOAD_LENGTH_63;
+				buf[2] = 0;
+				buf[3] = 0;
+				buf[4] = 0;
+				buf[5] = 0;
+				buf[6] = bufferLength >> 24;
+				buf[7] = bufferLength >> 16;
+				buf[8] = bufferLength >> 8;
+				buf[9] = bufferLength;
+				memcpy(buf + 10, message.c_str(), message.size());
+			}
+
+			int left = totalLength;
+			while (wsClients[clientID]->flag == true) Sleep(0);
+			wsClients[clientID]->flag = true;
+			if (opcode == WS_OPCODE_PING) { if (wsClients[clientID]->MessagePing != nullptr) delete[] wsClients[clientID]->MessagePing; wsClients[clientID]->MessagePing = buf; wsClients[clientID]->MessagePingLength = totalLength; }
+			if (opcode == WS_OPCODE_PONG) { if (wsClients[clientID]->MessagePong != nullptr) delete[] wsClients[clientID]->MessagePong; wsClients[clientID]->MessagePong = buf; wsClients[clientID]->MessagePongLength = totalLength; }
+            if (opcode == WS_OPCODE_CLOSE) { if (wsClients[clientID]->MessageClose != nullptr) delete[] wsClients[clientID]->MessageClose; wsClients[clientID]->MessageClose = buf; wsClients[clientID]->MessageCloseLength = totalLength; }
+			wsClients[clientID]->flag = false;
+				
+		}
+
+		
+
+	}
+	else {
+
+
+		while (wsClients[clientID]->flag == true) Sleep(0);
+
+		wsClients[clientID]->flag = true;
+		memcpy(wsClients[clientID]->MessageQueue + wsClients[clientID]->MessageQueueLength, message.c_str(), messageLength);
+		wsClients[clientID]->MessageQueueLength = wsClients[clientID]->MessageQueueLength + messageLength;
+		wsClients[clientID]->flag = false;
+	}
+
+		/*
+		wsClients[clientID]->LastMessageQueue++;
+		if(wsClients[clientID]->LastMessageQueue>=QUEUE_LENGTH)
+		printf("wsClients[clientID]->LastMessageQueue=%d\r\n", wsClients[clientID]->LastMessageQueue);
+		wsClients[clientID]->MessageQueue[wsClients[clientID]->LastMessageQueue] = buf;
+		wsClients[clientID]->MessageQueueLength[wsClients[clientID]->LastMessageQueue] = totalLength;*/
+    
+
+		
+	
+
+	return true;
+}
+bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* message, size_t messageLength, char* &writeBuffer, size_t &writeBufferLen) {
+	// check if client ready state is already closing or closed
+	if (clientID >= wsClients.size())
+		return false;
+
+	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
+		return true;
+
+	// fetch message length
+	//int messageLength = message.size();
+
 	// set max payload length per frame
 	int bufferSize = DEFAULT_BUFLEN;
 
@@ -335,67 +456,68 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 
 	// loop around all frames to send
 
-	char *buf = nullptr;
-	
-	
+	if (writeBuffer != nullptr) delete[] writeBuffer;
+	writeBuffer = nullptr;
+
+
 	for (int i = 0; i < frameCount; i++) {
 		// fetch fin, opcode and buffer length for frame
 		unsigned char fin = i != maxFrame ? 0 : WS_FIN;
 		opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
 
 		size_t bufferLength = i != maxFrame ? bufferSize : lastFrameBufferLength;
-		
-		size_t totalLength;
+
+		//size_t totalLength;
 
 		// set payload length variables for frame
 		if (bufferLength <= 125) {
 			// int payloadLength = bufferLength;
-			totalLength = bufferLength + 2;
-			buf = new char[totalLength];
-			buf[0] = fin | opcode;
-			buf[1] = bufferLength;
-			memcpy(buf + 2, message.c_str(), message.size());
+			writeBufferLen = bufferLength + 2;
+			writeBuffer = new char[writeBufferLen];
+			writeBuffer[0] = fin | opcode;
+			writeBuffer[1] = bufferLength;
+			memcpy(writeBuffer + 2, message, messageLength);
 		}
 		else if (bufferLength <= 65535) {
 			// int payloadLength = WS_PAYLOAD_LENGTH_16;
-			totalLength = bufferLength + 4;
-			buf = new char[totalLength];
-			buf[0] = fin | opcode;
-			buf[1] = WS_PAYLOAD_LENGTH_16;
-			buf[2] = bufferLength >> 8;
-			buf[3] = bufferLength;
-			memcpy(buf + 4, message.c_str(), message.size());
+			writeBufferLen = bufferLength + 4;
+			writeBuffer = new char[writeBufferLen];
+			writeBuffer[0] = fin | opcode;
+			writeBuffer[1] = WS_PAYLOAD_LENGTH_16;
+			writeBuffer[2] = bufferLength >> 8;
+			writeBuffer[3] = bufferLength;
+			memcpy(writeBuffer + 4, message, messageLength);
 		}
 		else {
 			// int payloadLength = WS_PAYLOAD_LENGTH_63;
-			totalLength = bufferLength + 10;
-			buf = new char[totalLength];
-			buf[0] = fin | opcode;
-			buf[1] = WS_PAYLOAD_LENGTH_63;
-			buf[2] = 0;
-			buf[3] = 0;
-			buf[4] = 0;
-			buf[5] = 0;
-			buf[6] = bufferLength >> 24;
-			buf[7] = bufferLength >> 16;
-			buf[8] = bufferLength >> 8;
-			buf[9] = bufferLength;
-			memcpy(buf + 10, message.c_str(), message.size());
+			writeBufferLen = bufferLength + 10;
+			writeBuffer = new char[writeBufferLen];
+			writeBuffer[0] = fin | opcode;
+			writeBuffer[1] = WS_PAYLOAD_LENGTH_63;
+			writeBuffer[2] = 0;
+			writeBuffer[3] = 0;
+			writeBuffer[4] = 0;
+			writeBuffer[5] = 0;
+			writeBuffer[6] = bufferLength >> 24;
+			writeBuffer[7] = bufferLength >> 16;
+			writeBuffer[8] = bufferLength >> 8;
+			writeBuffer[9] = bufferLength;
+			memcpy(writeBuffer + 10, message, messageLength);
 		}
-      
-		int left = totalLength;
-		
+
+		/*int left = totalLength;
+
 		while (wsClients[clientID]->flag == true) Sleep(0);
-		
+
 		wsClients[clientID]->flag = true;
 		wsClients[clientID]->LastMessageQueue++;
-		if(wsClients[clientID]->LastMessageQueue>=QUEUE_LENGTH)
-		printf("wsClients[clientID]->LastMessageQueue=%d\r\n", wsClients[clientID]->LastMessageQueue);
+		if (wsClients[clientID]->LastMessageQueue >= QUEUE_LENGTH)
+			printf("wsClients[clientID]->LastMessageQueue=%d\r\n", wsClients[clientID]->LastMessageQueue);
 		wsClients[clientID]->MessageQueue[wsClients[clientID]->LastMessageQueue] = buf;
 		wsClients[clientID]->MessageQueueLength[wsClients[clientID]->LastMessageQueue] = totalLength;
-        wsClients[clientID]->flag = false;
+		wsClients[clientID]->flag = false;*/
 
-		
+
 	}
 
 	return true;
@@ -404,8 +526,7 @@ bool webSocket::wsSend(int clientID, string message, bool binary) {
 	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message);
 }
 void webSocket::wsSendClientClose(int clientID, unsigned short status) {
-	printf("wsSendClientClose=%d\r\n", status);
-		// check if client ready state is already closing or closed
+			// check if client ready state is already closing or closed
 	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
 		return;
 
@@ -847,12 +968,14 @@ void webSocket::setPeriodicHandler(nullCallback callback) {
 	callPeriodic = callback;
 }
 void webSocket::startServer(int port) {
-	
+	printf("ffffffff");
 	
 	showAvailableIP();
-
+	//printf("ffffffff");
 	int yes = 1;
-	char buf[4096];
+	char buf[DEFAULT_BUFLEN];
+	char* writeBuffer = nullptr;
+	size_t writeBufferLen = 0;
 	struct sockaddr_in serv_addr, cli_addr;
 
 	memset(&serv_addr, '0', sizeof(serv_addr));
@@ -943,6 +1066,7 @@ void webSocket::startServer(int port) {
 
 
 	fdmax = ListenSocket;
+	int writeopcode = 0;
 	fd_set read_fds;
 	fd_set write_fds;
 	FD_ZERO(&r_fds);
@@ -961,17 +1085,17 @@ void webSocket::startServer(int port) {
 		timeout.tv_usec = 100;
 		//if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) 
 		
-			if (select(fdmax + 1, &read_fds, &write_fds, NULL, &timeout) != SOCKET_ERROR)
-			{
-				
-				
+		if (select(fdmax + 1, &read_fds, &write_fds, NULL, &timeout) != SOCKET_ERROR)
+		{
+
+
 			for (int i = 0; i <= fdmax; i++) {
-			
+
 				if (FD_ISSET(i, &read_fds)) {
-				
-					
+
+
 					if (i == ListenSocket) {
-						
+
 						socklen_t addrlen = sizeof(cli_addr);
 						int ClientSocket = accept(ListenSocket, (struct sockaddr*)&cli_addr, &addrlen);
 						if (ClientSocket != INVALID_SOCKET) {
@@ -979,7 +1103,7 @@ void webSocket::startServer(int port) {
 							ssl = SSL_new(ctx);
 							SSL_set_fd(ssl, ClientSocket);
 							SSL_set_accept_state(ssl);
-                			cert = SSL_get_peer_certificate(ssl);
+							cert = SSL_get_peer_certificate(ssl);
 							if (cert != NULL) {
 								std::printf("Client certificate:\n");
 
@@ -993,27 +1117,27 @@ void webSocket::startServer(int port) {
 
 								/* We could do all sorts of certificate verification stuff here before
 								deallocating the certificate. */
-							
+
 								X509_free(cert);
 							}
 							else {
 								//printf("Client does not have certificate.\n");
 							}
-					
+
 							wsAddClient(ClientSocket, ssl, cli_addr.sin_addr);
 							//ssl = nullptr;
 							//std::printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
 						}
 					}
 					else {
-						
-					
+
+
 						if (socketIDmap.find(i) != socketIDmap.end()) {
 							//std::printf("start read from socket %d\r\n", i);
 							int nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
 							//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
 							if (nbytes == 0) {
-						
+
 
 								int ssl_error = SSL_get_error(ssl, nbytes);
 								if (ssl_error == SSL_ERROR_WANT_WRITE) {
@@ -1030,7 +1154,7 @@ void webSocket::startServer(int port) {
 								long error = ERR_get_error();
 								const char* error_str = ERR_error_string(error, NULL);
 								//std::printf("could not SSL_read (returned 0): %s\n", error_str);
-								
+
 							}
 							else if (nbytes < 0) {
 								int ssl_error = SSL_get_error(ssl, nbytes);
@@ -1044,188 +1168,200 @@ void webSocket::startServer(int port) {
 									// wants_tcp_read is always 1;
 									continue;
 								}
-	
+
 								long error = ERR_get_error();
 								const char* error_string = ERR_error_string(error, NULL);
 								std::printf("could not SSL_read (returned -1) %s\n", error_string);
-							
-							
+
+
 							}
 
 
-							
+
 							if (nbytes < 0) {
-								printf("close1\r\n");
 								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-								
+
 							}
 							else if (nbytes == 0) {
-								
+
 								wsRemoveClient(socketIDmap[i]);
-								
+
 							}
 							else {
-								
+
 								if (!wsProcessClient(socketIDmap[i], buf, nbytes))
 								{
 									printf("close2\r\n");
 									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
 								}
-								
+
 							}
 						}
 					}
 				}
-			
+
 
 				if (FD_ISSET(i, &write_fds)) {
-					
+
 					if (i == ListenSocket) {
 						/**/
 					}
 					else {
 
 						if (socketIDmap.find(i) != socketIDmap.end()) {
+							writeopcode = 0;
 							int nbytes = 0;
 							if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING) {
+								writeopcode = 1;
 								if (wsClients[socketIDmap[i]]->HandshakeMessage == nullptr) continue;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->HandshakeMessage, strlen(wsClients[socketIDmap[i]]->HandshakeMessage));
-								
-							}
-							
-							
-							else {
-								
 
+							}
+
+							else if (wsClients[socketIDmap[i]]->MessageClose != nullptr) {
+								writeopcode = 2;
 								if (wsClients[socketIDmap[i]]->flag == true) continue;
-								if (wsClients[socketIDmap[i]]->MessageQueueLength[0] == -1) continue;
-								//std::printf("start write to socket %d\r\n", i);
-								wsClients[socketIDmap[i]]->flag == true;
-								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->MessageQueue[0], wsClients[socketIDmap[i]]->MessageQueueLength[0]);
+								wsClients[socketIDmap[i]]->flag = true;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->MessageClose, wsClients[socketIDmap[i]]->MessageCloseLength);
 
-								wsClients[socketIDmap[i]]->flag == false;
-								
-								
-							
+							}
+							else if (wsClients[socketIDmap[i]]->MessagePong != nullptr) {
+								writeopcode = 3;
+								if (wsClients[socketIDmap[i]]->flag == true) continue;
+								wsClients[socketIDmap[i]]->flag = true;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->MessagePong, wsClients[socketIDmap[i]]->MessagePongLength);
+
+							}
+							else if (wsClients[socketIDmap[i]]->MessagePing != nullptr) {
+								writeopcode = 4;
+								if (wsClients[socketIDmap[i]]->flag == true) continue;
+								wsClients[socketIDmap[i]]->flag = true;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->MessagePing, wsClients[socketIDmap[i]]->MessagePingLength);
+
 							}
 
-							//std::printf("write to socket %d  bytes %d \r\n", i,nbytes);
+
+							else {
+								writeopcode = 5;
+								if (wsClients[socketIDmap[i]]->flag == true) continue;
+								if (wsClients[socketIDmap[i]]->MessageQueueLength == 0) continue;
+								//std::printf("start write to socket %d\r\n", i);
+								wsClients[socketIDmap[i]]->flag = true;
+								// binary ? WS_OPCODE_BINARY :
+								wsEncodeClientMessage(socketIDmap[i], WS_OPCODE_TEXT, wsClients[socketIDmap[i]]->MessageQueue, wsClients[socketIDmap[i]]->MessageQueueLength, writeBuffer, writeBufferLen);
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, writeBuffer, writeBufferLen);
+								//wsClients[socketIDmap[i]]->flag == false;
+
+
+
+							}
+
 
 							if (nbytes == 0) {
 								int ssl_error = SSL_get_error(ssl, nbytes);
 								if (ssl_error == SSL_ERROR_WANT_WRITE) {
 									//std::printf("SSL_write wants write (returned 0)\r\n");
-									continue;
+									wsClients[socketIDmap[i]]->flag = false; continue;
 								}
 
 								if (ssl_error == SSL_ERROR_WANT_READ) {
 									//std::printf("SSL_write 0 wants read (returned 0)\r\n");
 									// wants_tcp_read is always 1;
+									wsClients[socketIDmap[i]]->flag = false;
 									continue;
 								}
-								
+
+								if (ssl_error == SSL_ERROR_SYSCALL) {
+									std::printf("SSL_write syscall error (returned 0)\r\n");
+									wsClients[socketIDmap[i]]->flag = false;
+									continue;
+								}
+
+
 								long error = ERR_get_error();
 								const char* error_str = ERR_error_string(error, NULL);
 								std::printf("could not SSL_write (returned 0): %s\n", error_str);
+								wsClients[socketIDmap[i]]->flag = false;
 
 							}
 							else if (nbytes < 0) {
-								printf("wsClients[socketIDmap[i]]->MessageQueueLength[0]=%d\r\n", wsClients[socketIDmap[i]]->MessageQueueLength[0]);
+								//printf("wsClients[socketIDmap[i]]->MessageQueueLength[0]=%d\r\n", wsClients[socketIDmap[i]]->MessageQueueLength[0]);
 								int ssl_error = SSL_get_error(ssl, nbytes);
 								if (ssl_error == SSL_ERROR_WANT_WRITE) {
 									std::printf("SSL_write wants write (returned -1)\r\n");
-									continue;
+									wsClients[socketIDmap[i]]->flag = false; continue;
 								}
 
 								if (ssl_error == SSL_ERROR_WANT_READ) {
 									std::printf("SSL_write wants read (returned -1)\r\n");
 									//wants_tcp_read is always 1;
-									continue;
+									wsClients[socketIDmap[i]]->flag = false;  continue;
 								}
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									std::printf("SSL_write syscall error (returned -1)\r\n");
-									continue;
+									wsClients[socketIDmap[i]]->flag = false; continue;
 								}
 
 								long error = ERR_get_error();
 								const char* error_str = ERR_error_string(error, NULL);
 								std::printf("could not SSL_write (returned -1): %s\n", error_str);
-								continue;
+								wsClients[socketIDmap[i]]->flag = false; continue;
 
 
 							}
-
-
 
 
 
 							if (nbytes < 0) {
-								printf("close3\r\n");
 								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-								
+								wsClients[socketIDmap[i]]->flag = false;
+
 							}
 							else if (nbytes == 0) {
-								
 								wsRemoveClient(socketIDmap[i]);
-								
-							}
-						else {
-
-							if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING )
-								    
-							{
-								  
-								
-								    wsClients[socketIDmap[i]]->ReadyState = WS_READY_STATE_OPEN;
-									delete[] wsClients[socketIDmap[i]]->HandshakeMessage;
-									wsClients[socketIDmap[i]]->HandshakeMessage = nullptr;
-									if (callOnOpen != NULL) callOnOpen(socketIDmap[i]);
+								wsClients[socketIDmap[i]]->flag = false;
 
 							}
 							else {
-								
-								while (wsClients[socketIDmap[i]]->flag == true) Sleep(0); 
-								wsClients[socketIDmap[i]]->flag = true;
-								if(wsClients[socketIDmap[i]]->MessageQueue[0]!=nullptr) delete[] wsClients[socketIDmap[i]]->MessageQueue[0]; 
-								
-								wsClients[socketIDmap[i]]->MessageQueue[0] = nullptr;
-								wsClients[socketIDmap[i]]->MessageQueueLength[0]=-1;
-								
-								for (int j = 0; j < wsClients[socketIDmap[i]]->LastMessageQueue; j++) {
-									wsClients[socketIDmap[i]]->MessageQueue[j] = wsClients[socketIDmap[i]]->MessageQueue[j + 1];
-									wsClients[socketIDmap[i]]->MessageQueueLength[j] = wsClients[socketIDmap[i]]->MessageQueueLength[j + 1];
-									
-									if (j == wsClients[socketIDmap[i]]->LastMessageQueue - 1) {
-										//delete[] wsClients[socketIDmap[i]]->MessageQueue[j + 1]; 
-										wsClients[socketIDmap[i]]->MessageQueue[j + 1] = nullptr;
-										wsClients[socketIDmap[i]]->MessageQueueLength[j + 1]=-1;
-									
-									
-									}
-									
-								};
 
-								
-								wsClients[socketIDmap[i]]->LastMessageQueue--;
-								//printf("wsClients[socketIDmap[i]]->LastMessageQueue=%d\r\n", wsClients[socketIDmap[i]]->LastMessageQueue);
-								
+								if (writeopcode == 1) {
+									wsClients[socketIDmap[i]]->ReadyState = WS_READY_STATE_OPEN;
+									delete[] wsClients[socketIDmap[i]]->HandshakeMessage;
+									wsClients[socketIDmap[i]]->HandshakeMessage = nullptr;
+									if (callOnOpen != NULL) callOnOpen(socketIDmap[i]);
+								}
+
+								if (writeopcode == 2) {
+									delete[] wsClients[socketIDmap[i]]->MessageClose; wsClients[socketIDmap[i]]->MessageClose = nullptr;
+									wsClients[socketIDmap[i]]->MessageCloseLength = 0;
+
+								}
+
+								if (writeopcode == 3) {
+									delete[] wsClients[socketIDmap[i]]->MessagePong; wsClients[socketIDmap[i]]->MessagePong = nullptr;
+									wsClients[socketIDmap[i]]->MessagePongLength = 0;
+
+								}
+								if (writeopcode == 4) {
+									delete[] wsClients[socketIDmap[i]]->MessagePing; wsClients[socketIDmap[i]]->MessagePing = nullptr;
+									wsClients[socketIDmap[i]]->MessagePingLength = 0;
+
+								}
+
+
+								if (writeopcode == 4) wsClients[socketIDmap[i]]->MessageQueueLength = 0; ;
+
+
 								wsClients[socketIDmap[i]]->flag = false;
-								
+
 
 							}
 
-							
-							}
+
 						}
 					}
 				}
-
-
-
-
-
-
 
            }
 		}
@@ -2302,15 +2438,14 @@ using namespace std;
 //if (TerminateThread(hThread, dwThreadID))CloseHandle(hThread);
 
 //hThread1 = CreateThread(NULL, 0, &SSLWebSocketThread, 0, THREAD_TERMINATE, &dwThreadID1);
-hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
+//hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
 int port = 443;
+
 server.setOpenHandler(openHandler);
 server.setCloseHandler(closeHandler);
 server.setMessageHandler(messageHandler);
 server.setPeriodicHandler(periodicHandler);
-
-
 server.startServer(port);
 
 //while (1) Sleep(0);
@@ -2388,7 +2523,7 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 
 	}
 
-	Sleep(40000);
+	//Sleep(40000);
 	startRecovery();
 	rabbitmqssl();
 	//sdkSocket();
@@ -5381,14 +5516,6 @@ void radarMessageHandler(string message) {
 		server.wsSend(clientIDs[i], message);
 	}
 }
-
-
-
-
-
-
-
-
 int httpsServer() {
 	WSADATA wsaData;
 	int iResult = 0;
@@ -5877,7 +6004,7 @@ static void run(amqp_connection_state_t conn)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = false;
+	bool print = true;
 	int event_id = 0;
 	int race = 0;
 	int status = 0;
