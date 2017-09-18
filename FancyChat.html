@@ -41,14 +41,27 @@
 		function log( text ) {
 			$log = $('#log');
 			//Add text to log
-			$log.append(($log.val()?"\n":'')+text);
+			//console.log(text);
+            if(text.length<5) console.log(text);
+
+            else document.getElementById("log").value=text;
+            //$log.append(text);
+
 			//Autoscroll
-			$log[0].scrollTop = $log[0].scrollHeight - $log[0].clientHeight;
+			//$log[0].scrollTop = $log[0].scrollHeight - $log[0].clientHeight;
 		}
 
 		function send( text ) {
 			Server.send( 'message', text );
 		}
+
+        var test=["Test Message1", "Test Message2", "Test Message3","Test Message4","Test Message5",];
+
+        function periodicSend(){
+            var s=test[Math.floor(Math.random()*test.length)];
+        log( 'You: '+s);
+        send(s);
+        }
 
         function connect(){
             log('Connecting...');
@@ -69,6 +82,9 @@
 			Server.bind('open', function() {
                 document.getElementById("cntBtn").disabled = true;
 				log( "Connected." );
+
+               // setInterval(periodicSend,500);
+
 			});
 
 			//OH NOES! Disconnection occurred.

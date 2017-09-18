@@ -86,6 +86,7 @@ typedef void(*messageCallback)(int, string);
 #define KEYF  "/passionbet.key"
 #define MAX_PATH 255
 #define DEFAULT_BUFLEN 67108864
+#define SEND_BUFLEN 16777216
 #define MEDIUM_BUFLEN 4096
 #define PLAYERS_LENTGH 300000
 #define COMPETITORS_LENTGH 150000
@@ -114,8 +115,7 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MARKETS_IN 2000
 #define MAX_BETSTOPS 200
 #define MAX_MATCHSTATUS 1000
-
-
+#define QUEUE_LENGTH 2000
 
 using namespace std;
 class wsClient {
@@ -134,6 +134,17 @@ public:
 		FrameBuffer.clear();
 		MessageOpcode = 0;
 		MessageBufferLength = 0;
+		MessageQueue = new char*[QUEUE_LENGTH];
+		MessageQueueLength = new size_t[QUEUE_LENGTH];
+		for (int i = 0; i < QUEUE_LENGTH; i++) {
+			MessageQueueLength[i] = -1; MessageQueue[i] = nullptr;
+		}
+		LastMessageQueue = -1;
+		HandshakeMessage = nullptr;
+        flag = false;
+
+	}
+	~wsClient() { for (int i = 0; i < QUEUE_LENGTH; i++) if (MessageQueue[i] != NULL) delete[] MessageQueue[i]; delete[] MessageQueue; delete[] MessageQueueLength;
 	}
 
 	int socket;                            // client socket
@@ -149,6 +160,18 @@ public:
 	string FrameBuffer;                    // joined onto end as a frame's data comes in, reset to blank string when all frame data has been read
 	unsigned char MessageOpcode;           // stored by the first frame for fragmented messages, default value is 0
 	size_t MessageBufferLength;            // the payload data length of MessageBuffer
+	size_t* MessageQueueLength;
+	size_t LastMessageQueue;
+	size_t NumQueue;
+	char** MessageQueue;
+	char* HandshakeMessage;
+	bool flag;
+
+
+
+
+
+
 };
 class webSocket {
 public:
@@ -224,7 +247,7 @@ void showAvailableIP() {
 
 		}
 		if (pIPAddrTable == NULL) {
-			printf("Memory allocation failed for GetIpAddrTable\n");
+			std::printf("Memory allocation failed for GetIpAddrTable\n");
 			return;
 		}
 	}
@@ -299,7 +322,7 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 	int messageLength = message.size();
 
 	// set max payload length per frame
-	int bufferSize = 4096;
+	int bufferSize = DEFAULT_BUFLEN;
 
 	// work out amount of frames to send, based on $bufferSize
 	int frameCount = ceil((float)messageLength / bufferSize);
@@ -311,13 +334,17 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 	int lastFrameBufferLength = (messageLength % bufferSize) != 0 ? (messageLength % bufferSize) : (messageLength != 0 ? bufferSize : 0);
 
 	// loop around all frames to send
+
+	char *buf = nullptr;
+	
+	
 	for (int i = 0; i < frameCount; i++) {
 		// fetch fin, opcode and buffer length for frame
 		unsigned char fin = i != maxFrame ? 0 : WS_FIN;
 		opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
 
 		size_t bufferLength = i != maxFrame ? bufferSize : lastFrameBufferLength;
-		char *buf;
+		
 		size_t totalLength;
 
 		// set payload length variables for frame
@@ -355,25 +382,20 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 			buf[9] = bufferLength;
 			memcpy(buf + 10, message.c_str(), message.size());
 		}
-
-		// send frame
+      
 		int left = totalLength;
-		char *buf2 = buf;
-		do {
-			//int sent = send(wsClients[clientID]->socket, buf2, left, 0);
-			int sent = SSL_write(wsClients[clientID]->ssl, buf2, left);
+		
+		while (wsClients[clientID]->flag == true) Sleep(0);
+		
+		wsClients[clientID]->flag = true;
+		wsClients[clientID]->LastMessageQueue++;
+		if(wsClients[clientID]->LastMessageQueue>=QUEUE_LENGTH)
+		printf("wsClients[clientID]->LastMessageQueue=%d\r\n", wsClients[clientID]->LastMessageQueue);
+		wsClients[clientID]->MessageQueue[wsClients[clientID]->LastMessageQueue] = buf;
+		wsClients[clientID]->MessageQueueLength[wsClients[clientID]->LastMessageQueue] = totalLength;
+        wsClients[clientID]->flag = false;
 
-			//SSL_write(ssl, sendBuf, strlen(sendBuf));
-
-			if (sent == -1)
-				return false;
-
-			left -= sent;
-			if (sent > 0)
-				buf2 += sent;
-		} while (left > 0);
-
-		delete buf;
+		
 	}
 
 	return true;
@@ -382,7 +404,8 @@ bool webSocket::wsSend(int clientID, string message, bool binary) {
 	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message);
 }
 void webSocket::wsSendClientClose(int clientID, unsigned short status) {
-	// check if client ready state is already closing or closed
+	printf("wsSendClientClose=%d\r\n", status);
+		// check if client ready state is already closing or closed
 	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
 		return;
 
@@ -445,19 +468,21 @@ bool webSocket::wsCheckSizeClientFrame(int clientID) {
 void webSocket::wsRemoveClient(int clientID) {
 	if (callOnClose != NULL)
 		callOnClose(clientID);
-
 	wsClient *client = wsClients[clientID];
-
 	// fetch close status (which could be false), and call wsOnClose
 	int closeStatus = wsClients[clientID]->CloseStatus;
-
+	//
+	//printf("wsRemoveClient3");
+	//SSL_shutdown(client->ssl);
+	SSL_set_shutdown(client->ssl, SSL_RECEIVED_SHUTDOWN);
 	SSL_free(client->ssl);
-	SSL_shutdown(client->ssl);
+	//SSL_CTX_free(client->ssl);
+
 	closesocket(client->socket);
 
-
-	WSACleanup();
+	//WSACleanup();
 	FD_CLR(client->socket, &r_fds);
+	FD_CLR(client->socket, &w_fds);
 	socketIDmap.erase(wsClients[clientID]->socket);
 	wsClients[clientID] = NULL;
 	delete client;
@@ -465,6 +490,7 @@ void webSocket::wsRemoveClient(int clientID) {
 bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
 	wsClient *client = wsClients[clientID];
 	// check opcodes
+	
 	if (opcode == WS_OPCODE_PING) {
 		// received ping message
 		return wsSendClientMessage(clientID, WS_OPCODE_PONG, data);
@@ -484,10 +510,12 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		}
 		else {
 			// the server has not already sent a close frame to the client, send one now
+			
 			wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
 		}
-
+		
 		wsRemoveClient(clientID);
+		
 	}
 	else if (opcode == WS_OPCODE_TEXT || opcode == WS_OPCODE_BINARY) {
 		if (callOnMessage != NULL)
@@ -504,7 +532,7 @@ bool webSocket::wsProcessClientFrame(int clientID) {
 	wsClient *client = wsClients[clientID];
 	// store the time that data was last received from the client
 	client->LastRecvTime = time(NULL);
-
+	
 	// check at least 6 bytes are set (first 2 bytes and 4 bytes for the mask key)
 	if (client->FrameBuffer.size() < 6)
 		return false;
@@ -596,9 +624,11 @@ bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength)
 	// increase number of bytes read for the frame, and join buffer onto end of the frame buffer
 	client->FrameBytesRead += bufferLength;
 	client->FrameBuffer.append(buffer, bufferLength);
-
+	
 	// check if the length of the frame's payload data has been fetched, if not then attempt to fetch it from the frame buffer
+
 	if (wsCheckSizeClientFrame(clientID) == true) {
+		;
 		// work out the header length of the frame
 		int headerLength = (client->FramePayloadDataLength <= 125 ? 0 : (client->FramePayloadDataLength <= 65535 ? 2 : 8)) + 6;
 
@@ -615,8 +645,9 @@ bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength)
 			}
 
 			// process the frame
+			
 			bool result = wsProcessClientFrame(clientID);
-
+			
 			// check if the client wasn't removed, then reset frame data
 			if (wsClients[clientID] != NULL) {
 				client->FramePayloadDataLength = -1;
@@ -725,6 +756,16 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 	SSL* ssl = wsClients[clientID]->ssl;
 
 	int left = message.size();
+	wsClients[clientID]->HandshakeMessage = new char[left];
+	strcpy(wsClients[clientID]->HandshakeMessage, message.c_str());
+
+	//printf(wsClients[clientID]->HandshakeMessage);
+	//printf("\r\n");
+
+	//int sent = SSL_write(ssl, message.c_str(), message.size());
+	//if (sent == false) return false;
+
+	/*
 	do {
 		//int sent = send(socket, message.c_str(), message.size(), 0);
 		int sent = SSL_write(ssl, message.c_str(), message.size());
@@ -736,6 +777,7 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 		if (sent > 0)
 			message = message.substr(sent);
 	} while (left > 0);
+	*/
 
 	return true;
 }
@@ -754,12 +796,12 @@ bool webSocket::wsProcessClient(int clientID, char *buffer, int bufferLength) {
 	else if (wsClients[clientID]->ReadyState == WS_READY_STATE_CONNECTING) {
 		// handshake not completed
 		result = wsProcessClientHandshake(clientID, buffer);
-		if (result) {
+	/*	if (result) {
 			if (callOnOpen != NULL)
 				callOnOpen(clientID);
 
 			wsClients[clientID]->ReadyState = WS_READY_STATE_OPEN;
-		}
+		}*/
 	}
 	else {
 		// ready state is set to closed
@@ -778,7 +820,7 @@ int webSocket::wsGetNextClientID() {
 }
 void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
 	FD_SET(socket, &r_fds);
-	//FD_SET(socket, &w_fds);
+	FD_SET(socket, &w_fds);
 	if (socket > fdmax)
 		fdmax = socket;
 
@@ -849,7 +891,7 @@ void webSocket::startServer(int port) {
 	ListenSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (ListenSocket == INVALID_SOCKET)
 	{	WSACleanup();
-		printf("failed socket %d", WSAGetLastError());
+		std::printf("failed socket %d", WSAGetLastError());
 		exit(1);
 	}
 
@@ -860,7 +902,7 @@ void webSocket::startServer(int port) {
   if (iResult == SOCKET_ERROR){
 	    closesocket(ListenSocket);
 		WSACleanup();
-		printf("failed setsockopt %d", WSAGetLastError());
+		std::printf("failed setsockopt %d", WSAGetLastError());
 		exit(1);
 	}
 
@@ -869,7 +911,7 @@ void webSocket::startServer(int port) {
   u_long ulBlock = 1;
   if (ioctlsocket(ListenSocket, FIONBIO, &ulBlock) == SOCKET_ERROR)
   {
-	  printf("could not fcntl\n");
+	  std::printf("could not fcntl\n");
 	  closesocket(ClientSocket);
 	  WSACleanup();
 	  exit(1);
@@ -884,7 +926,7 @@ void webSocket::startServer(int port) {
 	if (iResult == SOCKET_ERROR)
 	{	closesocket(ListenSocket);
 		WSACleanup();
-		printf("failed bind %d", WSAGetLastError());
+		std::printf("failed bind %d", WSAGetLastError());
 		exit(1);
 	}
 
@@ -895,95 +937,58 @@ void webSocket::startServer(int port) {
 	if (iResult == SOCKET_ERROR)
 	{	closesocket(ListenSocket);
 		WSACleanup();
-		printf(0, "failed listen %d", WSAGetLastError());
+		std::printf(0, "failed listen %d", WSAGetLastError());
 		exit(1);
 	}
 
 
 	fdmax = ListenSocket;
 	fd_set read_fds;
-	//fd_set write_fds;
+	fd_set write_fds;
 	FD_ZERO(&r_fds);
-	//FD_ZERO(&w_fds);
+	FD_ZERO(&w_fds);
 	FD_SET(ListenSocket, &r_fds);
-	//FD_SET(ListenSocket, &w_fds);
+	FD_SET(ListenSocket, &w_fds);
 	FD_ZERO(&read_fds);
-	//FD_ZERO(&write_fds);
-	printf(" ListenSocket=%d\r\n", ListenSocket);
+	FD_ZERO(&write_fds);
+	//std::printf(" ListenSocket=%d\r\n", ListenSocket);
 	struct timeval timeout;
 	time_t nextPingTime = time(NULL) + 20;
-	while (FD_ISSET(ListenSocket, &r_fds)) {
+	while (FD_ISSET(ListenSocket, &r_fds)|| FD_ISSET(ListenSocket, &w_fds)) {
 		read_fds = r_fds;
-		//write_fds = w_fds;
+		write_fds = w_fds;
 		timeout.tv_sec = 0;
-		timeout.tv_usec = 10000;
+		timeout.tv_usec = 100;
 		//if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) 
 		
-			if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) != SOCKET_ERROR)
-		{
+			if (select(fdmax + 1, &read_fds, &write_fds, NULL, &timeout) != SOCKET_ERROR)
+			{
+				
 				
 			for (int i = 0; i <= fdmax; i++) {
-				
 			
 				if (FD_ISSET(i, &read_fds)) {
 				
 					
-				
-				
 					if (i == ListenSocket) {
+						
 						socklen_t addrlen = sizeof(cli_addr);
 						int ClientSocket = accept(ListenSocket, (struct sockaddr*)&cli_addr, &addrlen);
 						if (ClientSocket != INVALID_SOCKET) {
 							/* add new client */
 							ssl = SSL_new(ctx);
 							SSL_set_fd(ssl, ClientSocket);
-							
-							
-						/*	do { 
-								printf("SSL_accept");
-								iResult = SSL_accept(ssl); 
-								if (iResult == -1) {
-									const int nCode = SSL_get_error(ssl, iResult);
-									if ((nCode != SSL_ERROR_WANT_READ) && (nCode != SSL_ERROR_WANT_WRITE))
-									{
-										iResult = 0; break;
-									}
-								}
-								
-							
-							} while (iResult == -1);
-								// iResult = SSL_accept(ssl);
-
-								*/
 							SSL_set_accept_state(ssl);
-
-							/*
-							if (iResult==0) {
-								wprintf(L"SSL connect error\nretval: %d\n", iResult);
-								iResult = closesocket(ClientSocket);
-								if (iResult == SOCKET_ERROR) {
-									printf("closesocket function failed with error: %ld\n", WSAGetLastError());
-									WSACleanup();
-									continue;
-								}
-								else {
-									iResult = SSL_get_error(ssl, iResult);
-									printf("SSL error: %d\n", iResult);
-									WSACleanup();
-									continue;
-								}
-							}*/
-
-							cert = SSL_get_peer_certificate(ssl);
+                			cert = SSL_get_peer_certificate(ssl);
 							if (cert != NULL) {
-								printf("Client certificate:\n");
+								std::printf("Client certificate:\n");
 
 								str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
-								printf("\t subject: %s\n", str);
+								std::printf("\t subject: %s\n", str);
 								OPENSSL_free(str);
 
 								str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
-								printf("\t issuer: %s\n", str);
+								std::printf("\t issuer: %s\n", str);
 								OPENSSL_free(str);
 
 								/* We could do all sorts of certificate verification stuff here before
@@ -991,63 +996,238 @@ void webSocket::startServer(int port) {
 							
 								X509_free(cert);
 							}
-							else
-								printf("Client does not have certificate.\n");
+							else {
+								//printf("Client does not have certificate.\n");
+							}
 					
 							wsAddClient(ClientSocket, ssl, cli_addr.sin_addr);
 							//ssl = nullptr;
-							printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
+							//std::printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
 						}
 					}
 					else {
+						
 					
-					
-
 						if (socketIDmap.find(i) != socketIDmap.end()) {
-							
+							//std::printf("start read from socket %d\r\n", i);
 							int nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
-
+							//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
 							if (nbytes == 0) {
+						
+
+								int ssl_error = SSL_get_error(ssl, nbytes);
+								if (ssl_error == SSL_ERROR_WANT_WRITE) {
+									//std::printf("SSL_read wants write (returned 0)\n");
+									continue;
+								}
+
+								if (ssl_error == SSL_ERROR_WANT_READ) {
+									//std::printf("SSL_read wants read (returned 0)\n");
+									// wants_tcp_read is always 1;
+									continue;
+								}
+
 								long error = ERR_get_error();
 								const char* error_str = ERR_error_string(error, NULL);
-								//printf("could not SSL_read (returned 0): %s\n", error_str);
+								//std::printf("could not SSL_read (returned 0): %s\n", error_str);
 								
 							}
 							else if (nbytes < 0) {
 								int ssl_error = SSL_get_error(ssl, nbytes);
 								if (ssl_error == SSL_ERROR_WANT_WRITE) {
-									//printf("SSL_read wants write\n");
+									std::printf("SSL_read wants write (returned -1)\n");
 									continue;
 								}
 
 								if (ssl_error == SSL_ERROR_WANT_READ) {
-									//printf("SSL_read wants read\n");
+									std::printf("SSL_read wants read (returned -1)\n");
 									// wants_tcp_read is always 1;
 									continue;
 								}
 	
 								long error = ERR_get_error();
 								const char* error_string = ERR_error_string(error, NULL);
-								//printf("could not SSL_read (returned -1) %s\n", error_string);
+								std::printf("could not SSL_read (returned -1) %s\n", error_string);
 							
 							
 							}
 
 
 							
-							if (nbytes < 0)
+							if (nbytes < 0) {
+								printf("close1\r\n");
 								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-							else if (nbytes == 0)
+								
+							}
+							else if (nbytes == 0) {
+								
 								wsRemoveClient(socketIDmap[i]);
+								
+							}
 							else {
 								
 								if (!wsProcessClient(socketIDmap[i], buf, nbytes))
+								{
+									printf("close2\r\n");
 									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+								}
+								
 							}
 						}
 					}
 				}
-			}
+			
+
+				if (FD_ISSET(i, &write_fds)) {
+					
+					if (i == ListenSocket) {
+						/**/
+					}
+					else {
+
+						if (socketIDmap.find(i) != socketIDmap.end()) {
+							int nbytes = 0;
+							if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING) {
+								if (wsClients[socketIDmap[i]]->HandshakeMessage == nullptr) continue;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->HandshakeMessage, strlen(wsClients[socketIDmap[i]]->HandshakeMessage));
+								
+							}
+							
+							
+							else {
+								
+
+								if (wsClients[socketIDmap[i]]->flag == true) continue;
+								if (wsClients[socketIDmap[i]]->MessageQueueLength[0] == -1) continue;
+								//std::printf("start write to socket %d\r\n", i);
+								wsClients[socketIDmap[i]]->flag == true;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->MessageQueue[0], wsClients[socketIDmap[i]]->MessageQueueLength[0]);
+
+								wsClients[socketIDmap[i]]->flag == false;
+								
+								
+							
+							}
+
+							//std::printf("write to socket %d  bytes %d \r\n", i,nbytes);
+
+							if (nbytes == 0) {
+								int ssl_error = SSL_get_error(ssl, nbytes);
+								if (ssl_error == SSL_ERROR_WANT_WRITE) {
+									//std::printf("SSL_write wants write (returned 0)\r\n");
+									continue;
+								}
+
+								if (ssl_error == SSL_ERROR_WANT_READ) {
+									//std::printf("SSL_write 0 wants read (returned 0)\r\n");
+									// wants_tcp_read is always 1;
+									continue;
+								}
+								
+								long error = ERR_get_error();
+								const char* error_str = ERR_error_string(error, NULL);
+								std::printf("could not SSL_write (returned 0): %s\n", error_str);
+
+							}
+							else if (nbytes < 0) {
+								printf("wsClients[socketIDmap[i]]->MessageQueueLength[0]=%d\r\n", wsClients[socketIDmap[i]]->MessageQueueLength[0]);
+								int ssl_error = SSL_get_error(ssl, nbytes);
+								if (ssl_error == SSL_ERROR_WANT_WRITE) {
+									std::printf("SSL_write wants write (returned -1)\r\n");
+									continue;
+								}
+
+								if (ssl_error == SSL_ERROR_WANT_READ) {
+									std::printf("SSL_write wants read (returned -1)\r\n");
+									//wants_tcp_read is always 1;
+									continue;
+								}
+
+								if (ssl_error == SSL_ERROR_SYSCALL) {
+									std::printf("SSL_write syscall error (returned -1)\r\n");
+									continue;
+								}
+
+								long error = ERR_get_error();
+								const char* error_str = ERR_error_string(error, NULL);
+								std::printf("could not SSL_write (returned -1): %s\n", error_str);
+								continue;
+
+
+							}
+
+
+
+
+
+							if (nbytes < 0) {
+								printf("close3\r\n");
+								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+								
+							}
+							else if (nbytes == 0) {
+								
+								wsRemoveClient(socketIDmap[i]);
+								
+							}
+						else {
+
+							if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING )
+								    
+							{
+								  
+								
+								    wsClients[socketIDmap[i]]->ReadyState = WS_READY_STATE_OPEN;
+									delete[] wsClients[socketIDmap[i]]->HandshakeMessage;
+									wsClients[socketIDmap[i]]->HandshakeMessage = nullptr;
+									if (callOnOpen != NULL) callOnOpen(socketIDmap[i]);
+
+							}
+							else {
+								
+								while (wsClients[socketIDmap[i]]->flag == true) Sleep(0); 
+								wsClients[socketIDmap[i]]->flag = true;
+								if(wsClients[socketIDmap[i]]->MessageQueue[0]!=nullptr) delete[] wsClients[socketIDmap[i]]->MessageQueue[0]; 
+								
+								wsClients[socketIDmap[i]]->MessageQueue[0] = nullptr;
+								wsClients[socketIDmap[i]]->MessageQueueLength[0]=-1;
+								
+								for (int j = 0; j < wsClients[socketIDmap[i]]->LastMessageQueue; j++) {
+									wsClients[socketIDmap[i]]->MessageQueue[j] = wsClients[socketIDmap[i]]->MessageQueue[j + 1];
+									wsClients[socketIDmap[i]]->MessageQueueLength[j] = wsClients[socketIDmap[i]]->MessageQueueLength[j + 1];
+									
+									if (j == wsClients[socketIDmap[i]]->LastMessageQueue - 1) {
+										//delete[] wsClients[socketIDmap[i]]->MessageQueue[j + 1]; 
+										wsClients[socketIDmap[i]]->MessageQueue[j + 1] = nullptr;
+										wsClients[socketIDmap[i]]->MessageQueueLength[j + 1]=-1;
+									
+									
+									}
+									
+								};
+
+								
+								wsClients[socketIDmap[i]]->LastMessageQueue--;
+								//printf("wsClients[socketIDmap[i]]->LastMessageQueue=%d\r\n", wsClients[socketIDmap[i]]->LastMessageQueue);
+								
+								wsClients[socketIDmap[i]]->flag = false;
+								
+
+							}
+
+							
+							}
+						}
+					}
+				}
+
+
+
+
+
+
+
+           }
 		}
 		
 			
@@ -1080,6 +1260,7 @@ void webSocket::stopServer() {
 	wsClients.clear();
 	socketIDmap.clear();
 	FD_ZERO(&r_fds);
+	FD_ZERO(&w_fds);
 	fdmax = 0;
 	WSACleanup();
 }
@@ -1095,17 +1276,6 @@ void webSocket::stopServer() {
 #ifndef librabbitmq_examples_utils_h
 #define librabbitmq_examples_utils_h
 #endif
-
-//#define CERTF  "/cert.pem"
-//#define KEYF  "/key.pem"
-// Need to link with Ws2_32.lib
-
-
-
-
-
-
-
 
 
 char* recvbuf;
@@ -2048,7 +2218,6 @@ int matchstatus_l = 0;
 
 
 int i = 0;
-webSocket server;
 
 Event** events_id = new Event*[MAX_EVENTS];
 Line** lines_id = new Line*[MAX_LINES];
@@ -2103,12 +2272,8 @@ void closeHandler(int);
 /* called when a client sends a message to the server */
 void messageHandler(int,string );
 /* called once per select() loop */
+void radarMessageHandler(string);
 void periodicHandler();
-
-
-
-
-
 void die(const char *, ...);
 void die_on_error(int, char const*);
 void die_on_amqp_error(amqp_rpc_reply_t, char const *);
@@ -2119,25 +2284,37 @@ void rabbitmqssl();
 static void run(amqp_connection_state_t);
 static int rows_eq(int *, int *);
 static void dump_row(long, int, int *);
+webSocket server;
+HANDLE hThread1;
+DWORD dwThreadID1;
+DWORD ExitCode1;
+DWORD WINAPI SSLWebSocketThread(LPVOID);
+
+HANDLE hThread2;
+DWORD dwThreadID2;
+DWORD ExitCode2;
+DWORD WINAPI BetradarThread(LPVOID);
 
 
 
 int main(){
 using namespace std;
+//if (TerminateThread(hThread, dwThreadID))CloseHandle(hThread);
+
+//hThread1 = CreateThread(NULL, 0, &SSLWebSocketThread, 0, THREAD_TERMINATE, &dwThreadID1);
+hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
 int port = 443;
-//cout << "Please set server port: ";
-//cin >> port;
-/* set event handler */
 server.setOpenHandler(openHandler);
 server.setCloseHandler(closeHandler);
 server.setMessageHandler(messageHandler);
-//server.setPeriodicHandler(periodicHandler);
+server.setPeriodicHandler(periodicHandler);
 
-/* start the chatroom server, listen to ip '127.0.0.1' and port '8000' */
+
 server.startServer(port);
 
-return 1;
+//while (1) Sleep(0);
+
 
 	//httpsServer();
 	//WebSocketServer();
@@ -2148,56 +2325,82 @@ return 1;
 
 	return 0;
 
+	
+}
+
+DWORD WINAPI SSLWebSocketThread(LPVOID lparam) {
+
+	int port = 443;
+	//cout << "Please set server port: ";
+	//cin >> port;
+	/* set event handler */
+	server.setOpenHandler(openHandler);
+	server.setCloseHandler(closeHandler);
+	server.setMessageHandler(messageHandler);
+	server.setPeriodicHandler(periodicHandler);
+
+	/* start the chatroom server, listen to ip '127.0.0.1' and port '8000' */
+	server.startServer(port);
+	return 1;
+}
+DWORD WINAPI BetradarThread(LPVOID lparam) {
+
 	bool fullData = false;
 	int recvbuflen = DEFAULT_BUFLEN;
 	recvbuf = new char[DEFAULT_BUFLEN];
-	for (int i = 0; i <MAX_EVENTS; i++) events_id[i] = NULL;
-	for (int i = 0; i <MAX_LINES; i++) lines_id[i] = NULL;
-	for (int i = 0; i <MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
-	for (int i = 0; i <MAX_TOURNAMENTS; i++) seasons_id[i] = NULL;
-	for (int i = 0; i <MAX_TOURNAMENTS; i++) simples_id[i] = NULL;
-	for (int i = 0; i <MAX_CATEGORIES; i++) categories_id[i] = NULL;
-	for (int i = 0; i <MAX_SPORTS; i++) sports_id[i] = NULL;
-	for (int i = 0; i <MAX_COMPETITORS; i++) competitors_id[i] = NULL;
-	for (int i = 0; i <MAX_PLAYERS; i++) players_id[i] = NULL;
-	for (int i = 0; i <MAX_MARKETS; i++) markets_id[i] = NULL;
-	for (int i = 0; i <MAX_MARKETS; i++) max_markets_in[i] = 2;
-	for (int i = 0; i <MAX_BETSTOPS; i++) betstops_id[i] = NULL;
-	for (int i = 0; i <MAX_MATCHSTATUS; i++) matchstatus_id[i] = NULL;
+	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = NULL;
+	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = NULL;
+	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
+	for (int i = 0; i < MAX_TOURNAMENTS; i++) seasons_id[i] = NULL;
+	for (int i = 0; i < MAX_TOURNAMENTS; i++) simples_id[i] = NULL;
+	for (int i = 0; i < MAX_CATEGORIES; i++) categories_id[i] = NULL;
+	for (int i = 0; i < MAX_SPORTS; i++) sports_id[i] = NULL;
+	for (int i = 0; i < MAX_COMPETITORS; i++) competitors_id[i] = NULL;
+	for (int i = 0; i < MAX_PLAYERS; i++) players_id[i] = NULL;
+	for (int i = 0; i < MAX_MARKETS; i++) markets_id[i] = NULL;
+	for (int i = 0; i < MAX_MARKETS; i++) max_markets_in[i] = 2;
+	for (int i = 0; i < MAX_BETSTOPS; i++) betstops_id[i] = NULL;
+	for (int i = 0; i < MAX_MATCHSTATUS; i++) matchstatus_id[i] = NULL;
 
 	getSports();
-    
-	if(getBetstops()!=-1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
-	if(getMatchstatus()!=-1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
+
+	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
+	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
 	if (fullData == false) {
-	loadMarketsFromFiles();
-	loadCategoriesFromFiles(); 
-	loadTournamentsFromFiles();
-	loadEventsFromFiles();
-	loadCompetitorsFromFiles();
-	loadPlayersFromFiles();
-	
-}
-	
+		loadMarketsFromFiles();
+		loadCategoriesFromFiles();
+		loadTournamentsFromFiles();
+		loadEventsFromFiles();
+		loadCompetitorsFromFiles();
+		loadPlayersFromFiles();
+
+	}
+
 
 	if (fullData == true) {
-		getMarkets(); 
+		getMarkets();
 		getCategoriesTournaments();
 		getEvents(0, 180);
 		for (int i = 0; i < tournaments_l; i++) saveTournamentToFile(&tournaments[i]);
 		for (int i = 0; i < categories_l; i++) saveCategoryToFile(&categories[i]);
 		for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
-		for (int i = 0; i < tournaments_l; i++) getTournament(&tournaments[i],true);
+		for (int i = 0; i < tournaments_l; i++) getTournament(&tournaments[i], true);
 
 	}
 
-
-startRecovery();
-rabbitmqssl();
+	Sleep(40000);
+	startRecovery();
+	rabbitmqssl();
 	//sdkSocket();
 	//httpsServer();
-	return 0;
+	return 1;
+
 }
+
+
+
+
+
 
 
 void startRecovery() {
@@ -4486,8 +4689,8 @@ void saveMarketToFile(Market* market) {
 	
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	if (INVALID_HANDLE_VALUE == File) {
-		printf("ERROR Save Market.");
-		printf(file_path); printf("\r\n");
+		std::printf("ERROR Save Market.");
+		std::printf(file_path);std::printf("\r\n");
 
 	}
 
@@ -5172,7 +5375,12 @@ void periodicHandler() {
 		next = time(NULL) + 10;
 	}
 }
-
+void radarMessageHandler(string message) {
+		vector<int> clientIDs = server.getClientIDs();
+	for (int i = 0; i < clientIDs.size(); i++) {
+		server.wsSend(clientIDs[i], message);
+	}
+}
 
 
 
@@ -5380,8 +5588,8 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	remoteHost = gethostbyname(domain);
 	if (remoteHost == NULL) {
 		dwError = WSAGetLastError(); if (dwError != 0) {
-			if (dwError == WSAHOST_NOT_FOUND) { printf("Host not found\n");  WSACleanup(); return -1; }
-			else if (dwError == WSANO_DATA) { printf("No data record found\n");  WSACleanup(); return -1; }
+			if (dwError == WSAHOST_NOT_FOUND) {std::printf("Host not found\n");  WSACleanup(); return -1; }
+			else if (dwError == WSANO_DATA) {std::printf("No data record found\n");  WSACleanup(); return -1; }
 			else {
 				printf("Function failed with error: %ld\n", dwError);
 				return -1;
@@ -5389,11 +5597,11 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 		}
 	}
 	/*else {
-	printf("Function returned:\n"); printf("\tOfficial name: %s\n", remoteHost->h_name);
+	printf("Function returned:\n");std::printf("\tOfficial name: %s\n", remoteHost->h_name);
 
 	for (pAlias = remoteHost->h_aliases; *pAlias != 0; pAlias++) {
 	printf("\tAlternate name #%d: %s\n", ++i, *pAlias);
-	} printf("\tAddress type: ");
+	}std::printf("\tAddress type: ");
 
 
 	switch (remoteHost->h_addrtype) {
@@ -5669,7 +5877,7 @@ static void run(amqp_connection_state_t conn)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = true;
+	bool print = false;
 	int event_id = 0;
 	int race = 0;
 	int status = 0;
@@ -5685,7 +5893,8 @@ static void run(amqp_connection_state_t conn)
 	float* outcome_odds=new float[500];
 	for (int i = 0; i < 500; i++) outcome_name[i] = NULL;
 	Line* _line = new Line();
-
+	char* socket_message_big = new char[145000];
+	char* socket_message_little = new char[4096];
 
 
 	for (;;) {
@@ -5713,7 +5922,7 @@ static void run(amqp_connection_state_t conn)
 
 	std::strncpy(maxbuf, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
 		maxbuf[envelope.message.body.len] = 0;
-		
+		socket_message_big[0] = 0;
 		doc.parse<0>(maxbuf);
 		if (doc.first_node() == NULL) continue;
 
@@ -5816,10 +6025,24 @@ static void run(amqp_connection_state_t conn)
 							std::printf("NAME:"); std::printf(_tournament->name);
 							std::printf("\r\n");
 						}
+							std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+							std::strcat(socket_message_big, socket_message_little);
+							std::sprintf(socket_message_little, "Simple id: %d\r\n", event_id);
+							std::strcat(socket_message_big, socket_message_little);
+							std::sprintf(socket_message_little, "NAME:");
+							std::strcat(socket_message_big, socket_message_little);
+							std::sprintf(socket_message_little, "\r\n");
+							
 
-						if (print == true) {
-							std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
-						}
+
+						
+
+							if (print == true) {
+								std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
+							}
+							std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
+							std::strcat(socket_message_big, "\r\n");
+						
 
 
 						if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run simple %d\r\n", _tournament->category_id); continue; }
@@ -5831,6 +6054,11 @@ static void run(amqp_connection_state_t conn)
 							std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 							std::printf("\r\n***************************************************\r\n");
 						}
+							//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+							std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
+							std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
+
+						
 
 
 						xml_node<> * odds = doc.first_node()->first_node("odds");
@@ -5956,7 +6184,7 @@ static void run(amqp_connection_state_t conn)
 											_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
 											strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
 											_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-											//printf(_line->extended_specifier[q]); printf("\r\n"); printf(_line->extended_specifier_value[q]); printf("\r\n");
+											//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
 
 
 										}
@@ -6053,6 +6281,12 @@ static void run(amqp_connection_state_t conn)
 										std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 									}
 
+										//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+										std::strcat(socket_message_big, "\r\n");
+										std::strcat(socket_message_big, _line->name);
+										std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+									
+
 
 
 
@@ -6098,6 +6332,15 @@ static void run(amqp_connection_state_t conn)
 												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 												std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 											}
+												//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+											
 
 
 
@@ -6168,6 +6411,17 @@ static void run(amqp_connection_state_t conn)
 												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 											}
 
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+
+
+											
+
 
 
 										}
@@ -6216,8 +6470,19 @@ static void run(amqp_connection_state_t conn)
 											if (print == true) {
 												std::printf(_line->outcome_name[i]); std::printf("\t");
 												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
+												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);}
+
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+
+
+
+											
 										}
 
 										if (_line->type == 3) {
@@ -6259,6 +6524,17 @@ static void run(amqp_connection_state_t conn)
 												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 											}
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+
+
+
+											
 
 
 
@@ -6311,16 +6587,32 @@ static void run(amqp_connection_state_t conn)
 
 						if (print == true) {
 							std::printf("\r\n***************************************************\r\n");
-							std::printf("Season id: %d\r\n",event_id);
+							std::printf("Season id: %d\r\n", event_id);
 							std::printf("Tournament id:%d\r\n", _tournament->id);
-							std::printf("NAME:"); std::printf(_tournament->name); 
+							std::printf("NAME:"); std::printf(_tournament->name);
 							std::printf("\r\nSEASON:"); std::printf(_tournament->season_name);
 							std::printf("\r\n");
 						}
 
-						if (print == true) {
-							std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
-						}
+							std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+							std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+							std::strcat(socket_message_big, socket_message_little);
+							std::sprintf(socket_message_little, "Tournament id:%d\r\n", _tournament->id);
+							std::strcat(socket_message_big, socket_message_little);
+							std::strcat(socket_message_big, "NAME:");
+							std::strcat(socket_message_big, _tournament->name);
+							std::strcat(socket_message_big, "\r\nSEASON:");
+							std::strcat(socket_message_big, _tournament->season_name);
+							std::strcat(socket_message_big, "\r\n");
+
+						
+
+							if (print == true) {
+								std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
+							}
+							std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
+							std::strcat(socket_message_big, "\r\n");
+						
 
 
 						if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run season %d\r\n", _tournament->category_id); continue; }
@@ -6332,6 +6624,13 @@ static void run(amqp_connection_state_t conn)
 							std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 							std::printf("\r\n***************************************************\r\n");
 						}
+
+							//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+							std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
+							std::strcat(socket_message_big, "\r\n");
+
+
+						
 
 
 						xml_node<> * odds = doc.first_node()->first_node("odds");
@@ -6457,7 +6756,7 @@ static void run(amqp_connection_state_t conn)
 											_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
 											strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
 											_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-											//printf(_line->extended_specifier[q]); printf("\r\n"); printf(_line->extended_specifier_value[q]); printf("\r\n");
+											//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
 
 
 										}
@@ -6555,6 +6854,15 @@ static void run(amqp_connection_state_t conn)
 									}
 
 
+										//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+										std::strcat(socket_message_big, "\r\n");
+										std::strcat(socket_message_big, _line->name);
+										std::strcat(socket_message_big, "\r\n");
+										std::strcat(socket_message_big, "------------------------------------------------------------------------------\r\n");
+
+									
+
+
 
 
 
@@ -6592,12 +6900,23 @@ static void run(amqp_connection_state_t conn)
 
 
 
-											if (print == true) {
+										   if (print == true) {
 
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
+											   std::printf(_line->outcome_name[i]); std::printf("\t");
+											   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+											   std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										   }
+
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+
+
+											
 
 
 
@@ -6664,6 +6983,17 @@ static void run(amqp_connection_state_t conn)
 												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 											}
 
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+
+
+											
+
 
 
 										}
@@ -6714,6 +7044,16 @@ static void run(amqp_connection_state_t conn)
 												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 											}
+
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+
+											
 										}
 
 										if (_line->type == 3) {
@@ -6755,6 +7095,14 @@ static void run(amqp_connection_state_t conn)
 												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 											}
+												std::strcat(socket_message_big, _line->outcome_name[i]);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												std::strcat(socket_message_big, socket_message_little);
+												std::strcat(socket_message_big, "\t");
+												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												std::strcat(socket_message_big, socket_message_little);
+											
 
 
 
@@ -6807,11 +7155,26 @@ static void run(amqp_connection_state_t conn)
 						std::printf(_event->home_name); if (_event->away_name != NULL) { std::printf(" - ");  std::printf(_event->away_name); }
 						std::printf("\r\n");
 					}
+
+						std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+						std::sprintf(socket_message_little, "%d\r\n", _event->id);
+						std::strcat(socket_message_big, socket_message_little);
+						std::strcat(socket_message_big, _event->home_name);
+						if (_event->away_name != NULL) {std::strcat(socket_message_big, " - ");  std::strcat(socket_message_big, _event->away_name);
+						
+
+
+					}
 					if (_event->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nsevent sport_id out of MAX_SPORTS in run %d\r\n", _event->sport_id); continue; }
 					if (sports_id[_event->sport_id] == NULL) { std::printf("Sport not found. Run getSports. sport_id=%d\r\n", _event->sport_id); getSports(); }
 					if (print == true) {
 						std::printf(sports_id[_event->sport_id]->name); std::printf("\r\n");
 					}
+						std::strcat(socket_message_big, sports_id[_event->sport_id]->name);
+						std::strcat(socket_message_big, "\r\n");
+						
+
+					
 					if (_event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->tournament_id); continue; }
 					if (_event->race==0 && tournaments_id[_event->tournament_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
@@ -6835,10 +7198,20 @@ static void run(amqp_connection_state_t conn)
 
 
 					if (print == true) {
-						if(_event->race==0) std::printf(tournaments_id[_event->tournament_id]->name);
+						if (_event->race == 0) std::printf(tournaments_id[_event->tournament_id]->name);
 						if (_event->race == 2) std::printf(simples_id[_event->tournament_id]->name);
 						std::printf("\r\n");
 					}
+
+						if (_event->race == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
+						if (_event->race == 2) std::strcat(socket_message_big, simples_id[_event->tournament_id]->name);
+						std::strcat(socket_message_big, "\r\n");
+
+						
+
+
+
+					
 
 					if (_event->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\nsevent category_id out of MAX_CATEGORIES in run %d\r\n", _event->category_id); continue; }
 					if (categories_id[_event->category_id] == NULL) {
@@ -6856,6 +7229,11 @@ static void run(amqp_connection_state_t conn)
 						std::printf(categories_id[_event->category_id]->name); std::printf("\r\n");
 						std::printf("\r\n***************************************************\r\n");
 					}
+						std::strcat(socket_message_big, categories_id[_event->category_id]->name);
+						std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
+						
+
+					
 
 					if (doc.first_node()->first_attribute("timestamp")) _event->timestamp = atoi(doc.first_node()->first_attribute("timestamp")->value());
 
@@ -7131,7 +7509,7 @@ static void run(amqp_connection_state_t conn)
 										_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
 										strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
 										_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-										//printf(_line->extended_specifier[q]); printf("\r\n"); printf(_line->extended_specifier_value[q]); printf("\r\n");
+										//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
 
 
 									}
@@ -7231,6 +7609,13 @@ static void run(amqp_connection_state_t conn)
 									std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 								}
 
+									std::strcat(socket_message_big, "\r\n");
+									std::strcat(socket_message_big, _line->name);
+									std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+
+
+								
+
 
 
 
@@ -7278,6 +7663,16 @@ static void run(amqp_connection_state_t conn)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
+											std::strcat(socket_message_big, _line->outcome_name[i]);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+											std::strcat(socket_message_big, socket_message_little);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+											std::strcat(socket_message_big, socket_message_little);
+
+
+										
 
 
 
@@ -7402,6 +7797,14 @@ static void run(amqp_connection_state_t conn)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
+											std::strcat(socket_message_big, _line->outcome_name[i]);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+											std::strcat(socket_message_big, socket_message_little);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+											std::strcat(socket_message_big, socket_message_little);
+										
 
 
 
@@ -7461,6 +7864,14 @@ static void run(amqp_connection_state_t conn)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
+											std::strcat(socket_message_big, _line->outcome_name[i]);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+											std::strcat(socket_message_big, socket_message_little);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+											std::strcat(socket_message_big, socket_message_little);
+										
 									}
 
 									if (_line->type == 3) {
@@ -7504,6 +7915,14 @@ static void run(amqp_connection_state_t conn)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
+											std::strcat(socket_message_big, _line->outcome_name[i]);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+											std::strcat(socket_message_big, socket_message_little);
+											std::strcat(socket_message_big, "\t");
+											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+											std::strcat(socket_message_big, socket_message_little);
+										
 
 
 
@@ -7528,12 +7947,13 @@ static void run(amqp_connection_state_t conn)
 		
 		
 		else {
-			printf(doc.first_node()->name()); printf("\r\n");
+			printf(doc.first_node()->name());std::printf("\r\n");
 		}
 
 		
-
-
+		string String(socket_message_big);
+		radarMessageHandler(String);
+		
 
 		
 		root_node = doc.first_node("odds_change");
@@ -7568,7 +7988,7 @@ static void run(amqp_connection_state_t conn)
 
 		//if (i > 50) return;
 
-		//if(i<4) printf((char*)envelope.message.body.bytes);
+		//if(i<4)std::printf((char*)envelope.message.body.bytes);
 		//i++;
 
 		
@@ -7784,54 +8204,6 @@ void rabbitmqssl() {
 
 
 
-
-
-
-//int read_blocked = 0;
-
-/*		do {
-//read_blocked = 0;
-nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
-printf("1nbytes=%d\r\n");
-int ssl_error = SSL_get_error(wsClients[socketIDmap[i]]->ssl, nbytes);
-//check SSL errors
-printf("ssl_error=%d\r\n", ssl_error);
-
-switch (ssl_error)
-{
-case SSL_ERROR_NONE:
-printf("do our stuff with buffer_array here\r\n");
-break;
-
-case SSL_ERROR_ZERO_RETURN:
-printf("connection closed by client, clean up\r\n");
-break;
-
-case SSL_ERROR_WANT_READ:
-printf("the operation did not complete, block the read\r\n");
-//read_blocked = 1;
-break;
-
-case SSL_ERROR_WANT_WRITE:
-printf("the operation did not complete\r\n");
-break;
-
-case SSL_ERROR_SYSCALL:
-printf("some I/O error occured (could be caused by false start in Chrome for instance), disconnect the client and clean up\r\n");
-break;
-
-default:
-
-printf("some other error, clean up\r\n");
-break;
-}
-
-} while (SSL_pending(wsClients[socketIDmap[i]]->ssl) && read_blocked==0);
-
-
-
-
-printf("2nbytes=%d\r\n");*/
 
 
 
