@@ -15,7 +15,7 @@ var FancyWebSocket = function(url)
 		return this;
 	};
 
-	this.connect = function() {
+	this.connect = function() {3
 		if ( typeof(MozWebSocket) == 'function' )
 			this.conn = new MozWebSocket(url);
 		else

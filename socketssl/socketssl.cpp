@@ -34,10 +34,58 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 #include <openssl/buffer.h>
+#include "zlib/zlib.h"
 #include "rapidxml-1.13/rapidxml.hpp"
 #include <amqp_ssl_socket.h>
 #include <amqp_framing.h>
 
+#define ZLIB_WINAPI   // actually actually needed (for linkage)
+
+#pragma comment(lib, "zlibwapi.lib") // for access to the DLL
+
+int GetMaxCompressedLen(int nLenSrc)
+{
+	int n16kBlocks = (nLenSrc + 16383) / 16384; // round up any fraction of a block
+	return (nLenSrc + 6 + (n16kBlocks * 5));
+}
+int CompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
+{
+	z_stream zInfo = { 0 };
+	zInfo.total_in = zInfo.avail_in = nLenSrc;
+	zInfo.total_out = zInfo.avail_out = nLenDst;
+	zInfo.next_in = (BYTE*)abSrc;
+	zInfo.next_out = abDst;
+
+	int nErr, nRet = -1;
+	nErr = deflateInit(&zInfo, Z_DEFAULT_COMPRESSION); // zlib function
+	if (nErr == Z_OK) {
+		nErr = deflate(&zInfo, Z_FINISH);              // zlib function
+		if (nErr == Z_STREAM_END) {
+			nRet = zInfo.total_out;
+		}
+	}
+	deflateEnd(&zInfo);    // zlib function
+	return(nRet);
+}
+int UncompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
+{
+	z_stream zInfo = { 0 };
+	zInfo.total_in = zInfo.avail_in = nLenSrc;
+	zInfo.total_out = zInfo.avail_out = nLenDst;
+	zInfo.next_in = (BYTE*)abSrc;
+	zInfo.next_out = abDst;
+
+	int nErr, nRet = -1;
+	nErr = inflateInit(&zInfo);               // zlib function
+	if (nErr == Z_OK) {
+		nErr = inflate(&zInfo, Z_FINISH);     // zlib function
+		if (nErr == Z_STREAM_END) {
+			nRet = zInfo.total_out;
+		}
+	}
+	inflateEnd(&zInfo);   // zlib function
+	return(nRet); // -1 or len of output
+}
 
 
 
@@ -119,6 +167,23 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MATCHSTATUS 1000
 #define QUEUE_LENGTH 2000
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 using namespace std;
 class wsClient {
 public:
@@ -137,9 +202,9 @@ public:
 		MessageOpcode = 0;
 		MessageBufferLength = 0;
 		MessageQueue = new char[DEFAULT_BUFLEN];
-		MessagePing = NULL;
-		MessagePong = NULL;
-		MessageClose = NULL;
+		MessagePing = nullptr;
+		MessagePong = nullptr;
+		MessageClose = nullptr;
 		MessagePingLength = 0;
 		MessagePongLength = 0;
 		MessageCloseLength = 0;
@@ -150,8 +215,10 @@ public:
         //flag = 0;
 
 	}
-	~wsClient() {  if (MessageQueue != NULL) delete[] MessageQueue; if (MessagePing != NULL) delete[] MessagePing; if (MessagePong != NULL) delete[] MessagePong;
-	if (MessageClose != NULL) delete[] MessageClose; if (WriteBuffer != nullptr) delete[] WriteBuffer;}
+	~wsClient() {
+		if (MessageQueue != nullptr) delete[] MessageQueue;  if (MessagePing != nullptr) delete[] MessagePing;  if (MessagePong != nullptr) delete[] MessagePong; 
+	if (MessageClose != nullptr) delete[] MessageClose;  if (WriteBuffer != nullptr) delete[] WriteBuffer; 
+	}
 
 	int socket;                            // client socket
 	SSL* ssl;                              //client ssl 
@@ -526,7 +593,10 @@ void webSocket::wsSendClientClose(int clientID, unsigned short status) {
 	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "");
 
 	// set client ready state to closing
+	printf("clientId=%d set WS_READY_STATE_CLOSING(2)\r\n", clientID);
 	wsClients[clientID]->ReadyState = WS_READY_STATE_CLOSING;
+
+
 }
 void webSocket::wsClose(int clientID) {
 	 wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
@@ -579,24 +649,27 @@ void webSocket::wsRemoveClient(int clientID) {
 
 	if (callOnClose != NULL)
 		callOnClose(clientID);
+
 	wsClient *client = wsClients[clientID];
 	// fetch close status (which could be false), and call wsOnClose
 	int closeStatus = wsClients[clientID]->CloseStatus;
 	//
 	//printf("wsRemoveClient3");
 	//SSL_shutdown(client->ssl);
-	SSL_set_shutdown(client->ssl, SSL_RECEIVED_SHUTDOWN);
-	SSL_free(client->ssl);
 	//SSL_CTX_free(client->ssl);
 
-	closesocket(client->socket);
+
 
 	//WSACleanup();
 	FD_CLR(client->socket, &r_fds);
 	FD_CLR(client->socket, &w_fds);
+	closesocket(client->socket);
+	SSL_set_shutdown(client->ssl, SSL_RECEIVED_SHUTDOWN);
+	SSL_free(client->ssl);
 	socketIDmap.erase(wsClients[clientID]->socket);
 	wsClients[clientID] = NULL;
 	delete client;
+	printf("remove clientID=%d\r\n", clientID);
 }
 bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
 	wsClient *client = wsClients[clientID];
@@ -623,8 +696,8 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 			// the server has not already sent a close frame to the client, send one now
 			
 			wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
+			
 		}
-		
 		wsRemoveClient(clientID);
 		
 	}
@@ -689,7 +762,6 @@ bool webSocket::wsProcessClientFrame(int clientID) {
 		// check if this is the first frame in the message
 		if (opcode != WS_OPCODE_CONTINUATION) {
 			// process the message
-
 			//if (opcode == WS_OPCODE_CLOSE) printf("gggggggg1\r\n");
 			return wsProcessClientMessage(clientID, opcode, data, client->FramePayloadDataLength);
 		}
@@ -740,9 +812,10 @@ bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength)
 	client->FrameBuffer.append(buffer, bufferLength);
 	
 	// check if the length of the frame's payload data has been fetched, if not then attempt to fetch it from the frame buffer
+	
 
 	if (wsCheckSizeClientFrame(clientID) == true) {
-		;
+		
 		// work out the header length of the frame
 		int headerLength = (client->FramePayloadDataLength <= 125 ? 0 : (client->FramePayloadDataLength <= 65535 ? 2 : 8)) + 6;
 
@@ -761,6 +834,7 @@ bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength)
 			// process the frame
 			
 			bool result = wsProcessClientFrame(clientID);
+	
 			
 			// check if the client wasn't removed, then reset frame data
 			if (wsClients[clientID] != NULL) {
@@ -771,13 +845,16 @@ bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength)
 
 			// if there's no extra bytes for the next frame, or processing the frame failed, return the result of processing the frame
 			if (nextFrameBytesLength <= 0 || !result)
+			{
+				
 				return result;
-
+			}
+			
 			// build the next frame with the extra bytes
 			return wsBuildClientFrame(clientID, nextFrameBytes, nextFrameBytesLength);
 		}
 	}
-
+	
 	return true;
 }
 bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
@@ -901,14 +978,16 @@ bool webSocket::wsProcessClient(int clientID, char *buffer, int bufferLength) {
 
 	if (clientID >= wsClients.size() || wsClients[clientID] == NULL)
 		return false;
-
+	
 		if (wsClients[clientID]->ReadyState == WS_READY_STATE_OPEN) {
 		// handshake completed
-		
+			
 		result = wsBuildClientFrame(clientID, buffer, bufferLength);
+	
 	}
 	else if (wsClients[clientID]->ReadyState == WS_READY_STATE_CONNECTING) {
 		// handshake not completed
+		
 		result = wsProcessClientHandshake(clientID, buffer);
 	/*	if (result) {
 			if (callOnOpen != NULL)
@@ -1070,6 +1149,7 @@ void webSocket::startServer(int port) {
 	//std::printf(" ListenSocket=%d\r\n", ListenSocket);
 	struct timeval timeout;
 	time_t nextPingTime = time(NULL) + 20;
+	
 	while (FD_ISSET(ListenSocket, &r_fds)|| FD_ISSET(ListenSocket, &w_fds)) {
 		read_fds = r_fds;
 		write_fds = w_fds;
@@ -1087,7 +1167,7 @@ void webSocket::startServer(int port) {
 
 
 					if (i == ListenSocket) {
-
+						
 						socklen_t addrlen = sizeof(cli_addr);
 						int ClientSocket = accept(ListenSocket, (struct sockaddr*)&cli_addr, &addrlen);
 						if (ClientSocket != INVALID_SOCKET) {
@@ -1122,7 +1202,7 @@ void webSocket::startServer(int port) {
 						}
 					}
 					else {
-
+						
 						
 						if (socketIDmap.find(i) != socketIDmap.end()) {
 							//std::printf("start read from socket %d\r\n", i);
@@ -1144,14 +1224,15 @@ void webSocket::startServer(int port) {
 								}
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
-									//std::printf("SSL_read syscall error (returned 0)\r\n");
-									//continue;
+									std::printf("SSL_read syscall error (returned 0)\r\n");
+									if(wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED) continue;
 								}
+								else {
 
-								
-								long error = ERR_get_error();
-								const char* error_str = ERR_error_string(error, NULL);
-								std::printf("could not SSL_read (returned 0): %s\n", error_str);
+									long error = ERR_get_error();
+									const char* error_str = ERR_error_string(error, NULL);
+									std::printf("could not SSL_read (returned 0): %s\n", error_str);
+								}
 
 							}
 							else if (nbytes < 0) {
@@ -1169,24 +1250,29 @@ void webSocket::startServer(int port) {
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									std::printf("SSL_read syscall error (returned -1)\r\n");
+									//printf("clientID=%d\r\n", socketIDmap[i]);
+									//printf("wsClients[socketIDmap[i]]->ReadyState=%d\r\n", wsClients[socketIDmap[i]]->ReadyState);
+									if (wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED) continue;
 									//continue;
 								}
+								else {
 
 								long error = ERR_get_error();
 								const char* error_str = ERR_error_string(error, NULL);
 								std::printf("could not SSL_read (returned -1) %s\n", error_str);
+							}
 
 
 							}
 
-
+							
 
 							if (nbytes < 0) {
-									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-
+								if(wsClients[socketIDmap[i]]->ReadyState== WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CLOSED)
+									wsRemoveClient(socketIDmap[i]);else 
+								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
 							}
 							else if (nbytes == 0) {
-
 								wsRemoveClient(socketIDmap[i]);
 
 							}
@@ -1194,8 +1280,7 @@ void webSocket::startServer(int port) {
 								
 								if (!wsProcessClient(socketIDmap[i], buf, nbytes))
 								{
-								
-								
+									
 									 wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
 								}
 
@@ -1242,7 +1327,6 @@ void webSocket::startServer(int port) {
 
 
 							}
-
 							else if (wsClients[socketIDmap[i]]->MessageClose != nullptr) {
 								writeopcode = 2;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->MessageClose, wsClients[socketIDmap[i]]->MessageCloseLength);
@@ -1260,8 +1344,7 @@ void webSocket::startServer(int port) {
 							}
 
 							if (writeopcode == 0) continue;
-							
-							//printf("writeopcode=%d\r\n", writeopcode);
+						
 
 
 							if (nbytes == 0) {
@@ -1283,10 +1366,12 @@ void webSocket::startServer(int port) {
 									//wsClients[socketIDmap[i]]->flag = false;
 																	
 								}
+								else {
 
 
-								long error = ERR_get_error();
-								const char* error_str = ERR_error_string(error, NULL);
+									long error = ERR_get_error();
+									const char* error_str = ERR_error_string(error, NULL);
+								}
 								//std::printf("could not SSL_write (returned 0): %s\n", error_str);
 								
 
@@ -1300,7 +1385,7 @@ void webSocket::startServer(int port) {
 								}
 
 								if (ssl_error == SSL_ERROR_WANT_READ) {
-									std::printf("SSL_write wants read (returned -1)\r\n");
+									//std::printf("SSL_write wants read (returned -1)\r\n");
 									//wants_tcp_read is always 1;
 									 continue;
 								}
@@ -1312,9 +1397,10 @@ void webSocket::startServer(int port) {
 									
 								}
 								
-
-								long error = ERR_get_error();
-								const char* error_str = ERR_error_string(error, NULL);
+								if (writeopcode != 5) {
+									long error = ERR_get_error();
+									const char* error_str = ERR_error_string(error, NULL);
+								}
 								//std::printf("could not SSL_write (returned -1): %s\n", error_str);
 								
 
@@ -1369,6 +1455,7 @@ void webSocket::startServer(int port) {
 
 								if (writeopcode == 5) {
 									if (wsClients[socketIDmap[i]]->WriteBuffer != nullptr) delete[] wsClients[socketIDmap[i]]->WriteBuffer,
+										wsClients[socketIDmap[i]]->WriteBuffer = nullptr;
 										wsClients[socketIDmap[i]]->WriteBufferLen = 0;
 								}
 
@@ -1420,15 +1507,6 @@ void webSocket::stopServer() {
 	fdmax = 0;
 	WSACleanup();
 }
-
-
-
-
-
-
-
-
-
 #ifndef librabbitmq_examples_utils_h
 #define librabbitmq_examples_utils_h
 #endif
@@ -2455,6 +2533,35 @@ DWORD WINAPI BetradarThread(LPVOID);
 
 int main(){
 using namespace std;
+
+/*
+BYTE pbSrc[] = "hello hello hello hello there";
+
+//-------------- compress (save the original length)
+
+int nLenSrc = strlen((char*)pbSrc) + 1; // include terminating NULL
+int nLenDst = GetMaxCompressedLen(nLenSrc);
+BYTE* pbDst = new BYTE[nLenDst];  // alloc dest buffer
+int nLenPacked = CompressData(pbSrc, nLenSrc, pbDst, nLenDst);
+
+if (nLenPacked == -1) return(1);  // error
+
+								  //-------------- uncompress (uses the saved original length)
+
+BYTE* pbPacked = pbDst;
+BYTE* pbUnpacked = new BYTE[nLenSrc];
+
+int nLen = UncompressData(pbPacked, nLenPacked, pbUnpacked, nLenSrc);
+
+((char*)pbUnpacked)[nLen] = 0;
+printf((char*)pbUnpacked);
+
+
+
+// breakpoint here and view pbUnpacked to confirm
+delete pbDst;            // do some cleanup
+delete pbUnpacked;
+*/
 //if (TerminateThread(hThread, dwThreadID))CloseHandle(hThread);
 
 //hThread1 = CreateThread(NULL, 0, &SSLWebSocketThread, 0, THREAD_TERMINATE, &dwThreadID1);
@@ -6761,7 +6868,7 @@ static void run(amqp_connection_state_t conn)
 							std::printf("Season id: %d\r\n", event_id);
 							std::printf("Tournament id:%d\r\n", _tournament->id);
 							std::printf("NAME:"); std::printf(_tournament->name);
-							std::printf("\r\nSEASON:"); std::printf(_tournament->season_name);
+							std::printf("\r\nSEASON:"); if(_tournament->season_name!=NULL) std::printf(_tournament->season_name); else std::printf(_tournament->name);
 							std::printf("\r\n");
 						}
 
@@ -6773,7 +6880,8 @@ static void run(amqp_connection_state_t conn)
 							std::strcat(socket_message_big, "NAME:");
 							std::strcat(socket_message_big, _tournament->name);
 							std::strcat(socket_message_big, "\r\nSEASON:");
-							std::strcat(socket_message_big, _tournament->season_name);
+							if (_tournament->season_name != NULL) std::strcat(socket_message_big, _tournament->season_name);
+							else std::strcat(socket_message_big, _tournament->name);
 							std::strcat(socket_message_big, "\r\n");
 
 						
