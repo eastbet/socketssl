@@ -657,9 +657,7 @@ void webSocket::wsRemoveClient(int clientID) {
 	//printf("wsRemoveClient3");
 	//SSL_shutdown(client->ssl);
 	//SSL_CTX_free(client->ssl);
-
-
-
+	
 	//WSACleanup();
 	FD_CLR(client->socket, &r_fds);
 	FD_CLR(client->socket, &w_fds);
@@ -1163,6 +1161,7 @@ void webSocket::startServer(int port) {
 
 			for (int i = 0; i <= fdmax; i++) {
 
+				//|| (socketIDmap.find(i) != socketIDmap.end() &&SSL_pending(wsClients[socketIDmap[i]]->ssl))
 				if (FD_ISSET(i, &read_fds)) {
 
 
@@ -1225,7 +1224,9 @@ void webSocket::startServer(int port) {
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									std::printf("SSL_read syscall error (returned 0)\r\n");
-									if(wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED) continue;
+									printf("wsClients[%d]->ReadyState=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState);
+									//if(wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED) 
+										//if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING) continue;
 								}
 								else {
 
@@ -1250,9 +1251,13 @@ void webSocket::startServer(int port) {
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									std::printf("SSL_read syscall error (returned -1)\r\n");
+									printf("wsClients[%d]->ReadyState=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState);
+									if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING) continue;
 									//printf("clientID=%d\r\n", socketIDmap[i]);
 									//printf("wsClients[socketIDmap[i]]->ReadyState=%d\r\n", wsClients[socketIDmap[i]]->ReadyState);
-									if (wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED) continue;
+									//if (wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED)
+									//	if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING)
+									//	continue;
 									//continue;
 								}
 								else {
@@ -1345,6 +1350,7 @@ void webSocket::startServer(int port) {
 
 							if (writeopcode == 0) continue;
 						
+							printf("wsClients[%d]->ReadyState=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
 
 
 							if (nbytes == 0) {
@@ -1392,7 +1398,7 @@ void webSocket::startServer(int port) {
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									//std::printf("SSL_write syscall error (returned -1)\r\n");
-									if (writeopcode == 5) continue;
+									if (writeopcode == 5|| writeopcode == 1) continue;
 										 
 									
 								}
@@ -2567,7 +2573,7 @@ delete pbUnpacked;
 //hThread1 = CreateThread(NULL, 0, &SSLWebSocketThread, 0, THREAD_TERMINATE, &dwThreadID1);
 hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
-int port = 443;
+int port = 1443;
 
 server.setOpenHandler(openHandler);
 server.setCloseHandler(closeHandler);
@@ -4799,7 +4805,7 @@ void saveEventToFile(Event* event) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-    std::strcpy(file_path, "D://Betradar//Events//");
+    std::strcpy(file_path, "C://Betradar//Events//");
 	_itoa(event->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -4859,8 +4865,8 @@ void loadEventsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "D://Betradar//Events//");
-	std::strcpy(find_path, "D://Betradar//Events//*.*");
+	std::strcpy(folder_path, "C://Betradar//Events//");
+	std::strcpy(find_path, "C://Betradar//Events//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -4962,7 +4968,7 @@ void saveMarketToFile(Market* market) {
 	int i = 0;
 	int j = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Markets//");
+	std::strcpy(file_path, "C://Betradar//Markets//");
 	_itoa(market->id, buf, 10);
 	strcat(file_path, buf);
 	if (market->variable_text != NULL) { strcat(file_path, "_"); strcpy(variable_text, market->variable_text); 
@@ -5026,8 +5032,8 @@ void loadMarketsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "D://Betradar//Markets//");
-	std::strcpy(find_path, "D://Betradar//Markets//*.*");
+	std::strcpy(folder_path, "C://Betradar//Markets//");
+	std::strcpy(find_path, "C://Betradar//Markets//*.*");
 	
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5138,7 +5144,7 @@ void saveTournamentToFile(Tournament* tournament) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Tournaments//");
+	std::strcpy(file_path, "C://Betradar//Tournaments//");
 	if (tournament->race == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
 	if (tournament->race == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
 	if (tournament->race == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
@@ -5186,17 +5192,17 @@ void loadTournamentsFromFiles() {
 		i = tournaments_l;
 
 		if (k == 0) {
-			std::strcpy(folder_path, "D://Betradar//Tournaments//Championships//");
-			std::strcpy(find_path, "D://Betradar//Tournaments//Championships//*.*");
+			std::strcpy(folder_path, "C://Betradar//Tournaments//Championships//");
+			std::strcpy(find_path, "C://Betradar//Tournaments//Championships//*.*");
 		}
 
 		if (k == 1) {
-			std::strcpy(folder_path, "D://Betradar//Tournaments//Race//");
-			std::strcpy(find_path, "D://Betradar//Tournaments//Race//*.*");
+			std::strcpy(folder_path, "C://Betradar//Tournaments//Race//");
+			std::strcpy(find_path, "C://Betradar//Tournaments//Race//*.*");
 		}
 		if (k == 2) {
-			std::strcpy(folder_path, "D://Betradar//Tournaments//Simple//");
-			std::strcpy(find_path, "D://Betradar//Tournaments//Simple//*.*");
+			std::strcpy(folder_path, "C://Betradar//Tournaments//Simple//");
+			std::strcpy(find_path, "C://Betradar//Tournaments//Simple//*.*");
 		}
 
 
@@ -5262,7 +5268,7 @@ void saveCategoryToFile(Category* category) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Categories//");
+	std::strcpy(file_path, "C://Betradar//Categories//");
    _itoa(category->id, buf, 10); 
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5292,8 +5298,8 @@ void loadCategoriesFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 		i = categories_l;
-			std::strcpy(folder_path, "D://Betradar//Categories//");
-			std::strcpy(find_path, "D://Betradar//Categories//*.*");
+			std::strcpy(folder_path, "C://Betradar//Categories//");
+			std::strcpy(find_path, "C://Betradar//Categories//*.*");
 		
 		Hd = FindFirstFile(find_path, &Fd);
 		if (INVALID_HANDLE_VALUE == Hd) {
@@ -5341,7 +5347,7 @@ void saveCompetitorToFile(Competitor* competitor) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Competitors//");
+	std::strcpy(file_path, "C://Betradar//Competitors//");
 	_itoa(competitor->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5374,8 +5380,8 @@ void loadCompetitorsFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 	i = competitors_l;
-	std::strcpy(folder_path, "D://Betradar//Competitors//");
-	std::strcpy(find_path, "D://Betradar//Competitors//*.*");
+	std::strcpy(folder_path, "C://Betradar//Competitors//");
+	std::strcpy(find_path, "C://Betradar//Competitors//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5431,7 +5437,7 @@ void savePlayerToFile(Player* player) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Players//");
+	std::strcpy(file_path, "C://Betradar//Players//");
 	_itoa(player->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5483,8 +5489,8 @@ void loadPlayersFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 	i = players_l;
-	std::strcpy(folder_path, "D://Betradar//Players//");
-	std::strcpy(find_path, "D://Betradar//Players//*.*");
+	std::strcpy(folder_path, "C://Betradar//Players//");
+	std::strcpy(find_path, "C://Betradar//Players//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -8252,7 +8258,7 @@ static void run(amqp_connection_state_t conn)
 
 
 		if (i < 100 && status == 1 && (_event->away_yellowcards>0 || _event->away_redcards>0 || _event->home_yellowcards>0 || _event->home_redcards>0)) {
-			i++;std::strcpy(name, "D://unifeed");
+			i++;std::strcpy(name, "C://unifeed");
 			_itoa(i, buf, 10);
 			strcat(name, buf);
 			strcat(name, ".xml");

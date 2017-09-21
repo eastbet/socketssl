@@ -63,9 +63,17 @@
         send(s);
         }
 
+        
         function connect(){
             log('Connecting...');
-            Server = new FancyWebSocket('wss://' + document.getElementById('ip').value + ':' + document.getElementById('port').value);
+
+            if(window.location.href.indexOf("file")>-1)
+            Server = new FancyWebSocket('wss://passion.bet:1443');//+ ':' + document.getElementById('port').value);
+            else Server = new FancyWebSocket('wss://' + document.getElementById('ip').value + ':' + document.getElementById('port').value);
+
+
+
+
 			//Server = new FancyWebSocket('wss://' + document.getElementById('ip').value + ':' + document.getElementById('port').value);
             //Server = new FancyWebSocket('wss://passion.bet');
 
@@ -106,7 +114,7 @@
 
 <body>
     <div id='body'>
-        Server ip: <input type='text' id='ip' name='ip' value="passion.bet">
+        Server ip: <input type='text' id='ip' name='ip' value="bettestsocket.passion.bet">
         Server port: <input type='text' id='port' name='port' value="443">
         <button type="button" id='cntBtn' onclick="connect();">Connect</button>
         <textarea id='log' name='log' readonly='readonly'></textarea><br />
