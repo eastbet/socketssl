@@ -63,6 +63,8 @@
         send(s);
         }
 
+
+        
         
         function connect(){
             log('Connecting...');
@@ -89,6 +91,7 @@
 			//Let the user know we're connected
 			Server.bind('open', function() {
                 document.getElementById("cntBtn").disabled = true;
+                document.getElementById("recBtn").disabled = false;
 				log( "Connected." );
 
                // setInterval(periodicSend,500);
@@ -98,6 +101,7 @@
 			//OH NOES! Disconnection occurred.
 			Server.bind('close', function( data ) {
                 document.getElementById("cntBtn").disabled = false;
+                document.getElementById("recBtn").disabled = true;
 				log( "Disconnected." );
 			});
 
@@ -112,11 +116,13 @@
     </script>
 </head>
 
+
 <body>
     <div id='body'>
         Server ip: <input type='text' id='ip' name='ip' value="bettestsocket.passion.bet">
         Server port: <input type='text' id='port' name='port' value="443">
-        <button type="button" id='cntBtn' onclick="connect();">Connect</button>
+        <button type="button" id='cntBtn'  onclick="connect();">Connect</button>
+        <button type="button" id='recBtn' disabled onclick="send('recovery');">Recovery</button>
         <textarea id='log' name='log' readonly='readonly'></textarea><br />
         <input type='text' id='message' name='message' />
     </div>

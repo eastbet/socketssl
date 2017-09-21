@@ -179,7 +179,20 @@ typedef void(*messageCallback)(int, string);
 
 
 
+HANDLE hThread1;
+DWORD dwThreadID1;
+DWORD ExitCode1;
+DWORD WINAPI SSLWebSocketThread(LPVOID);
 
+HANDLE hThread2;
+DWORD dwThreadID2;
+DWORD ExitCode2;
+DWORD WINAPI BetradarThread(LPVOID);
+
+HANDLE hThread3;
+DWORD dwThreadID3;
+DWORD ExitCode3;
+DWORD WINAPI startRecoveryThread(LPVOID);
 
 
 
@@ -267,7 +280,7 @@ public:
 	void setPeriodicHandler(nullCallback callback);
 	void startServer(int port);
 	void stopServer();
-	bool wsSend(int clientID, string message, bool binary = false);
+	bool wsSend(int clientID, string message, bool binary = true);
 	void wsClose(int clientID);
 	vector<int> getClientIDs();
 	string getClientIP(int clientID);
@@ -497,16 +510,83 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 
 	return true;
 }
-bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* message, size_t messageLength, char* &writeBuffer, size_t &writeBufferLen) {
+bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* messageSrc, size_t messageSrcLength, char* &writeBuffer, size_t &writeBufferLen) {
 	// check if client ready state is already closing or closed
 	if (clientID >= wsClients.size())
 		return false;
+
+	//opcode = WS_OPCODE_BINARY; //printf("HAHAHAHAH");
 
 	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
 		return true;
 
 	// fetch message length
 	//int messageLength = message.size();
+
+
+
+	//-------------- compress (save the original length)
+
+	//int nLenSrc = strlen((char*)pbSrc) + 1; // include terminating NULL
+	int messageLength = GetMaxCompressedLen(messageSrcLength + 1);
+	char* message = nullptr;
+	BYTE* bm = new BYTE[messageLength];  // alloc dest buffer
+	message = (char*)bm;
+	int nLenPacked = CompressData((BYTE*)messageSrc, messageSrcLength + 1, (BYTE*)message, messageLength);
+
+	if (nLenPacked == -1) {
+		message = messageSrc;
+		messageLength = messageSrcLength;
+	}
+	// error
+
+									  //-------------- uncompress (uses the saved original length)
+
+	//BYTE* pbPacked = pbDst;
+	//BYTE* pbUnpacked = new BYTE[nLenSrc];
+
+	//int nLen = UncompressData(pbPacked, nLenPacked, pbUnpacked, nLenSrc);
+
+	//((char*)pbUnpacked)[nLen] = 0;
+	//	printf((char*)pbUnpacked);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	// set max payload length per frame
 	int bufferSize = DEFAULT_BUFLEN;
@@ -700,6 +780,7 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		
 	}
 	else if (opcode == WS_OPCODE_TEXT || opcode == WS_OPCODE_BINARY) {
+		if(data.substr(0, dataLength)=="recovery" ) hThread3 = CreateThread(NULL, 0, &startRecoveryThread, 0, THREAD_TERMINATE, &dwThreadID3);
 		if (callOnMessage != NULL)
 			callOnMessage(clientID, data.substr(0, dataLength));
 	}
@@ -857,7 +938,7 @@ bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength)
 }
 bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 	// fetch headers and request line
-	string buf(buffer);
+	/*string buf(buffer);
 	size_t sep = buf.find("\r\n\r\n");
 	if (sep == string::npos)
 		return false;
@@ -944,9 +1025,65 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 	int socket = wsClients[clientID]->socket;
 	SSL* ssl = wsClients[clientID]->ssl;
 
-	int left = message.size();
-	wsClients[clientID]->HandshakeMessage = new char[left];
-	strcpy(wsClients[clientID]->HandshakeMessage, message.c_str());
+	int left = message.size();*/
+
+
+
+	bool findHandshake = false;
+	uint32_t index = 0;
+	char handshakeTest[] = "Sec-WebSocket-Key: ";
+	char* handshakeHash = new char[120];
+	char* handshakeBuffer=new char[MAX_PATH];
+	char* base64EncodeOutput = NULL;
+	//ZeroMemory(base64_hash, sizeof(base64_hash));
+	int handshakeTestLen = strlen(handshakeTest);
+	unsigned char* digest = new unsigned char[SHA_DIGEST_LENGTH];
+	int bufferLen = strlen(buffer);
+
+	for (int i = 0; i < bufferLen - handshakeTestLen - 20; i++)
+		if (strncmp((char*)((char*)buffer + i), handshakeTest, handshakeTestLen) == 0)
+		{
+			for (int j = 0; j < 100; j++) if (buffer[j + i + handshakeTestLen] == '\r' && buffer[j + i + handshakeTestLen + 1] == '\n')
+			{
+				strncpy(handshakeHash, (char*)((char*)buffer + i + handshakeTestLen), j);
+				handshakeHash[j] = 0;
+				//strcpy(handshakeHash, "lpRgKO1IAsqpPeIgIIbpfA==");
+
+				strcat(handshakeHash, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
+				findHandshake = true;
+			//	printf(handshakeHash);
+				//printf("\r\n");
+				break;
+			}
+
+
+			break;
+		}
+
+
+	if (findHandshake == true) {
+		SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
+		//printf("Output (sha1): %d\n", strlen(digest));
+		Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
+		//printf("Output (base64): %s\r\n", base64EncodeOutput);
+
+	}
+	base64EncodeOutput[strlen(base64EncodeOutput)] = 0;
+
+	strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
+	strcat(handshakeBuffer, base64EncodeOutput);
+	strcat(handshakeBuffer, "\r\n\r\n");
+	//printf(handshakeBuffer);
+
+
+
+
+	wsClients[clientID]->HandshakeMessage = handshakeBuffer;// new char[left];
+	delete[] digest;
+	delete[] base64EncodeOutput;
+	delete[] handshakeHash;
+	//wsClients[clientID]->HandshakeMessage = new char[left];
+	//strcpy(wsClients[clientID]->HandshakeMessage, message.c_str());
 
 	//printf(wsClients[clientID]->HandshakeMessage);
 	//printf("\r\n");
@@ -1206,6 +1343,10 @@ void webSocket::startServer(int port) {
 						if (socketIDmap.find(i) != socketIDmap.end()) {
 							//std::printf("start read from socket %d\r\n", i);
 							int nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
+
+							//printf("wsClients[%d]->ReadyState=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, SSL_get_error(ssl, nbytes));
+
+
 							//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
 							if (nbytes == 0) {
 
@@ -1223,8 +1364,8 @@ void webSocket::startServer(int port) {
 								}
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
-									std::printf("SSL_read syscall error (returned 0)\r\n");
-									printf("wsClients[%d]->ReadyState=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState);
+									//std::printf("SSL_read syscall error (returned 0)\r\n");
+									
 									//if(wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CLOSED) 
 										//if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING) continue;
 								}
@@ -1232,7 +1373,7 @@ void webSocket::startServer(int port) {
 
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
-									std::printf("could not SSL_read (returned 0): %s\n", error_str);
+									//std::printf("could not SSL_read (returned 0): %s\n", error_str);
 								}
 
 							}
@@ -1250,8 +1391,8 @@ void webSocket::startServer(int port) {
 								}
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
-									std::printf("SSL_read syscall error (returned -1)\r\n");
-									printf("wsClients[%d]->ReadyState=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState);
+									//std::printf("SSL_read syscall error (returned -1)\r\n");
+									
 									if (wsClients[socketIDmap[i]]->ReadyState == WS_READY_STATE_CONNECTING) continue;
 									//printf("clientID=%d\r\n", socketIDmap[i]);
 									//printf("wsClients[socketIDmap[i]]->ReadyState=%d\r\n", wsClients[socketIDmap[i]]->ReadyState);
@@ -1311,17 +1452,16 @@ void webSocket::startServer(int port) {
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->HandshakeMessage, strlen(wsClients[socketIDmap[i]]->HandshakeMessage));
 
 							}
-							else if (wsClients[socketIDmap[i]]->WriteBufferLen >0) {
+							else if (wsClients[socketIDmap[i]]->WriteBufferLen >0 && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CONNECTING) {
 								writeopcode = 5;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->WriteBuffer, wsClients[socketIDmap[i]]->WriteBufferLen);
 
-
 							}
-							else if (wsClients[socketIDmap[i]]->MessageQueueLength > 0) {
+							else if (wsClients[socketIDmap[i]]->MessageQueueLength > 0 && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CONNECTING) {
 								wsClients[socketIDmap[i]]->mutex.lock();
 							//	printf("wsClients[socketIDmap[i]]->MessageQueueLength=%d\r\n", wsClients[socketIDmap[i]]->MessageQueueLength);
 								wsClients[socketIDmap[i]]->MessageQueue[wsClients[socketIDmap[i]]->MessageQueueLength] = 0;
-								wsEncodeClientMessage(socketIDmap[i], WS_OPCODE_TEXT, wsClients[socketIDmap[i]]->MessageQueue, wsClients[socketIDmap[i]]->MessageQueueLength, writeBuffer, writeBufferLen);
+								wsEncodeClientMessage(socketIDmap[i], WS_OPCODE_BINARY, wsClients[socketIDmap[i]]->MessageQueue, wsClients[socketIDmap[i]]->MessageQueueLength, writeBuffer, writeBufferLen);
 								wsClients[socketIDmap[i]]->MessageQueueLength = 0;
 								wsClients[socketIDmap[i]]->mutex.unlock();
 								writeopcode = 5;
@@ -1350,7 +1490,7 @@ void webSocket::startServer(int port) {
 
 							if (writeopcode == 0) continue;
 						
-							printf("wsClients[%d]->ReadyState=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
+							//printf("wsClients[%d]->ReadyState=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
 
 
 							if (nbytes == 0) {
@@ -1368,7 +1508,7 @@ void webSocket::startServer(int port) {
 								}
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
-									std::printf("SSL_write syscall error (returned 0)\r\n");
+									//std::printf("SSL_write syscall error (returned 0)\r\n");
 									//wsClients[socketIDmap[i]]->flag = false;
 																	
 								}
@@ -2455,7 +2595,7 @@ Betstop* betstops = new Betstop[BETSTOPS_LENTGH];
 int betstops_l = 0;
 Matchstatus* matchstatus = new Matchstatus[MATCHSTATUS_LENTGH];
 int matchstatus_l = 0;
-
+int recovery_state = 0;
 
 int i = 0;
 
@@ -2525,49 +2665,52 @@ static void run(amqp_connection_state_t);
 static int rows_eq(int *, int *);
 static void dump_row(long, int, int *);
 webSocket server;
-HANDLE hThread1;
-DWORD dwThreadID1;
-DWORD ExitCode1;
-DWORD WINAPI SSLWebSocketThread(LPVOID);
 
-HANDLE hThread2;
-DWORD dwThreadID2;
-DWORD ExitCode2;
-DWORD WINAPI BetradarThread(LPVOID);
+
+
 
 
 
 int main(){
 using namespace std;
 
+
 /*
-BYTE pbSrc[] = "hello hello hello hello there";
+int CompressData2(const BYTE abSrc, int nLenSrc, BYTE abDst, int nLenDst, int compress_type, int strategy, int memlevel)
+{
+	z_stream zInfo = { 0 };
+	zInfo.total_in = zInfo.avail_in = nLenSrc;
+	zInfo.total_out = zInfo.avail_out = nLenDst;
+	zInfo.next_in = (BYTE*)abSrc;
+	zInfo.next_out = abDst;
 
-//-------------- compress (save the original length)
+	int nErr, nRet = -1;
+	nErr = deflateInit2(&zInfo, compress_type,
+		Z_DEFLATED, 15, memlevel, strategy);
+	//deflateInit2(&strm, Z_DEFAULT_COMPRESSION,
+	// Z_DEFLATED, 15, 8, Z_DEFAULT_STRATEGY);
+	//nErr = deflateInit(&zInfo, compress_type); // zlib function
+	if (nErr == Z_OK) {
+		nErr = deflate(&zInfo, Z_FINISH);              // zlib function
+		if (nErr == Z_STREAM_END) {
+			nRet = zInfo.total_out;
+		}
+	}
+	deflateEnd(&zInfo);    // zlib function
+	return(nRet);
+}
+using code is
 
-int nLenSrc = strlen((char*)pbSrc) + 1; // include terminating NULL
-int nLenDst = GetMaxCompressedLen(nLenSrc);
-BYTE* pbDst = new BYTE[nLenDst];  // alloc dest buffer
-int nLenPacked = CompressData(pbSrc, nLenSrc, pbDst, nLenDst);
+memlevel = 2 ->
+nLenPacked[j] = CompressData2(pbSrc, nLenOrig, pbDst, nLenDst, j - 1, Z_DEFAULT_STRATEGY, 2);
 
-if (nLenPacked == -1) return(1);  // error
+memlevel = 5 ->
+nLenPacked[j] = CompressData2(pbSrc, nLenOrig, pbDst, nLenDst, j - 1, Z_DEFAULT_STRATEGY, 5);
+j - 1->compression level
 
-								  //-------------- uncompress (uses the saved original length)
-
-BYTE* pbPacked = pbDst;
-BYTE* pbUnpacked = new BYTE[nLenSrc];
-
-int nLen = UncompressData(pbPacked, nLenPacked, pbUnpacked, nLenSrc);
-
-((char*)pbUnpacked)[nLen] = 0;
-printf((char*)pbUnpacked);
-
-
-
-// breakpoint here and view pbUnpacked to confirm
-delete pbDst;            // do some cleanup
-delete pbUnpacked;
 */
+
+
 //if (TerminateThread(hThread, dwThreadID))CloseHandle(hThread);
 
 //hThread1 = CreateThread(NULL, 0, &SSLWebSocketThread, 0, THREAD_TERMINATE, &dwThreadID1);
@@ -2683,7 +2826,7 @@ DWORD WINAPI pushClientMessageThread(LPVOID lparam) {
 	//printf("ExitClientMessageThread=%d\r\n", clientID);
 	return 0;
 }
-
+DWORD WINAPI startRecoveryThread(LPVOID) { startRecovery(); return 0; }
 
 
 
@@ -2691,6 +2834,8 @@ DWORD WINAPI pushClientMessageThread(LPVOID lparam) {
 
 
 void startRecovery() {
+	if (recovery_state == 1) return;
+	if (recovery_state = 1);
 	char* recvbuf = new char[DEFAULT_BUFLEN];
 	while (httpsRequest("api.betradar.com", "/v1/pre/recovery/initiate_request?request_id=2", recvbuf, 1)==-1) Sleep(1000);
 	//printf(recvbuf);
@@ -8234,6 +8379,7 @@ static void run(amqp_connection_state_t conn)
 		
 		
 		else {
+			if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
 			printf(doc.first_node()->name());std::printf("\r\n");
 		}
 
