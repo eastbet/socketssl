@@ -130,7 +130,7 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MARKETS_IN 2000
 #define MAX_BETSTOPS 200
 #define MAX_MATCHSTATUS 1000
-#define QUEUE_LENGTH 200
+#define QUEUE_LENGTH 2000
 
 
 
@@ -283,8 +283,12 @@ private:
 	nullCallback callPeriodic;
 };
 
+size_t calcDecodeLength(const char*);
 int Base64Decode(char*, unsigned char**, size_t*);
-int Base64Encode(const unsigned char*, size_t, char**);
+void Base64Encode(const std::uint8_t*, std::size_t, char*&, std::size_t&);
+
+
+
 DWORD WINAPI pushClientMessageThread(LPVOID lparam);
 
 void showAvailableIP() {
@@ -999,14 +1003,17 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 		}
 
 
-	if (findHandshake == true) {
-		SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), (unsigned char*)digest);
-		//printf("Output (sha1): %d\n", strlen(digest));
-		Base64Encode((unsigned char*)digest, 20, &base64EncodeOutput);
-		//printf("Output (base64): %s\r\n", base64EncodeOutput);
 
+	size_t handshakelen = 0;
+	if (findHandshake == true) {
+		SHA1((unsigned char*)handshakeHash, strlen(handshakeHash), digest);
+		//printf("Output (sha1): %d\n", strlen(digest));
+		Base64Encode(digest, 20, base64EncodeOutput, handshakelen);
+        base64EncodeOutput[handshakelen] = 0;
+	    printf("Output (base64): %s\r\n", base64EncodeOutput);
+		printf("handshakelen: %d\r\n", handshakelen);
 	}
-	base64EncodeOutput[strlen(base64EncodeOutput)] = 0;
+	
 
 	strcpy(handshakeBuffer, "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ");
 	strcat(handshakeBuffer, base64EncodeOutput);
@@ -1284,7 +1291,7 @@ void webSocket::startServer(int port) {
 
 							//printf("wsClients[%d]->ReadyState=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, SSL_get_error(ssl, nbytes));
 
-							//printf("Read Cicle wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, SSL_get_error(ssl, nbytes));
+							printf("Read Cicle wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, SSL_get_error(ssl, nbytes));
 							//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
 							if (nbytes == 0) {
 
@@ -1441,7 +1448,7 @@ void webSocket::startServer(int port) {
 
 							if (writeopcode == 0) continue;
 						
-							//printf("wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
+							printf("wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
 
 
 							if (nbytes == 0) {
@@ -2602,7 +2609,6 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
-size_t calcDecodeLength(const char* );
 /* called when a client connects */
 void openHandler(int);
 /* called when a client disconnects */
@@ -5767,25 +5773,45 @@ int Base64Decode(char* b64message, unsigned char** buffer, size_t* length) { //D
 
 	return (0); //success
 }
-int Base64Encode(const unsigned char* buffer, size_t length, char** b64text) { //Encodes a binary safe base 64 string
-	BIO *bio, *b64;
-	BUF_MEM *bufferPtr;
+void Base64Encode(const std::uint8_t* input, std::size_t inputLen, char*& output, std::size_t& outputLen)
+{
+	BIO* bio;
+	BIO* b64;
+	BUF_MEM* bufferPtr;
 
 	b64 = BIO_new(BIO_f_base64());
 	bio = BIO_new(BIO_s_mem());
 	bio = BIO_push(b64, bio);
 
-	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL); //Ignore newlines - write everything in one line
-	BIO_write(bio, buffer, length);
+	BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+	BIO_write(bio, input, static_cast<int>(inputLen));
 	BIO_flush(bio);
-	BIO_get_mem_ptr(bio, &bufferPtr);
+	BIO_get_mem_ptr(bio, std::addressof(bufferPtr));
 	BIO_set_close(bio, BIO_NOCLOSE);
+
+	output = bufferPtr->data;
+	outputLen = bufferPtr->length;
+	free(bufferPtr);
+
 	BIO_free_all(bio);
+};
 
-	*b64text = (*bufferPtr).data;
 
-	return (0); //success
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void openHandler(int clientID) {
 	ostringstream os;
 	os << "Stranger " << clientID << " has joined.";
@@ -6440,9 +6466,11 @@ static void run(amqp_connection_state_t conn)
 						tournaments[tournaments_l].id = 0;
 						tournaments[tournaments_l].season_id = event_id;
 						tournaments[tournaments_l].race = 0;
-						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments season id not found in run %d\r\n", event_id); continue; }
+						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournament season id not found in run %d\r\n", event_id); continue; }
 						else {
-							if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournaments season id not found after succes in getTournament run %d\r\n", event_id); continue; }
+							if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournament season id not found after succes in getTournament run %d\r\n", event_id); 
+							
+							continue; }
 							tournaments_l++; std::printf("fixture_change succes for tournamnet season id=%d\r\n",event_id);
 						}
 						} else if (getTournament(seasons_id[event_id], false) == -1) { std::printf("ERROR!\r\n getTournament in fixture_change season id =%d\r\n", event_id); continue; }

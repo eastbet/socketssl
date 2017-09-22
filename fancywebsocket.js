@@ -23,7 +23,7 @@ var FancyWebSocket = function(url)
         this.conn.binaryType = "arraybuffer";
 
 		// dispatch to the right handlers
-		this.conn.onmessage = function(event){
+		this.conn.onmessage = function(evt){
 
             //var data = pako.inflate(event.data);
 			dispatch('message', toUTF8A(pako.inflate(evt.data)));
