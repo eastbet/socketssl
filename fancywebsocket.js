@@ -26,7 +26,7 @@ var FancyWebSocket = function(url)
 		this.conn.onmessage = function(event){
 
             //var data = pako.inflate(event.data);
-			dispatch('message', toUTF8A(pako.inflate(event.data)));
+			dispatch('message', toUTF8A(pako.inflate(evt.data)));
 		};
 
 		this.conn.onclose = function(){dispatch('close',null)}
