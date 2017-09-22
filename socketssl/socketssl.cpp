@@ -43,49 +43,14 @@
 
 #pragma comment(lib, "zlibwapi.lib") // for access to the DLL
 
-int GetMaxCompressedLen(int nLenSrc)
-{
-	int n16kBlocks = (nLenSrc + 16383) / 16384; // round up any fraction of a block
-	return (nLenSrc + 6 + (n16kBlocks * 5));
-}
-int CompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
-{
-	z_stream zInfo = { 0 };
-	zInfo.total_in = zInfo.avail_in = nLenSrc;
-	zInfo.total_out = zInfo.avail_out = nLenDst;
-	zInfo.next_in = (BYTE*)abSrc;
-	zInfo.next_out = abDst;
+int GetMaxCompressedLen(int);
+int CompressData(const BYTE* , int , BYTE* , int );
+int UncompressData(const BYTE* , int , BYTE* , int);
+int gzip(char*, int, char* &);
 
-	int nErr, nRet = -1;
-	nErr = deflateInit(&zInfo, Z_DEFAULT_COMPRESSION); // zlib function
-	if (nErr == Z_OK) {
-		nErr = deflate(&zInfo, Z_FINISH);              // zlib function
-		if (nErr == Z_STREAM_END) {
-			nRet = zInfo.total_out;
-		}
-	}
-	deflateEnd(&zInfo);    // zlib function
-	return(nRet);
-}
-int UncompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
-{
-	z_stream zInfo = { 0 };
-	zInfo.total_in = zInfo.avail_in = nLenSrc;
-	zInfo.total_out = zInfo.avail_out = nLenDst;
-	zInfo.next_in = (BYTE*)abSrc;
-	zInfo.next_out = abDst;
 
-	int nErr, nRet = -1;
-	nErr = inflateInit(&zInfo);               // zlib function
-	if (nErr == Z_OK) {
-		nErr = inflate(&zInfo, Z_FINISH);     // zlib function
-		if (nErr == Z_STREAM_END) {
-			nRet = zInfo.total_out;
-		}
-	}
-	inflateEnd(&zInfo);   // zlib function
-	return(nRet); // -1 or len of output
-}
+
+
 
 
 
@@ -165,7 +130,7 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MARKETS_IN 2000
 #define MAX_BETSTOPS 200
 #define MAX_MATCHSTATUS 1000
-#define QUEUE_LENGTH 2000
+#define QUEUE_LENGTH 200
 
 
 
@@ -214,22 +179,26 @@ public:
 		FrameBuffer.clear();
 		MessageOpcode = 0;
 		MessageBufferLength = 0;
-		MessageQueue = new char[DEFAULT_BUFLEN];
+		MessageQueue = new char*[QUEUE_LENGTH];
+		MessageQueueLength = new int[QUEUE_LENGTH];
+		for (int i = 0; i < QUEUE_LENGTH; i++) { MessageQueue[i] = nullptr; MessageQueueLength[i] = 0;}
 		MessagePing = nullptr;
 		MessagePong = nullptr;
 		MessageClose = nullptr;
 		MessagePingLength = 0;
 		MessagePongLength = 0;
 		MessageCloseLength = 0;
-		MessageQueueLength = 0;
 		HandshakeMessage = nullptr;
 		WriteBuffer=nullptr;
 		WriteBufferLen=0;
+		LastMessageQueue = -1;
         //flag = 0;
 
 	}
 	~wsClient() {
-		if (MessageQueue != nullptr) delete[] MessageQueue;  if (MessagePing != nullptr) delete[] MessagePing;  if (MessagePong != nullptr) delete[] MessagePong; 
+	for (int i = 0; i < QUEUE_LENGTH; i++)  if(MessageQueue[i] != nullptr) delete[] MessageQueue[i]; 
+	delete[] MessageQueue; delete[] MessageQueueLength;
+	if (MessagePing != nullptr) delete[] MessagePing;  if (MessagePong != nullptr) delete[] MessagePong; 
 	if (MessageClose != nullptr) delete[] MessageClose;  if (WriteBuffer != nullptr) delete[] WriteBuffer; 
 	}
 
@@ -246,14 +215,15 @@ public:
 	string FrameBuffer;                    // joined onto end as a frame's data comes in, reset to blank string when all frame data has been read
 	unsigned char MessageOpcode;           // stored by the first frame for fragmented messages, default value is 0
 	size_t MessageBufferLength;            // the payload data length of MessageBuffer
-	size_t MessageQueueLength;
-	char* MessageQueue;
+	int* MessageQueueLength;
+	char** MessageQueue;
+	int LastMessageQueue;
 	char* MessagePing;
 	char* MessagePong;
 	char* MessageClose;
-	size_t MessagePingLength;
-	size_t MessagePongLength;
-	size_t MessageCloseLength;
+	int MessagePingLength;
+	int MessagePongLength;
+	int MessageCloseLength;
 	char* HandshakeMessage;
 	char* WriteBuffer;
 	int WriteBufferLen;
@@ -280,7 +250,7 @@ public:
 	void setPeriodicHandler(nullCallback callback);
 	void startServer(int port);
 	void stopServer();
-	bool wsSend(int clientID, string message, bool binary = true);
+	bool wsSend(int clientID, char* message, size_t messageLen, bool binary = true);
 	void wsClose(int clientID);
 	vector<int> getClientIDs();
 	string getClientIP(int clientID);
@@ -294,7 +264,7 @@ private:
 	int ListenSocket;
 	SSL_CTX *ctx;
 	void wsCheckIdleClients();
-	bool wsSendClientMessage(int clientID, unsigned char opcode, string);
+	bool wsSendClientMessage(int clientID, unsigned char opcode, char*, int);
 	bool wsEncodeClientMessage(int clientID, unsigned char opcode, char*, size_t, char* &, size_t &);
 	void wsSendClientClose(int clientID, unsigned short status = -1);
 	bool wsCheckSizeClientFrame(int clientID);
@@ -397,7 +367,7 @@ void webSocket::wsCheckIdleClients() {
 			else if (difftime(current, wsClients[i]->LastRecvTime) != WS_TIMEOUT_RECV) {
 				if (wsClients[i]->ReadyState != WS_READY_STATE_CONNECTING) {
 					wsClients[i]->PingSentTime = time(NULL);
-					wsSendClientMessage(i, WS_OPCODE_PING, "");
+					wsSendClientMessage(i, WS_OPCODE_PING, "",0);
 				}
 				else
 					wsRemoveClient(i);
@@ -405,7 +375,7 @@ void webSocket::wsCheckIdleClients() {
 		}
 	}
 }
-bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string message) {
+bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, char* message, int messageLen) {
 	// check if client ready state is already closing or closed
 	if (clientID >= wsClients.size())
 		return false;
@@ -414,27 +384,26 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 		return true;
 
 	// fetch message length
-	int messageLength = message.size();
-
-	if (opcode == WS_OPCODE_PING || opcode == WS_OPCODE_PONG || opcode == WS_OPCODE_CLOSE) {
-
+	
+	
+		char *buf = nullptr;
+		size_t totalLength;
 
 		// set max payload length per frame
 		int bufferSize = DEFAULT_BUFLEN;
 
 		// work out amount of frames to send, based on $bufferSize
-		int frameCount = ceil((float)messageLength / bufferSize);
+		int frameCount = ceil((float)messageLen / bufferSize);
 		if (frameCount == 0)
 			frameCount = 1;
 
 		// set last frame variables
 		int maxFrame = frameCount - 1;
-		int lastFrameBufferLength = (messageLength % bufferSize) != 0 ? (messageLength % bufferSize) : (messageLength != 0 ? bufferSize : 0);
+		int lastFrameBufferLength = (messageLen % bufferSize) != 0 ? (messageLen % bufferSize) : (messageLen != 0 ? bufferSize : 0);
 
 		// loop around all frames to send
 
-		char *buf = nullptr;
-
+		
 
 		for (int i = 0; i < frameCount; i++) {
 			// fetch fin, opcode and buffer length for frame
@@ -443,7 +412,7 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 
 			size_t bufferLength = i != maxFrame ? bufferSize : lastFrameBufferLength;
 
-			size_t totalLength;
+
 
 			// set payload length variables for frame
 			if (bufferLength <= 125) {
@@ -452,7 +421,7 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 				buf = new char[totalLength];
 				buf[0] = fin | opcode;
 				buf[1] = bufferLength;
-				memcpy(buf + 2, message.c_str(), message.size());
+				memcpy(buf + 2, message, messageLen);
 			}
 			else if (bufferLength <= 65535) {
 				// int payloadLength = WS_PAYLOAD_LENGTH_16;
@@ -462,7 +431,7 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 				buf[1] = WS_PAYLOAD_LENGTH_16;
 				buf[2] = bufferLength >> 8;
 				buf[3] = bufferLength;
-				memcpy(buf + 4, message.c_str(), message.size());
+				memcpy(buf + 4, message, messageLen);
 			}
 			else {
 				// int payloadLength = WS_PAYLOAD_LENGTH_63;
@@ -478,39 +447,32 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string m
 				buf[7] = bufferLength >> 16;
 				buf[8] = bufferLength >> 8;
 				buf[9] = bufferLength;
-				memcpy(buf + 10, message.c_str(), message.size());
+				memcpy(buf + 10, message, messageLen);
 			}
 
-			int left = totalLength;
-			
-			if (opcode == WS_OPCODE_PING) { if (wsClients[clientID]->MessagePing != nullptr) delete[] wsClients[clientID]->MessagePing; wsClients[clientID]->MessagePing = buf; wsClients[clientID]->MessagePingLength = totalLength; }
-			if (opcode == WS_OPCODE_PONG) { if (wsClients[clientID]->MessagePong != nullptr) delete[] wsClients[clientID]->MessagePong; wsClients[clientID]->MessagePong = buf; wsClients[clientID]->MessagePongLength = totalLength; }
-            if (opcode == WS_OPCODE_CLOSE) { if (wsClients[clientID]->MessageClose != nullptr) delete[] wsClients[clientID]->MessageClose; wsClients[clientID]->MessageClose = buf; wsClients[clientID]->MessageCloseLength = totalLength; }
-			//wsClients[clientID]->flag = false;
-				
 		}
-
 		
-
-	}
-	else {
-
-
-
+			if (opcode == WS_OPCODE_PING) { if (wsClients[clientID]->MessagePing != nullptr) delete[] wsClients[clientID]->MessagePing; wsClients[clientID]->MessagePing = buf; wsClients[clientID]->MessagePingLength = totalLength; } else
+			if (opcode == WS_OPCODE_PONG) { if (wsClients[clientID]->MessagePong != nullptr) delete[] wsClients[clientID]->MessagePong; wsClients[clientID]->MessagePong = buf; wsClients[clientID]->MessagePongLength = totalLength; } else
+            if (opcode == WS_OPCODE_CLOSE) { if (wsClients[clientID]->MessageClose != nullptr) delete[] wsClients[clientID]->MessageClose; wsClients[clientID]->MessageClose = buf; wsClients[clientID]->MessageCloseLength = totalLength; } else 
+			
+			{
+			
+			
 			wsClients[clientID]->mutex.lock();
-			memcpy(wsClients[clientID]->MessageQueue + wsClients[clientID]->MessageQueueLength, message.c_str(), messageLength);
-			wsClients[clientID]->MessageQueueLength = wsClients[clientID]->MessageQueueLength + messageLength;
-			wsClients[clientID]->mutex.unlock();
-
-
-
-	}
+			wsClients[clientID]->LastMessageQueue++;
+			wsClients[clientID]->MessageQueueLength[wsClients[clientID]->LastMessageQueue] = totalLength;
+			wsClients[clientID]->MessageQueue[wsClients[clientID]->LastMessageQueue] = buf;
+			wsClients[clientID]->mutex.unlock(); 
+			
+			
+			}
 		
-	
+			
 
 	return true;
 }
-bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* messageSrc, size_t messageSrcLength, char* &writeBuffer, size_t &writeBufferLen) {
+bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* message, size_t messageLength, char* &writeBuffer, size_t &writeBufferLen) {
 	// check if client ready state is already closing or closed
 	if (clientID >= wsClients.size())
 		return false;
@@ -525,31 +487,7 @@ bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* 
 
 
 
-	//-------------- compress (save the original length)
-
-	//int nLenSrc = strlen((char*)pbSrc) + 1; // include terminating NULL
-	int messageLength = GetMaxCompressedLen(messageSrcLength + 1);
-	char* message = nullptr;
-	BYTE* bm = new BYTE[messageLength];  // alloc dest buffer
-	message = (char*)bm;
-	int nLenPacked = CompressData((BYTE*)messageSrc, messageSrcLength + 1, (BYTE*)message, messageLength);
-
-	if (nLenPacked == -1) {
-		message = messageSrc;
-		messageLength = messageSrcLength;
-	}
-	// error
-
-									  //-------------- uncompress (uses the saved original length)
-
-	//BYTE* pbPacked = pbDst;
-	//BYTE* pbUnpacked = new BYTE[nLenSrc];
-
-	//int nLen = UncompressData(pbPacked, nLenPacked, pbUnpacked, nLenSrc);
-
-	//((char*)pbUnpacked)[nLen] = 0;
-	//	printf((char*)pbUnpacked);
-
+	
 
 
 
@@ -657,8 +595,8 @@ bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* 
 
 	return true;
 }
-bool webSocket::wsSend(int clientID, string message, bool binary) {
-	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message);
+bool webSocket::wsSend(int clientID, char* message, size_t messageLen, bool binary) {
+	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message, messageLen);
 }
 void webSocket::wsSendClientClose(int clientID, unsigned short status) {
 	
@@ -670,7 +608,7 @@ void webSocket::wsSendClientClose(int clientID, unsigned short status) {
 	wsClients[clientID]->ReadyState = status;
 
 	// send close frame to client
-	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "");
+	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "",0);
 
 	// set client ready state to closing
 	printf("clientId=%d set WS_READY_STATE_CLOSING(2)\r\n", clientID);
@@ -755,7 +693,7 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 	
 	if (opcode == WS_OPCODE_PING) {
 		// received ping message
-		return wsSendClientMessage(clientID, WS_OPCODE_PONG, data);
+		return wsSendClientMessage(clientID, WS_OPCODE_PONG, (char*)data.c_str(), data.size());
 	}
 	else if (opcode == WS_OPCODE_PONG) {
 		// received pong message (it's valid if the server did not send a ping request for this pong message)
@@ -1346,7 +1284,7 @@ void webSocket::startServer(int port) {
 
 							//printf("wsClients[%d]->ReadyState=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, SSL_get_error(ssl, nbytes));
 
-
+							//printf("Read Cicle wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, SSL_get_error(ssl, nbytes));
 							//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
 							if (nbytes == 0) {
 
@@ -1453,21 +1391,34 @@ void webSocket::startServer(int port) {
 
 							}
 							else if (wsClients[socketIDmap[i]]->WriteBufferLen >0 && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CONNECTING) {
+								
 								writeopcode = 5;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->WriteBuffer, wsClients[socketIDmap[i]]->WriteBufferLen);
 
 							}
-							else if (wsClients[socketIDmap[i]]->MessageQueueLength > 0 && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CONNECTING) {
-								wsClients[socketIDmap[i]]->mutex.lock();
-							//	printf("wsClients[socketIDmap[i]]->MessageQueueLength=%d\r\n", wsClients[socketIDmap[i]]->MessageQueueLength);
-								wsClients[socketIDmap[i]]->MessageQueue[wsClients[socketIDmap[i]]->MessageQueueLength] = 0;
-								wsEncodeClientMessage(socketIDmap[i], WS_OPCODE_BINARY, wsClients[socketIDmap[i]]->MessageQueue, wsClients[socketIDmap[i]]->MessageQueueLength, writeBuffer, writeBufferLen);
-								wsClients[socketIDmap[i]]->MessageQueueLength = 0;
-								wsClients[socketIDmap[i]]->mutex.unlock();
+							else if (wsClients[socketIDmap[i]]->LastMessageQueue > -1 && wsClients[socketIDmap[i]]->ReadyState != WS_READY_STATE_CONNECTING) {
 								writeopcode = 5;
-								wsClients[socketIDmap[i]]->WriteBuffer = writeBuffer; writeBuffer = nullptr;
-								wsClients[socketIDmap[i]]->WriteBufferLen = writeBufferLen
-									;
+								wsClients[socketIDmap[i]]->mutex.lock();
+								wsClients[socketIDmap[i]]->WriteBufferLen = wsClients[socketIDmap[i]]->MessageQueueLength[0];
+								wsClients[socketIDmap[i]]->WriteBuffer = wsClients[socketIDmap[i]]->MessageQueue[0];
+								for (int j = 0; j < wsClients[socketIDmap[i]]->LastMessageQueue; j++) {
+									wsClients[socketIDmap[i]]->MessageQueueLength[j] = wsClients[socketIDmap[i]]->MessageQueueLength[j + 1];
+									wsClients[socketIDmap[i]]->MessageQueue[j] = wsClients[socketIDmap[i]]->MessageQueue[j + 1];
+								}
+								wsClients[socketIDmap[i]]->MessageQueue[wsClients[socketIDmap[i]]->LastMessageQueue] = nullptr;
+								wsClients[socketIDmap[i]]->MessageQueueLength[wsClients[socketIDmap[i]]->LastMessageQueue] = 0;
+								wsClients[socketIDmap[i]]->LastMessageQueue--;
+
+
+							//	printf("wsClients[socketIDmap[i]]->MessageQueueLength=%d\r\n", wsClients[socketIDmap[i]]->MessageQueueLength);
+								//wsClients[socketIDmap[i]]->MessageQueue[wsClients[socketIDmap[i]]->MessageQueueLength] = 0;
+								//wsEncodeClientMessage(socketIDmap[i], WS_OPCODE_BINARY, wsClients[socketIDmap[i]]->MessageQueue, wsClients[socketIDmap[i]]->MessageQueueLength, writeBuffer, writeBufferLen);
+								//wsClients[socketIDmap[i]]->MessageQueueLength = 0;
+								wsClients[socketIDmap[i]]->mutex.unlock();
+								
+								//wsClients[socketIDmap[i]]->WriteBuffer = writeBuffer; writeBuffer = nullptr;
+								//wsClients[socketIDmap[i]]->WriteBufferLen = writeBufferLen
+									
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->WriteBuffer, wsClients[socketIDmap[i]]->WriteBufferLen);
 
 
@@ -1490,7 +1441,7 @@ void webSocket::startServer(int port) {
 
 							if (writeopcode == 0) continue;
 						
-							//printf("wsClients[%d]->ReadyState=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
+							//printf("wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
 
 
 							if (nbytes == 0) {
@@ -2360,14 +2311,21 @@ class Line {
 public:
 	Line();
 	~Line() {
-		if (name != NULL) delete[] name; if (outcome_number > 0) { for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != NULL) delete[] outcome_name[i]; };
+		
+		if (name != NULL) delete[] name;  if (outcome_number > 0) { for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != NULL) delete[] outcome_name[i]; };
+		
 		if (outcome_id != NULL) delete[] outcome_id; if (outcome_active != NULL) delete[] outcome_active; if (outcome_team != NULL) delete[] outcome_team; if (outcome_odds != NULL) delete[] outcome_odds;
+		
 		if (outcome_probabilities != NULL) delete[] outcome_probabilities; if (outcome_name != NULL) delete[] outcome_name;
-		if (specifier_number > 0) { for (int i = 0; i < specifier_number; i++) { if (specifier[i] != NULL) delete[] specifier[i];  if (specifier_value[i] != NULL) delete[] specifier_value[i]; if (specifier_value[i] != NULL) delete[] specifier_value[i];} }
+		
+		if (specifier_number > 0) { for (int i = 0; i < specifier_number; i++) { if (specifier[i] != NULL) delete[] specifier[i];  if (specifier_value[i] != NULL) delete[] specifier_value[i];} }
+	
 
-		if (extended_specifier_number > 0) { for (int i = 0; i < extended_specifier_number; i++) { if (extended_specifier[i] != NULL) delete[] extended_specifier[i];  if (extended_specifier_value[i] != NULL) delete[] extended_specifier_value[i]; if (extended_specifier_value[i] != NULL) delete[] extended_specifier_value[i]; } }
+		if (extended_specifier_number > 0) { for (int i = 0; i < extended_specifier_number; i++) { if (extended_specifier[i] != NULL) delete[] extended_specifier[i];  if (extended_specifier_value[i] != NULL) delete[] extended_specifier_value[i];  } }
+	
 		if (specifier != NULL) delete[] specifier; if (specifier_value != NULL) delete[] specifier_value;
 		if (extended_specifier != NULL) delete[] extended_specifier; if (extended_specifier_value != NULL) delete[] extended_specifier_value;
+	
 		
 	};
 
@@ -2652,7 +2610,7 @@ void closeHandler(int);
 /* called when a client sends a message to the server */
 void messageHandler(int,string );
 /* called once per select() loop */
-void radarMessageHandler(string);
+void radarMessageHandler(char*,int);
 void periodicHandler();
 void die(const char *, ...);
 void die_on_error(int, char const*);
@@ -2723,6 +2681,7 @@ server.setCloseHandler(closeHandler);
 server.setMessageHandler(messageHandler);
 server.setPeriodicHandler(periodicHandler);
 server.startServer(port);
+
 
 //while (1) Sleep(0);
 
@@ -2818,10 +2777,10 @@ DWORD WINAPI pushClientMessageThread(LPVOID lparam) {
 	//while (server.wsClients[clientID]->flag == 1) Sleep(0);
 	//printf("FlagpushClientMessageThread=%d\r\n", clientID);
 	//server.wsClients[clientID]->flag = 1;
-	server.wsClients[clientID]->mutex.lock();
+	/*server.wsClients[clientID]->mutex.lock();
 	memcpy(server.wsClients[clientID]->MessageQueue + server.wsClients[clientID]->MessageQueueLength, message, messageLen);
 	server.wsClients[clientID]->MessageQueueLength = server.wsClients[clientID]->MessageQueueLength + messageLen;
-	server.wsClients[clientID]->mutex.unlock();
+	server.wsClients[clientID]->mutex.unlock();*/
 	//server.wsClients[clientID]->flag = 0;
 	//printf("ExitClientMessageThread=%d\r\n", clientID);
 	return 0;
@@ -2830,8 +2789,63 @@ DWORD WINAPI startRecoveryThread(LPVOID) { startRecovery(); return 0; }
 
 
 
+int GetMaxCompressedLen(int nLenSrc)
+{
+	int n16kBlocks = (nLenSrc + 16383) / 16384; // round up any fraction of a block
+	return (nLenSrc + 6 + (n16kBlocks * 5));
+}
+int CompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
+{
+	z_stream zInfo = { 0 };
+	zInfo.total_in = zInfo.avail_in = nLenSrc;
+	zInfo.total_out = zInfo.avail_out = nLenDst;
+	zInfo.next_in = (BYTE*)abSrc;
+	zInfo.next_out = abDst;
+
+	int nErr, nRet = -1;
+	//nErr = deflateInit(&zInfo, Z_DEFAULT_COMPRESSION); // zlib function
+	nErr = deflateInit2(&zInfo, 2, Z_DEFLATED, 15, 8, Z_DEFAULT_STRATEGY);
 
 
+	if (nErr == Z_OK) {
+		nErr = deflate(&zInfo, Z_FINISH);              // zlib function
+		if (nErr == Z_STREAM_END) {
+			nRet = zInfo.total_out;
+		}
+	}
+	deflateEnd(&zInfo);    // zlib function
+	return(nRet);
+}
+int UncompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
+{
+	z_stream zInfo = { 0 };
+	zInfo.total_in = zInfo.avail_in = nLenSrc;
+	zInfo.total_out = zInfo.avail_out = nLenDst;
+	zInfo.next_in = (BYTE*)abSrc;
+	zInfo.next_out = abDst;
+
+	int nErr, nRet = -1;
+	nErr = inflateInit(&zInfo);               // zlib function
+	if (nErr == Z_OK) {
+		nErr = inflate(&zInfo, Z_FINISH);     // zlib function
+		if (nErr == Z_STREAM_END) {
+			nRet = zInfo.total_out;
+		}
+	}
+	inflateEnd(&zInfo);   // zlib function
+	return(nRet); // -1 or len of output
+}
+int gzip(char* message, int messageLen, char* &zpMessage) {
+	if (messageLen == 0 || message == nullptr) return -1;
+	int tempLen = GetMaxCompressedLen(messageLen + 1);
+	BYTE* zipped = new BYTE[tempLen];  // alloc dest buffer
+	int zippedLen = CompressData((BYTE*)message, messageLen + 1, zipped, tempLen);
+	if (zippedLen == -1) { printf("error gzip encoding\r\n"); delete[] zipped; return -1; }
+	zpMessage = new char[zippedLen];
+	memcpy(zpMessage, zipped, zippedLen);
+	delete[] zipped;
+	return zippedLen;
+}
 
 void startRecovery() {
 	if (recovery_state == 1) return;
@@ -2985,6 +2999,7 @@ void getCategoriesTournaments() {
 	printf("Create tournament successful. Numbers of tournaments: %d\r\n", tournaments_l);
 	printf("Create categories successful. Numbers of categories: %d\r\n", categories_l);
 	delete[] recvbuf;
+	doc.clear();
 
 }
 void getSports() {
@@ -3015,6 +3030,7 @@ void getSports() {
 	}
 
 	sports_l = i;
+	doc.clear();
 	delete[] recvbuf;
 	printf("Create sports successful. Numbers of sports: %d\r\n", sports_l);
 
@@ -3362,7 +3378,7 @@ void getEvents(time_t sec,int days) {
 			i++;
 
 		}
-
+		doc.clear();
 	}
 
 
@@ -3412,6 +3428,7 @@ int getVariantMarkets(Market* market, char* urn) {
 		delete[] outcome_name;
 		delete[] outcome_id;
 		delete[] recvbuf;
+		doc.clear();
 		return -1;
 	}
 
@@ -3481,6 +3498,7 @@ int getVariantMarkets(Market* market, char* urn) {
 	delete[] outcome_name;
 	delete[] outcome_id;
 	delete[] recvbuf;
+	doc.clear();
 	return 0;
 }
 void getMarkets() {
@@ -3531,7 +3549,7 @@ void getMarkets() {
 		delete[] outcome_id;
 		delete[] recvbuf;
 		delete[] urn;
-
+		doc.clear();
 		return;
 	}
 
@@ -3714,6 +3732,7 @@ void getMarkets() {
 	delete[] outcome_id;
 	delete[] recvbuf;
 	delete[] urn;
+	doc.clear();
 
 }
 int getPlayer(Player* player) {
@@ -3742,9 +3761,9 @@ int getPlayer(Player* player) {
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("player_profile");
-	if (root_node == NULL) { delete[] recvbuf; return -1; }
+	if (root_node == NULL) { delete[] recvbuf; doc.clear(); return -1; }
 	xml_node<> * player_node = root_node->first_node("player"); if (player_node == NULL) {
-		delete[] recvbuf; return -1;
+		delete[] recvbuf; doc.clear(); return -1;
 	}
 
 	if (player_node->first_attribute("date_of_birth")) {
@@ -3797,6 +3816,7 @@ int getPlayer(Player* player) {
 	}
 	else if (players_id[player->id] == NULL) players_id[player->id] = player;
 	savePlayerToFile(player);
+	doc.clear();
 	delete[] recvbuf;
 	return 0;
 }
@@ -3827,8 +3847,8 @@ int getCompetitor(Competitor* competitor) {
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("competitor_profile");
-	if (root_node == NULL) { delete[] recvbuf; delete player; return -1; }
-	xml_node<> * competitor_node = root_node->first_node("competitor"); if (competitor_node == NULL) { delete[] recvbuf; delete player; return -1; }
+	if (root_node == NULL) { delete[] recvbuf; delete player; doc.clear(); return -1; }
+	xml_node<> * competitor_node = root_node->first_node("competitor"); if (competitor_node == NULL) { delete[] recvbuf; delete player; doc.clear(); return -1; }
 
 
 	
@@ -3854,7 +3874,7 @@ int getCompetitor(Competitor* competitor) {
 	
 
 	if (competitor->id >= MAX_COMPETITORS)  {std::printf("ERROR DATA!\r\ncompetitors id out of MAX_COMPETITORS in getCompetitors %d\r\n", competitor->id); 
-	 delete[] recvbuf; delete player; return -1; } else  competitors_id[competitor->id] = competitor;
+	 delete[] recvbuf; delete player; doc.clear(); return -1; } else  competitors_id[competitor->id] = competitor;
 		
 //	std::printf("competitors_l=%d\r\n", competitors_l);
 
@@ -3976,6 +3996,7 @@ int getCompetitor(Competitor* competitor) {
 
 	delete player;
 	delete[] recvbuf;
+	doc.clear();
 	return 0;
 }
 int getEventFixture(Event* event) {
@@ -4006,7 +4027,7 @@ int getEventFixture(Event* event) {
 
 	
 	root_node = doc.first_node("fixtures_fixture");
-	if (root_node == NULL) { delete[] recvbuf; return -1; }
+	if (root_node == NULL) { delete[] recvbuf; doc.clear(); return -1; }
 	if (root_node->first_node("fixture")->first_attribute("start_time")) {
 		std::strcpy(buf, root_node->first_node("fixture")->first_attribute("start_time")->value());
 		sscanf(buf, "%d-%d-%dT%d:%d:%d", &st.wYear, &st.wMonth, &st.wDay, &st.wHour, &st.wMinute, &st.wSecond);
@@ -4150,7 +4171,7 @@ int getEventFixture(Event* event) {
 
 		
 		if (event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id); 
-		delete[] recvbuf; return -1;
+		delete[] recvbuf; doc.clear(); return -1;
 		}
 			else {
 				if (event->race == 0) {
@@ -4349,6 +4370,7 @@ int getEventFixture(Event* event) {
 	else saveTournamentToFile(tournaments_id[event->tournament_id]);
 	saveCategoryToFile(categories_id[event->category_id]);
 	saveEventToFile(event);
+	doc.clear();
 	return 0;
 }
 int getEventSummary(Event* event) {
@@ -4370,11 +4392,12 @@ int getEventSummary(Event* event) {
 	doc.parse<0>((char*)((char*)recvbuf + j + 4));
 
 	root_node = doc.first_node("match_summary");
-	if (root_node == NULL) { delete[] recvbuf; return -1; }
+	if (root_node == NULL) { delete[] recvbuf; doc.clear(); return -1; }
 
 	if (root_node->first_node("sport_event_conditions") && root_node->first_node("sport_event_conditions")->first_attribute("match_mode"))
 		event->bo = atoi((char*)((char*)root_node->first_node("sport_event_conditions")->first_attribute("match_mode")->value() + 2));
 	delete[] recvbuf;
+	doc.clear();
 	return 0;
 
 }
@@ -4394,7 +4417,7 @@ int getBetstops() {
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("betstop_reasons_descriptions");
-	if (root_node == NULL) { delete[] recvbuf; return -1; }
+	if (root_node == NULL) { delete[] recvbuf; doc.clear(); return -1; }
 	betstops_l = 0;
 
 	if (root_node->first_node("betstop_reason"))
@@ -4416,12 +4439,13 @@ int getBetstops() {
 			else   std::printf("ERROR DATA!\r\nbetstop id out of MAX_BETSTOPS in getBetstops %d\r\n", betstops[i].id);
 			i++;
 		
-		} else { delete[] recvbuf; return -1; }
+		} else { delete[] recvbuf; doc.clear(); return -1; }
 	
 		betstops_l = i;
 		
 	
 	delete[] recvbuf;
+	doc.clear();
 	return 0;
 
 }
@@ -4441,7 +4465,7 @@ int getMatchstatus() {
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("match_status_descriptions");
-	if (root_node == NULL) { delete[] recvbuf; return -1; }
+	if (root_node == NULL) { delete[] recvbuf; doc.clear(); return -1; }
 	matchstatus_l = 0;
 
 	if (root_node->first_node("match_status"))
@@ -4464,12 +4488,13 @@ int getMatchstatus() {
 			i++;
 
 		}
-	else { delete[] recvbuf; return -1; }
+	else { delete[] recvbuf; doc.clear(); return -1; }
 
 	matchstatus_l = i;
 
 
 	delete[] recvbuf;
+	doc.clear();
 	return 0;
 
 }
@@ -4487,7 +4512,7 @@ int getTournament(Tournament* tournament, bool extended) {
 
 	
 	if(tournament->id ==0 && tournament->season_id == 0 && tournament->simple_id == 0) {
-		delete[] recvbuf; delete competitor; return -1;
+		delete[] recvbuf; delete competitor;  return -1;
 	};
 
 
@@ -4518,10 +4543,10 @@ int getTournament(Tournament* tournament, bool extended) {
 				doc.parse<0>((char*)((char*)recvbuf + j + 4));
 				root_node = doc.first_node("tournament_info");
 				if (root_node == NULL) {
-					delete[] recvbuf; delete competitor; return -1;
+					delete[] recvbuf; delete competitor; doc.clear(); return -1;
 				}
 				xml_node<> * tournament_node = root_node->first_node("tournament"); if (tournament_node == NULL) {
-					delete[] recvbuf; delete competitor; return -1;
+					delete[] recvbuf; delete competitor; doc.clear(); return -1;
 				}
 				if (tournament_node->first_attribute("id")) {
 					if (tournament->race == 0)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));else 
@@ -4611,11 +4636,11 @@ int getTournament(Tournament* tournament, bool extended) {
 				} else {
 					if (tournament->id < MAX_TOURNAMENTS) tournaments_id[tournament->id] = tournament;
 					else {
-						std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMANETS in getTournaments %d\r\n", tournament->id); delete[] recvbuf; delete competitor; return -1;
+						std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMANETS in getTournaments %d\r\n", tournament->id); delete[] recvbuf; delete competitor; doc.clear(); return -1;
 					}
 
 					if (tournament->season_id > 0) {
-						if (tournament->season_id < MAX_TOURNAMENTS) seasons_id[tournament->season_id] = tournament; else { std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getTournaments %d\r\n", tournament->season_id); delete[] recvbuf; delete competitor; return -1; }
+						if (tournament->season_id < MAX_TOURNAMENTS) seasons_id[tournament->season_id] = tournament; else { std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getTournaments %d\r\n", tournament->season_id); delete[] recvbuf; delete competitor; doc.clear(); return -1; }
 					}
 
 				}
@@ -4688,6 +4713,7 @@ int getTournament(Tournament* tournament, bool extended) {
 
 				delete competitor;
 				delete[] recvbuf;
+				doc.clear();
 				return 0;
 };
 void postBooked(int event_id) {
@@ -4754,7 +4780,7 @@ return split_array;
 
 };
  void replace(char* &string, char* sub, char* value) {
-	 int i = 0;
+	  int i = 0;
 	 int j = 0;
 	 int l = 0;
 	 int k = 0;
@@ -5761,37 +5787,55 @@ int Base64Encode(const unsigned char* buffer, size_t length, char** b64text) { /
 	return (0); //success
 }
 void openHandler(int clientID) {
-
 	ostringstream os;
 	os << "Stranger " << clientID << " has joined.";
+    char* zpMessage = nullptr;
+	int zpLen=gzip((char*)os.str().c_str(), os.str().size(), zpMessage);
+	if (zpLen < 1) return;
 
 	vector<int> clientIDs = server.getClientIDs();
 	for (int i = 0; i < clientIDs.size(); i++) {
 		if (clientIDs[i] != clientID)
-			server.wsSend(clientIDs[i], os.str());
+			server.wsSend(clientIDs[i], zpMessage, zpLen);
 	}
-	server.wsSend(clientID, "Welcome!");
+	delete[] zpMessage;
+	zpMessage = nullptr;
+	zpLen=gzip("Welcome!", 7, zpMessage);
+	if (zpLen < 1) return;
+	server.wsSend(clientID, zpMessage, zpLen);
+	delete[] zpMessage;
+	
 }
 void closeHandler(int clientID) {
 
 	ostringstream os;
 	os << "Stranger " << clientID << " has leaved.";
+	
+	char* zpMessage = nullptr;
+	int zpLen = gzip((char*)os.str().c_str(), os.str().size(), zpMessage);
+	if (zpLen < 1) return;
 
 	vector<int> clientIDs = server.getClientIDs();
 	for (int i = 0; i < clientIDs.size(); i++) {
 		if (clientIDs[i] != clientID)
-			server.wsSend(clientIDs[i], os.str());
+			server.wsSend(clientIDs[i], zpMessage, zpLen);
 	}
+	delete[] zpMessage;
 }
-void messageHandler(int clientID, string message) {
+void messageHandler(int clientID, string data) {
 	ostringstream os;
-	os << "Stranger " << clientID << " says: " << message;
+	os << "Stranger " << clientID << " says: " << data;
+    char* zpMessage = nullptr;
+	int zpLen = gzip((char*)os.str().c_str(), os.str().size(), zpMessage);
+	if (zpLen < 1) return;
+
 
 	vector<int> clientIDs = server.getClientIDs();
 	for (int i = 0; i < clientIDs.size(); i++) {
 		if (clientIDs[i] != clientID)
-			server.wsSend(clientIDs[i], os.str());
+			server.wsSend(clientIDs[i], zpMessage, zpLen);
 	}
+	delete[] zpMessage;
 }
 void periodicHandler() {
 	
@@ -5802,19 +5846,26 @@ void periodicHandler() {
 		string timestring = ctime(&current);
 		timestring = timestring.substr(0, timestring.size() - 1);
 		os << timestring;
+		char* zpMessage = nullptr;
+		int zpLen = gzip((char*)os.str().c_str(), os.str().size(), zpMessage);
+		if (zpLen < 1) return;
 
 		vector<int> clientIDs = server.getClientIDs();
 		for (int i = 0; i < clientIDs.size(); i++)
-			server.wsSend(clientIDs[i], os.str());
-
+		server.wsSend(clientIDs[i], zpMessage, zpLen);
 		next = time(NULL) + 10;
+		delete[] zpMessage;
 	}
 }
-void radarMessageHandler(string message) {
-		vector<int> clientIDs = server.getClientIDs();
+void radarMessageHandler(char* message, int messageLen) {
+	char* zpMessage = nullptr;
+	int zpLen = gzip(message, messageLen, zpMessage);
+	if (zpLen < 1) return;
+	vector<int> clientIDs = server.getClientIDs();
 	for (int i = 0; i < clientIDs.size(); i++) {
-		server.wsSend(clientIDs[i], message);
+		server.wsSend(clientIDs[i], zpMessage, zpLen);
 	}
+	delete[] zpMessage;
 }
 int httpsServer() {
 	WSADATA wsaData;
@@ -6280,6 +6331,7 @@ static void run(amqp_connection_state_t conn)
 	using namespace std;
 	xml_document<> doc;
 	xml_node<> * root_node;
+	printf("run\r\n");
 
 	uint64_t start_time = now_microseconds();
 	int received = 0;
@@ -6351,10 +6403,12 @@ static void run(amqp_connection_state_t conn)
 		maxbuf[envelope.message.body.len] = 0;
 		socket_message_big[0] = 0;
 		doc.parse<0>(maxbuf);
+		
+
 		if (doc.first_node() == NULL) continue;
 
 
-
+		
 		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
 
 			 race = 0;
@@ -6517,8 +6571,8 @@ static void run(amqp_connection_state_t conn)
 								_line->variant = markets_id[_line->market_id][0]->variant;
 								_line->type = markets_id[_line->market_id][0]->type;
 								if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
-									if (_line->specifier[q] != NULL) delete[] _line->specifier[q];
-									if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q];
+									if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;
+									if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
 								}
 								if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
 								if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
@@ -7092,8 +7146,8 @@ static void run(amqp_connection_state_t conn)
 								_line->variant = markets_id[_line->market_id][0]->variant;
 								_line->type = markets_id[_line->market_id][0]->type;
 								if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
-									if (_line->specifier[q] != NULL) delete[] _line->specifier[q];
-									if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q];
+									if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;;
+									if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
 								}
 								if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
 								if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
@@ -7845,8 +7899,8 @@ static void run(amqp_connection_state_t conn)
 							_line->variant = markets_id[_line->market_id][0]->variant;
 							_line->type = markets_id[_line->market_id][0]->type;
 							if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
-								if (_line->specifier[q] != NULL) delete[] _line->specifier[q];
-								if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q];
+								if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;
+								if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
 							}
 							if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
 							if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
@@ -8383,11 +8437,13 @@ static void run(amqp_connection_state_t conn)
 			printf(doc.first_node()->name());std::printf("\r\n");
 		}
 
+		doc.clear();
+		//string String(socket_message_big);
 		
-		string String(socket_message_big);
-		radarMessageHandler(String);
+		radarMessageHandler(socket_message_big, strlen(socket_message_big));
 		
-
+		
+/*
 		
 		root_node = doc.first_node("odds_change");
 		if (root_node && root_node->first_node("sport_event_status") && root_node->first_node("sport_event_status")->first_attribute("status")) {
@@ -8398,11 +8454,11 @@ static void run(amqp_connection_state_t conn)
 			
 		}
 
-
+		*/
 		
 		//if (i < 100 && _event->sport_id == 21 && (envelope.message.body.len > 8000 || status == 1))
 
-
+	/*	
 		if (i < 100 && status == 1 && (_event->away_yellowcards>0 || _event->away_redcards>0 || _event->home_yellowcards>0 || _event->home_redcards>0)) {
 			i++;std::strcpy(name, "C://unifeed");
 			_itoa(i, buf, 10);
@@ -8417,6 +8473,8 @@ static void run(amqp_connection_state_t conn)
 			WriteFile(File, envelope.message.body.bytes, envelope.message.body.len, &l, NULL);
 			CloseHandle(File);
 		}
+
+		*/
 		//WriteFile(File, "<endmessage></endmessage>", strlen("<endmessage></endmessage>"), &l, NULL);
 
 		//if (i > 50) return;
@@ -8424,22 +8482,29 @@ static void run(amqp_connection_state_t conn)
 		//if(i<4)std::printf((char*)envelope.message.body.bytes);
 		//i++;
 
-		
+	//	if (_line != nullptr) {
+//			delete _line; _line = nullptr;
+//		}
+
+	
+
 
 		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
 			if (AMQP_RESPONSE_LIBRARY_EXCEPTION == ret.reply_type &&
 				AMQP_STATUS_UNEXPECTED_STATE == ret.library_error) {
 				if (AMQP_STATUS_OK != amqp_simple_wait_frame(conn, &frame)) {
 					
+					delete[] outcome_team;
 					delete[] outcome_name;
 					delete[] outcome_id;
 					delete[] outcome_active;
-					delete[] outcome_team;
 					delete[] outcome_probabilities;
 					delete[] outcome_odds;
 					delete[] name;
 					delete[] buf;
 					delete[] maxbuf;
+					delete[] socket_message_big;
+					delete[] socket_message_little;
 
 					
 					return;
@@ -8470,6 +8535,8 @@ static void run(amqp_connection_state_t conn)
 							delete[] name;
 							delete[] buf;
 							delete[] maxbuf;
+							delete[] socket_message_big;
+							delete[] socket_message_little;
 							
 							return;
 						}
@@ -8497,7 +8564,8 @@ static void run(amqp_connection_state_t conn)
 						delete[] name;
 						delete[] buf;
 						delete[] maxbuf;
-
+						delete[] socket_message_big;
+						delete[] socket_message_little;
 						return;
 
 					case AMQP_CONNECTION_CLOSE_METHOD:
@@ -8515,12 +8583,24 @@ static void run(amqp_connection_state_t conn)
 						delete[] name;
 						delete[] buf;
 						delete[] maxbuf;
-
-
+						delete[] socket_message_big;
+						delete[] socket_message_little;
 						return;
 
 					default:
 						fprintf(stderr, "An unexpected method was received %u\n", frame.payload.method.id);
+						delete[] outcome_team;
+						delete[] outcome_name;
+						delete[] outcome_id;
+						delete[] outcome_active;
+						delete[] outcome_probabilities;
+						delete[] outcome_odds;
+						delete[] name;
+						delete[] buf;
+						delete[] maxbuf;
+						delete[] socket_message_big;
+						delete[] socket_message_little;
+
 						return;
 					}
 				}
