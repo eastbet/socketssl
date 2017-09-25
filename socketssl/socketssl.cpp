@@ -615,7 +615,7 @@ void webSocket::wsSendClientClose(int clientID, unsigned short status) {
 	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "",0);
 
 	// set client ready state to closing
-	printf("clientId=%d set WS_READY_STATE_CLOSING(2)\r\n", clientID);
+	//printf("clientId=%d set WS_READY_STATE_CLOSING(2)\r\n", clientID);
 	wsClients[clientID]->ReadyState = WS_READY_STATE_CLOSING;
 
 
@@ -689,7 +689,7 @@ void webSocket::wsRemoveClient(int clientID) {
 	socketIDmap.erase(wsClients[clientID]->socket);
 	wsClients[clientID] = NULL;
 	delete client;
-	printf("remove clientID=%d\r\n", clientID);
+	//printf("remove clientID=%d\r\n", clientID);
 }
 bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
 	wsClient *client = wsClients[clientID];
@@ -1010,8 +1010,8 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 		//printf("Output (sha1): %d\n", strlen(digest));
 		Base64Encode(digest, 20, base64EncodeOutput, handshakelen);
         base64EncodeOutput[handshakelen] = 0;
-	    printf("Output (base64): %s\r\n", base64EncodeOutput);
-		printf("handshakelen: %d\r\n", handshakelen);
+	   // printf("Output (base64): %s\r\n", base64EncodeOutput);
+		//printf("handshakelen: %d\r\n", handshakelen);
 	}
 	
 
@@ -1291,7 +1291,7 @@ void webSocket::startServer(int port) {
 
 							//printf("wsClients[%d]->ReadyState=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, nbytes, SSL_get_error(ssl, nbytes));
 
-							printf("Read Cicle wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, SSL_get_error(ssl, nbytes));
+							//printf("Read Cicle wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, SSL_get_error(ssl, nbytes));
 							//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
 							if (nbytes == 0) {
 
@@ -1448,7 +1448,7 @@ void webSocket::startServer(int port) {
 
 							if (writeopcode == 0) continue;
 						
-							printf("wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
+							//printf("wsClients[%d]->ReadyState=%d LastMessageQueue=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ReadyState, wsClients[socketIDmap[i]]->LastMessageQueue, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
 
 
 							if (nbytes == 0) {
@@ -5306,7 +5306,7 @@ void loadMarketsFromFiles() {
 		markets_l = k;
 
 
-
+		CloseHandle(File);
 
 
 	} while (FindNextFile(Hd, &Fd));
@@ -6357,7 +6357,7 @@ static void run(amqp_connection_state_t conn)
 	using namespace std;
 	xml_document<> doc;
 	xml_node<> * root_node;
-	printf("run\r\n");
+	
 
 	uint64_t start_time = now_microseconds();
 	int received = 0;
@@ -6400,6 +6400,8 @@ static void run(amqp_connection_state_t conn)
 	Line* _line = new Line();
 	char* socket_message_big = new char[145000];
 	char* socket_message_little = new char[4096];
+	int outcomeNameError=0;
+	
 
 
 	for (;;) {
@@ -6429,6 +6431,7 @@ static void run(amqp_connection_state_t conn)
 		maxbuf[envelope.message.body.len] = 0;
 		socket_message_big[0] = 0;
 		doc.parse<0>(maxbuf);
+		
 		
 
 		if (doc.first_node() == NULL) continue;
@@ -6574,7 +6577,7 @@ static void run(amqp_connection_state_t conn)
 
 						if (odds != NULL) {
 							betstop_reason = 0;
-
+							
 							if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
 							_line->tournament_id = 0;
 							_line->event_id = 0;
@@ -6583,7 +6586,8 @@ static void run(amqp_connection_state_t conn)
 
 							for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 							{
-								if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
+								outcomeNameError = 0;
+ 								if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 								if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 								if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
 								if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
@@ -6699,14 +6703,22 @@ static void run(amqp_connection_state_t conn)
 										}
 									}
 								}
+							outcomeNameError1: 
+								
+								
+								
 								if (_line->variant > -1) {
 									z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
+
+								
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-									if (u == max_markets_in[_line->market_id]) {
-										std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+									if (outcomeNameError == 1||u == max_markets_in[_line->market_id]) {
+										std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 										for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 									}
 									_line->market = markets_id[_line->market_id][u];
+									if (outcomeNameError == 1)outcomeNameError = 2;
+									
 									if (_line->type == 3) z = 16;
 								}
 								else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
@@ -6820,10 +6832,13 @@ static void run(amqp_connection_state_t conn)
 
 											}
 											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-												if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d GoTo GetVarianMarket \r\n", _line->market_id, _line->outcome_id[i]);
 												_line->outcome_name[i] = new char[2];
 												std::strcpy(_line->outcome_name[i], " ");
+												if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text); 
+												if (outcomeNameError == 0) outcomeNameError = 1;
+												
+											
 											}
 
 											for (int j = 0; j < _line->specifier_number; j++) {
@@ -7013,9 +7028,13 @@ static void run(amqp_connection_state_t conn)
 											}
 											else {
 												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-												if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+												
 												_line->outcome_name[i] = new char[2];
 												std::strcpy(_line->outcome_name[i], " ");
+												if (outcomeNameError == 0) outcomeNameError = 1;
+												if (_line->market->variant > -1) 
+													printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+													
 											}
 
 											for (int j = 0; j < _line->specifier_number; j++) {
@@ -7053,6 +7072,20 @@ static void run(amqp_connection_state_t conn)
 
 
 									}
+
+
+									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
+										
+
+									
+
+
+
+
+
+
+
+
 
 
 
@@ -7157,7 +7190,8 @@ static void run(amqp_connection_state_t conn)
 							_line->betstop_reason = betstop_reason;
 
 							for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
-							{
+							{       
+								outcomeNameError = 0;
 								if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 								if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 								if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
@@ -7274,14 +7308,15 @@ static void run(amqp_connection_state_t conn)
 										}
 									}
 								}
-								if (_line->variant > -1) {
+								outcomeNameError2:	if (_line->variant > -1) {
 									z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-									if (u == max_markets_in[_line->market_id]) {
+									if (outcomeNameError==1 || u == max_markets_in[_line->market_id]) {
 										std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 										for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 									}
 									_line->market = markets_id[_line->market_id][u];
+									if (outcomeNameError == 1) outcomeNameError = 2;
 									if (_line->type == 3) z = 16;
 								}
 								else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
@@ -7398,9 +7433,13 @@ static void run(amqp_connection_state_t conn)
 
 											}
 											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]); if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]); 
 												_line->outcome_name[i] = new char[2];
 												std::strcpy(_line->outcome_name[i], " ");
+
+												if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+													if (outcomeNameError == 0) outcomeNameError = 1;
+
 											}
 
 											for (int j = 0; j < _line->specifier_number; j++) {
@@ -7585,9 +7624,14 @@ static void run(amqp_connection_state_t conn)
 
 											}
 											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]); if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]); 
 												_line->outcome_name[i] = new char[2];
 												std::strcpy(_line->outcome_name[i], " ");
+
+												if (_line->market->variant > -1) 
+													printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+												if (outcomeNameError == 0) outcomeNameError = 1;
+														
 											}
 
 											for (int j = 0; j < _line->specifier_number; j++) {
@@ -7622,6 +7666,11 @@ static void run(amqp_connection_state_t conn)
 
 
 									}
+
+									if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
+
+
+									
 
 
 
@@ -7911,6 +7960,7 @@ static void run(amqp_connection_state_t conn)
 						_line->simple_id = 0;
 						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 						{
+							outcomeNameError = 0;
 							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
@@ -8027,14 +8077,15 @@ static void run(amqp_connection_state_t conn)
 									}
 								}
 							}
-							if (_line->variant > -1) {
+							outcomeNameError3: if (_line->variant > -1) {
 								z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-								if (u == max_markets_in[_line->market_id]) {
+								if (outcomeNameError==1 || u == max_markets_in[_line->market_id]) {
 									std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 								}
 								_line->market = markets_id[_line->market_id][u];
+								if (outcomeNameError == 1) outcomeNameError = 2;
 								if (_line->type == 3) z = 16;
 							}
 							else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
@@ -8153,9 +8204,13 @@ static void run(amqp_connection_state_t conn)
 										}
 										else {
 											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+											
 											_line->outcome_name[i] = new char[2];
 											std::strcpy(_line->outcome_name[i], " ");
+											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+											if (outcomeNameError == 0) outcomeNameError = 1;
+											
+
 										}
 
 										for (int j = 0; j < _line->specifier_number; j++) {
@@ -8405,9 +8460,10 @@ static void run(amqp_connection_state_t conn)
 										}
 										else {
 											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
 											_line->outcome_name[i] = new char[2];
 											std::strcpy(_line->outcome_name[i], " ");
+											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+											if (outcomeNameError == 0) outcomeNameError = 1;
 										}
 
 										for (int j = 0; j < _line->specifier_number; j++) {
@@ -8444,6 +8500,22 @@ static void run(amqp_connection_state_t conn)
 
 
 								}
+
+
+
+								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
+								
+
+
+
+
+
+
+
+
+
+
+
 
 
 
