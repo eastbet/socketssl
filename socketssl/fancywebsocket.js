@@ -24,9 +24,11 @@ var FancyWebSocket = function(url)
 
 		// dispatch to the right handlers
 		this.conn.onmessage = function(evt){
-
+		    console.log(evt);
             //var data = pako.inflate(event.data);
-			dispatch('message', toUTF8A(pako.inflate(evt.data)));
+		    // dispatch('message', toUTF8A(pako.inflate(evt.data)));
+		    dispatch('message', evt.data);
+		    // console.log("message arrived", evt.data.length);
 		};
 
 		this.conn.onclose = function(){dispatch('close',null)}

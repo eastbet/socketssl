@@ -33,4 +33,15 @@
       <Filter>Файлы исходного кода</Filter>
     </ClCompile>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="FancyChat.html">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="fancywebsocket.js">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+    <None Include="GetData.html">
+      <Filter>Файлы ресурсов</Filter>
+    </None>
+  </ItemGroup>
 </Project>

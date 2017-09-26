@@ -1847,7 +1847,18 @@ public:
 	int sort;
 	char *name;
 	void operator = (const Category&);
+	size_t getSize();
 };
+
+// size of this object for packing in bytes
+size_t Category::getSize() { 
+	return   sizeof(int) +   // id
+		sizeof(int) +   // sport_id
+		sizeof(unsigned char) +  // sort, 1 byte integer, should cast into unsigned char
+		sizeof(int) +  // length of name
+		strlen(name);   // each char, 1 byte - TODO: What about UTF8 strings i.e. Player names
+}
+
 void Category:: operator = (const Category & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
@@ -2633,54 +2644,58 @@ webSocket server;
 
 
 
+char *data_buffer;
+size_t buffer_total_size = 0;
 
 
 int main(){
 using namespace std;
 
-
-/*
-int CompressData2(const BYTE abSrc, int nLenSrc, BYTE abDst, int nLenDst, int compress_type, int strategy, int memlevel)
-{
-	z_stream zInfo = { 0 };
-	zInfo.total_in = zInfo.avail_in = nLenSrc;
-	zInfo.total_out = zInfo.avail_out = nLenDst;
-	zInfo.next_in = (BYTE*)abSrc;
-	zInfo.next_out = abDst;
-
-	int nErr, nRet = -1;
-	nErr = deflateInit2(&zInfo, compress_type,
-		Z_DEFLATED, 15, memlevel, strategy);
-	//deflateInit2(&strm, Z_DEFAULT_COMPRESSION,
-	// Z_DEFLATED, 15, 8, Z_DEFAULT_STRATEGY);
-	//nErr = deflateInit(&zInfo, compress_type); // zlib function
-	if (nErr == Z_OK) {
-		nErr = deflate(&zInfo, Z_FINISH);              // zlib function
-		if (nErr == Z_STREAM_END) {
-			nRet = zInfo.total_out;
-		}
-	}
-	deflateEnd(&zInfo);    // zlib function
-	return(nRet);
-}
-using code is
-
-memlevel = 2 ->
-nLenPacked[j] = CompressData2(pbSrc, nLenOrig, pbDst, nLenDst, j - 1, Z_DEFAULT_STRATEGY, 2);
-
-memlevel = 5 ->
-nLenPacked[j] = CompressData2(pbSrc, nLenOrig, pbDst, nLenDst, j - 1, Z_DEFAULT_STRATEGY, 5);
-j - 1->compression level
-
-*/
-
-
 //if (TerminateThread(hThread, dwThreadID))CloseHandle(hThread);
 
 //hThread1 = CreateThread(NULL, 0, &SSLWebSocketThread, 0, THREAD_TERMINATE, &dwThreadID1);
-hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
+// hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
 int port = 1443;
+
+for (int i = 0; i < MAX_CATEGORIES; i++) categories_id[i] = NULL;
+loadCategoriesFromFiles();
+
+buffer_total_size = 0;
+for (int i = 0; i <categories_l; i++) {
+	cout << "Size: " << sizeof(categories[i]) << "  Name:" << categories[i].name
+		<< "(" << strlen(categories[i].name) << ")" << endl;
+	buffer_total_size += categories[i].getSize();
+}
+
+buffer_total_size += sizeof(int);   // we'll also include count of Category objects
+data_buffer = (char*) malloc(buffer_total_size + 10);
+size_t offset = 0;
+
+// let's fill the buffer
+memcpy(data_buffer + offset, &categories_l, sizeof(int));
+offset += sizeof(int);
+
+// fill each Category object
+unsigned char temp_sort;
+int name_len;
+for (int i = 0; i < categories_l; i++) {
+	Category c = categories[i];
+	memcpy(data_buffer + offset, &c.id, sizeof(int));
+	offset += sizeof(int);
+	memcpy(data_buffer + offset, &c.sport_id, sizeof(int));
+	offset += sizeof(int);
+	temp_sort = (unsigned char)c.sort;
+	memcpy(data_buffer + offset, &temp_sort, sizeof(unsigned char));
+	offset += sizeof(unsigned char);
+	name_len = strlen(c.name);
+	memcpy(data_buffer + offset, &name_len, sizeof(int));
+	offset += sizeof(int);
+	memcpy(data_buffer + offset, c.name, strlen(c.name));
+	offset += strlen(c.name);
+}
+data_buffer[offset] = 0;
+cout << offset << " " << buffer_total_size << endl;
 
 server.setOpenHandler(openHandler);
 server.setCloseHandler(closeHandler);
@@ -2743,15 +2758,16 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
 	if (fullData == false) {
-		loadMarketsFromFiles();
+		// loadMarketsFromFiles();
 		loadCategoriesFromFiles();
-		loadTournamentsFromFiles();
+		/* loadTournamentsFromFiles();
 		loadEventsFromFiles();
 		loadCompetitorsFromFiles();
-		loadPlayersFromFiles();
+		loadPlayersFromFiles(); */
 
 	}
 
+	return 0;
 
 	if (fullData == true) {
 		getMarkets();
@@ -2765,13 +2781,14 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	}
 
 	
-	startRecovery();
-	rabbitmqssl();
+	// startRecovery();
+	// rabbitmqssl();
 	//sdkSocket();
 	//httpsServer();
 	return 0;
 
 }
+
 DWORD WINAPI pushClientMessageThread(LPVOID lparam) {
 	char* param = (char*)lparam;
 	int clientID = (int)param[0];
@@ -2841,7 +2858,13 @@ int UncompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
 	inflateEnd(&zInfo);   // zlib function
 	return(nRet); // -1 or len of output
 }
+
 int gzip(char* message, int messageLen, char* &zpMessage) {
+	int zippedLen = messageLen;
+	zpMessage = new char[zippedLen];
+	memcpy(zpMessage, message, zippedLen);
+	return zippedLen;
+	/*
 	if (messageLen == 0 || message == nullptr) return -1;
 	int tempLen = GetMaxCompressedLen(messageLen + 1);
 	BYTE* zipped = new BYTE[tempLen];  // alloc dest buffer
@@ -2851,6 +2874,7 @@ int gzip(char* message, int messageLen, char* &zpMessage) {
 	memcpy(zpMessage, zipped, zippedLen);
 	delete[] zipped;
 	return zippedLen;
+	*/
 }
 
 void startRecovery() {
@@ -4982,7 +5006,7 @@ void saveEventToFile(Event* event) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-    std::strcpy(file_path, "C://Betradar//Events//");
+    std::strcpy(file_path, "D://Betradar//Events//");
 	_itoa(event->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5042,8 +5066,8 @@ void loadEventsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "C://Betradar//Events//");
-	std::strcpy(find_path, "C://Betradar//Events//*.*");
+	std::strcpy(folder_path, "D://Betradar//Events//");
+	std::strcpy(find_path, "D://Betradar//Events//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5145,7 +5169,7 @@ void saveMarketToFile(Market* market) {
 	int i = 0;
 	int j = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "C://Betradar//Markets//");
+	std::strcpy(file_path, "D://Betradar//Markets//");
 	_itoa(market->id, buf, 10);
 	strcat(file_path, buf);
 	if (market->variable_text != NULL) { strcat(file_path, "_"); strcpy(variable_text, market->variable_text); 
@@ -5209,8 +5233,8 @@ void loadMarketsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "C://Betradar//Markets//");
-	std::strcpy(find_path, "C://Betradar//Markets//*.*");
+	std::strcpy(folder_path, "D://Betradar//Markets//");
+	std::strcpy(find_path, "D://Betradar//Markets//*.*");
 	
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5321,7 +5345,7 @@ void saveTournamentToFile(Tournament* tournament) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "C://Betradar//Tournaments//");
+	std::strcpy(file_path, "D://Betradar//Tournaments//");
 	if (tournament->race == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
 	if (tournament->race == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
 	if (tournament->race == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
@@ -5369,17 +5393,17 @@ void loadTournamentsFromFiles() {
 		i = tournaments_l;
 
 		if (k == 0) {
-			std::strcpy(folder_path, "C://Betradar//Tournaments//Championships//");
-			std::strcpy(find_path, "C://Betradar//Tournaments//Championships//*.*");
+			std::strcpy(folder_path, "D://Betradar//Tournaments//Championships//");
+			std::strcpy(find_path, "D://Betradar//Tournaments//Championships//*.*");
 		}
 
 		if (k == 1) {
-			std::strcpy(folder_path, "C://Betradar//Tournaments//Race//");
-			std::strcpy(find_path, "C://Betradar//Tournaments//Race//*.*");
+			std::strcpy(folder_path, "D://Betradar//Tournaments//Race//");
+			std::strcpy(find_path, "D://Betradar//Tournaments//Race//*.*");
 		}
 		if (k == 2) {
-			std::strcpy(folder_path, "C://Betradar//Tournaments//Simple//");
-			std::strcpy(find_path, "C://Betradar//Tournaments//Simple//*.*");
+			std::strcpy(folder_path, "D://Betradar//Tournaments//Simple//");
+			std::strcpy(find_path, "D://Betradar//Tournaments//Simple//*.*");
 		}
 
 
@@ -5445,7 +5469,7 @@ void saveCategoryToFile(Category* category) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "C://Betradar//Categories//");
+	std::strcpy(file_path, "D://Betradar//Categories//");
    _itoa(category->id, buf, 10); 
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5475,8 +5499,8 @@ void loadCategoriesFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 		i = categories_l;
-			std::strcpy(folder_path, "C://Betradar//Categories//");
-			std::strcpy(find_path, "C://Betradar//Categories//*.*");
+			std::strcpy(folder_path, "D://Betradar//Categories//");
+			std::strcpy(find_path, "D://Betradar//Categories//*.*");
 		
 		Hd = FindFirstFile(find_path, &Fd);
 		if (INVALID_HANDLE_VALUE == Hd) {
@@ -5524,7 +5548,7 @@ void saveCompetitorToFile(Competitor* competitor) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "C://Betradar//Competitors//");
+	std::strcpy(file_path, "D://Betradar//Competitors//");
 	_itoa(competitor->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5557,8 +5581,8 @@ void loadCompetitorsFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 	i = competitors_l;
-	std::strcpy(folder_path, "C://Betradar//Competitors//");
-	std::strcpy(find_path, "C://Betradar//Competitors//*.*");
+	std::strcpy(folder_path, "D://Betradar//Competitors//");
+	std::strcpy(find_path, "D://Betradar//Competitors//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5614,7 +5638,7 @@ void savePlayerToFile(Player* player) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "C://Betradar//Players//");
+	std::strcpy(file_path, "D://Betradar//Players//");
 	_itoa(player->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5666,8 +5690,8 @@ void loadPlayersFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 	i = players_l;
-	std::strcpy(folder_path, "C://Betradar//Players//");
-	std::strcpy(find_path, "C://Betradar//Players//*.*");
+	std::strcpy(folder_path, "D://Betradar//Players//");
+	std::strcpy(find_path, "D://Betradar//Players//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5815,6 +5839,7 @@ void Base64Encode(const std::uint8_t* input, std::size_t inputLen, char*& output
 void openHandler(int clientID) {
 	ostringstream os;
 	os << "Stranger " << clientID << " has joined.";
+	cout << "Stranger " << clientID << " has joined." << endl;
     char* zpMessage = nullptr;
 	int zpLen=gzip((char*)os.str().c_str(), os.str().size(), zpMessage);
 	if (zpLen < 1) return;
@@ -5828,10 +5853,14 @@ void openHandler(int clientID) {
 	zpMessage = nullptr;
 	zpLen=gzip("Welcome!", 7, zpMessage);
 	if (zpLen < 1) return;
-	server.wsSend(clientID, zpMessage, zpLen);
+	server.wsSend(clientID, zpMessage, zpLen, false);
+	cout << buffer_total_size << endl;
+	cout << strlen(data_buffer) << endl;
+	server.wsSend(clientID, data_buffer, buffer_total_size - 1, true);  // true: send binary	    
 	delete[] zpMessage;
 	
 }
+
 void closeHandler(int clientID) {
 
 	ostringstream os;
@@ -5878,7 +5907,7 @@ void periodicHandler() {
 
 		vector<int> clientIDs = server.getClientIDs();
 		for (int i = 0; i < clientIDs.size(); i++)
-		server.wsSend(clientIDs[i], zpMessage, zpLen);
+		    server.wsSend(clientIDs[i], zpMessage, zpLen, false);
 		next = time(NULL) + 10;
 		delete[] zpMessage;
 	}
