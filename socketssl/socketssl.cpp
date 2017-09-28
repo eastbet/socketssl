@@ -38,6 +38,7 @@
 #include "rapidxml-1.13/rapidxml.hpp"
 #include <amqp_ssl_socket.h>
 #include <amqp_framing.h>
+#include <unordered_map>
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -2629,8 +2630,51 @@ webSocket server;
 
 
 
+// izzet: Reverse Lookup hash tables for Line objects
 
+// key is event_id. values are Line objects whose event_id is that key. so it is a vector. 
+unordered_map<int, vector<Line*>> event2lines;   
+// key: market_id + event_id + specifiers_value. we can have just one Line for that key so no need to have a vector as value   
+unordered_map<string, Line*> mrkt_ev_spec2line;  
 
+// whenever a new Line is created call this function to update reverse lookup tables
+void insert_line(Line &line) {	
+	bool debug_output = true;   
+	ostringstream key_oss;
+	string key;
+	
+	int event_id = line.event_id;    
+	if (event_id > 0) {
+		// hash table for case 2: event_id (if event_id> 0)
+		auto it2 = event2lines.find(event_id);   // event_id is the key
+		if (it2 == event2lines.end()) {   // key not found, we are seeing this event_id the first time.
+			event2lines[event_id] = vector<Line*>();  // so create an empty vector
+		}
+		event2lines[event_id].push_back(&line);   // insert new line to the vector	
+		if (debug_output) {
+			cout << "New line for event=" << event_id << endl;
+			cout << "\tTotal lines: " << event2lines[event_id].size() << endl;
+		}
+		// hash table for case 5:  market_id + event_id + specifiers_value (if event_id> 0)
+		// let's first build our key
+		key_oss.str("");  // reset our stream
+		key_oss << line.market_id << ";" << line.event_id;
+		if (line.specifier_number > 0) {
+			key_oss << ";";  // add this only if there are specifiers for the line
+			for (int i = 0; i < line.specifier_number; i++) {
+				if (i != 0) key_oss << "&";
+				key_oss << line.specifier_value[i];
+			}
+		}
+		key = key_oss.str();
+		if (debug_output) {
+			cout << "\t" << line.name << ": " << key << "   -- mrkt;evt[;spec] " <<endl;
+		}
+		mrkt_ev_spec2line[key] = &line;   // insert new line's pointer as value
+	}
+	
+	return;
+}
 
 int main(){
 using namespace std;
@@ -7072,57 +7116,17 @@ static void run(amqp_connection_state_t conn)
 												std::strcat(socket_message_big, "\t");
 												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 												std::strcat(socket_message_big, socket_message_little);
-
-
-
-											
 										}
-
-
 									}
 
 
 									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
-										
-
-									
-
-
-
-
-
-
-
-
-
-
-
-
-
 								}
-
-
-							
 								lines[lines_l] = _line[0];
+								insert_line(_line[0]);
 								lines_l++;
-
-
 }
 						}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 					}
 				if (race == 3) {
 					if(event_id>=MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
@@ -7681,34 +7685,13 @@ static void run(amqp_connection_state_t conn)
 									}
 
 									if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
-
-
-									
-
-
-
-
-
 								}
 
 								lines[lines_l] = _line[0];
+								insert_line(_line[0]);
 								lines_l++;
 							}
 						}
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
 				}
 				if (race < 2) {
 					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
@@ -7720,10 +7703,7 @@ static void run(amqp_connection_state_t conn)
 						events_l++;
 
 					}
-
 					_event = events_id[event_id];
-
-
 					if (print == true) {
 						std::printf("\r\n***************************************************\r\n");
 						std::printf("%d\r\n", _event->id);
@@ -8518,35 +8498,14 @@ static void run(amqp_connection_state_t conn)
 
 
 								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
-								
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 							}
-
 							lines[lines_l] = _line[0];
+							insert_line(_line[0]);
 							lines_l++;
 						}
 					}
 				}
-
 }
-		
-		
-		
 		else {
 			if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
 			printf(doc.first_node()->name());std::printf("\r\n");
