@@ -2632,47 +2632,94 @@ webSocket server;
 
 // izzet: Reverse Lookup hash tables for Line objects
 
-// key is event_id. values are Line objects whose event_id is that key. so it is a vector. 
-unordered_map<int, vector<Line*>> event2lines;   
-// key: market_id + event_id + specifiers_value. we can have just one Line for that key so no need to have a vector as value   
-unordered_map<string, Line*> mrkt_ev_spec2line;  
+// we supply an id (market,event,tournament or simple) and return all the lines. so key is an int (id) and values is a vector of Line object ptrs.
+typedef unordered_map<int, vector<Line*>> reverse_lookup_lines;
+// we supply market_id + one of (event,tournament or simple) + specifiers and find out the unique Line.
+typedef unordered_map<string, Line*> reverse_lookup_ids_spec;
+
+reverse_lookup_lines market2lines;   // lookup based on market_id
+reverse_lookup_lines event2lines;    // lookup based on event_id
+reverse_lookup_lines tourn2lines;    // lookup based on tournament_id
+reverse_lookup_lines simple2lines;   // lookup based on simple_id
+ 
+reverse_lookup_ids_spec mrkt_event_spec2line;    // market_id + event_id + specifiers_value
+reverse_lookup_ids_spec mrkt_tourn_spec2line;    // market_id + tournament_id + specifiers_value
+reverse_lookup_ids_spec mrkt_simple_spec2line;   // market_id + simple_id + specifiers_value
 
 // whenever a new Line is created call this function to update reverse lookup tables
 void insert_line(Line &line) {	
 	bool debug_output = true;   
 	ostringstream key_oss;
 	string key;
-	
-	int event_id = line.event_id;    
-	if (event_id > 0) {
-		// hash table for case 2: event_id (if event_id> 0)
-		auto it2 = event2lines.find(event_id);   // event_id is the key
-		if (it2 == event2lines.end()) {   // key not found, we are seeing this event_id the first time.
-			event2lines[event_id] = vector<Line*>();  // so create an empty vector
-		}
-		event2lines[event_id].push_back(&line);   // insert new line to the vector	
-		if (debug_output) {
-			cout << "New line for event=" << event_id << endl;
-			cout << "\tTotal lines: " << event2lines[event_id].size() << endl;
-		}
-		// hash table for case 5:  market_id + event_id + specifiers_value (if event_id> 0)
-		// let's first build our key
-		key_oss.str("");  // reset our stream
-		key_oss << line.market_id << ";" << line.event_id;
-		if (line.specifier_number > 0) {
-			key_oss << ";";  // add this only if there are specifiers for the line
-			for (int i = 0; i < line.specifier_number; i++) {
-				if (i != 0) key_oss << "&";
-				key_oss << line.specifier_value[i];
-			}
-		}
-		key = key_oss.str();
-		if (debug_output) {
-			cout << "\t" << line.name << ": " << key << "   -- mrkt;evt[;spec] " <<endl;
-		}
-		mrkt_ev_spec2line[key] = &line;   // insert new line's pointer as value
+	int cat_id;   // id based on Line's category (event, tournament or simple)
+	string cat_name;
+	reverse_lookup_lines* cat2lines;  // hash table for one of cases 2,3,4
+	reverse_lookup_ids_spec* mrkt_cat_spec2line;  // hash table for one of cases 5,6,7
+
+	// hash table for case1: market_id. for all Line categories we update market2lines
+	int market_id = line.market_id;    
+	auto it = market2lines.find(market_id);   // market_id is the key
+	if (it == market2lines.end()) {   // key not found, we are seeing this market_id the first time.
+		market2lines[market_id] = vector<Line*>();  // so create an empty vector
 	}
-	
+	market2lines[market_id].push_back(&line);   // insert new line to the vector
+
+	// now let's determine the category and the related lookup tables that will be updated
+	if (line.event_id > 0) {
+		cat_id = line.event_id;
+		cat_name = "EVENT";
+		cat2lines = &event2lines;
+		mrkt_cat_spec2line = &mrkt_event_spec2line;
+		if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
+	}
+	else if (line.tournament_id > 0) {
+		cat_id = line.tournament_id;
+		cat_name = "TOURNAMENT";
+		cat2lines = &tourn2lines;
+		mrkt_cat_spec2line = &mrkt_tourn_spec2line;
+	}
+	else if (line.simple_id > 0) {
+		cat_id = line.simple_id;
+		cat_name = "SIMPLE";
+		cat2lines = &simple2lines;
+		mrkt_cat_spec2line = &mrkt_simple_spec2line;
+	}
+	else {
+		cout << "Something wrong with this line: " << line.name << endl;
+		return;
+	}
+
+	// update hash table for cases 2,3,4:  event, tournament or simple
+	reverse_lookup_lines::const_iterator cat_it = cat2lines->find(cat_id);   // cat_id is the key
+	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
+		(*cat2lines)[cat_id] = vector<Line*>();  // so create an empty vector
+	}
+	(*cat2lines)[cat_id].push_back(&line);   // insert new line to the vector	
+	if (debug_output) {
+		cout << "New line for " << cat_name << "=" << cat_id << endl;
+		cout << "\tTotal lines: " << (*cat2lines)[cat_id].size() << endl;
+	}
+
+	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
+	// let's first build our key
+	key_oss.str("");  // reset our stream
+	key_oss << line.market_id << ";" << cat_id;
+	if (line.specifier_number > 0) {
+		key_oss << ";";  // add this only if there are specifiers for the line
+		for (int i = 0; i < line.specifier_number; i++) {
+			if (i != 0) key_oss << "&";
+			key_oss << line.specifier_value[i];
+		}
+	}
+	key = key_oss.str();
+	(*mrkt_cat_spec2line)[key] = &line;   // insert new line's pointer as value
+	if (debug_output) {
+		cout << "\t" << "Key for " << line.name << ": " << key << endl;
+	}			
+	if (line.tournament_id > 0) {  // let's pause for checking
+		cout << "Finally a tournament related line. Hit enter to continue ...";
+		getchar();
+	}
 	return;
 }
 
