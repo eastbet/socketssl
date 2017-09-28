@@ -1616,7 +1616,7 @@ void webSocket::stopServer() {
 #endif
 
 
-char* recvbuf;
+//char* recvbuf;
 
 
 
@@ -2609,13 +2609,10 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
-/* called when a client connects */
+long timestamp();
 void openHandler(int);
-/* called when a client disconnects */
 void closeHandler(int);
-/* called when a client sends a message to the server */
 void messageHandler(int,string );
-/* called once per select() loop */
 void radarMessageHandler(char*,int);
 void periodicHandler();
 void die(const char *, ...);
@@ -2637,6 +2634,8 @@ webSocket server;
 
 int main(){
 using namespace std;
+timestamp();
+//printf("time=%d\r\n", timestamp());
 
 
 /*
@@ -2722,8 +2721,8 @@ DWORD WINAPI SSLWebSocketThread(LPVOID lparam) {
 DWORD WINAPI BetradarThread(LPVOID lparam) {
 
 	bool fullData = false;
-	int recvbuflen = DEFAULT_BUFLEN;
-	recvbuf = new char[DEFAULT_BUFLEN];
+	//int recvbuflen = DEFAULT_BUFLEN;
+	//recvbuf = new char[DEFAULT_BUFLEN];
 	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = NULL;
 	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = NULL;
 	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
@@ -5810,8 +5809,21 @@ void Base64Encode(const std::uint8_t* input, std::size_t inputLen, char*& output
 
 
 
+long timestamp() {
+	time_t start;
+	SYSTEMTIME st;
+	struct tm tm;
+	memset(&st, 0, sizeof(st));
+	memset(&tm, 0, sizeof(tm));
+	GetSystemTime(&st);
+
+	tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
+	tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
+	start = mktime(&tm);
+	return start * 1000 + st.wMilliseconds;
 
 
+}
 void openHandler(int clientID) {
 	ostringstream os;
 	os << "Stranger " << clientID << " has joined.";
@@ -6577,7 +6589,6 @@ static void run(amqp_connection_state_t conn)
 
 						if (odds != NULL) {
 							betstop_reason = 0;
-							
 							if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
 							_line->tournament_id = 0;
 							_line->event_id = 0;
@@ -7065,9 +7076,6 @@ static void run(amqp_connection_state_t conn)
 
 
 											
-
-
-
 										}
 
 
@@ -7094,7 +7102,12 @@ static void run(amqp_connection_state_t conn)
 								}
 
 
-							}
+							
+								lines[lines_l] = _line[0];
+								lines_l++;
+
+
+}
 						}
 
 
@@ -7678,7 +7691,8 @@ static void run(amqp_connection_state_t conn)
 
 								}
 
-
+								lines[lines_l] = _line[0];
+								lines_l++;
 							}
 						}
 				
@@ -8523,7 +8537,8 @@ static void run(amqp_connection_state_t conn)
 
 							}
 
-
+							lines[lines_l] = _line[0];
+							lines_l++;
 						}
 					}
 				}
@@ -8538,6 +8553,8 @@ static void run(amqp_connection_state_t conn)
 		}
 
 		doc.clear();
+
+		//printf("lines_l=%d\r\n",lines_l);
 		//string String(socket_message_big);
 		
 		radarMessageHandler(socket_message_big, strlen(socket_message_big));
