@@ -2725,8 +2725,8 @@ void insert_line(Line &line) {
 
 int main(){
 using namespace std;
-timestamp();
-//printf("time=%d\r\n", timestamp());
+//timestamp();
+printf("time=%d\r\n", timestamp());
 
 
 /*
