@@ -39,6 +39,7 @@
 #include <amqp_ssl_socket.h>
 #include <amqp_framing.h>
 #include <unordered_map>
+#include <unordered_set>
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -2633,7 +2634,7 @@ webSocket server;
 // izzet: Reverse Lookup hash tables for Line objects
 
 // we supply an id (market,event,tournament or simple) and return all the lines. so key is an int (id) and values is a vector of Line object ptrs.
-typedef unordered_map<int, vector<Line*>> reverse_lookup_lines;
+typedef unordered_map<int, unordered_set<Line*>> reverse_lookup_lines;
 // we supply market_id + one of (event,tournament or simple) + specifiers and find out the unique Line.
 typedef unordered_map<string, Line*> reverse_lookup_ids_spec;
 
@@ -2660,9 +2661,9 @@ void insert_line(Line &line) {
 	int market_id = line.market_id;    
 	auto it = market2lines.find(market_id);   // market_id is the key
 	if (it == market2lines.end()) {   // key not found, we are seeing this market_id the first time.
-		market2lines[market_id] = vector<Line*>();  // so create an empty vector
+		market2lines[market_id] = unordered_set<Line*>();  // so create an empty vector
 	}
-	market2lines[market_id].push_back(&line);   // insert new line to the vector
+	market2lines[market_id].insert(&line);   // insert new line to the vector
 
 	// now let's determine the category and the related lookup tables that will be updated
 	if (line.event_id > 0) {
@@ -2692,9 +2693,9 @@ void insert_line(Line &line) {
 	// update hash table for cases 2,3,4:  event, tournament or simple
 	reverse_lookup_lines::const_iterator cat_it = cat2lines->find(cat_id);   // cat_id is the key
 	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
-		(*cat2lines)[cat_id] = vector<Line*>();  // so create an empty vector
+		(*cat2lines)[cat_id] = unordered_set<Line*>();  // so create an empty vector
 	}
-	(*cat2lines)[cat_id].push_back(&line);   // insert new line to the vector	
+	(*cat2lines)[cat_id].insert(&line);   // insert new line to the vector	
 	if (debug_output) {
 		cout << "New line for " << cat_name << "=" << cat_id << endl;
 		cout << "\tTotal lines: " << (*cat2lines)[cat_id].size() << endl;
