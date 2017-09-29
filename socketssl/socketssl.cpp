@@ -5674,7 +5674,7 @@ void loadCompetitorsFromFiles() {
 			competitors[i].name = new char[j];
 			ReadFile(File, competitors[i].name, j, &l, NULL);
 		}
-
+		//test
 
 		if (competitors[i].country_name != NULL) { delete[] competitors[i].country_name; competitors[i].country_name = NULL; }
 		ReadFile(File, &j, sizeof(int), &l, NULL);
