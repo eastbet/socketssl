@@ -38,6 +38,7 @@
 #include "rapidxml-1.13/rapidxml.hpp"
 #include <amqp_ssl_socket.h>
 #include <amqp_framing.h>
+#include <unordered_map>
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -1616,7 +1617,7 @@ void webSocket::stopServer() {
 #endif
 
 
-char* recvbuf;
+//char* recvbuf;
 
 
 
@@ -2609,13 +2610,10 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
-/* called when a client connects */
+long timestamp();
 void openHandler(int);
-/* called when a client disconnects */
 void closeHandler(int);
-/* called when a client sends a message to the server */
 void messageHandler(int,string );
-/* called once per select() loop */
 void radarMessageHandler(char*,int);
 void periodicHandler();
 void die(const char *, ...);
@@ -2632,11 +2630,103 @@ webSocket server;
 
 
 
+// izzet: Reverse Lookup hash tables for Line objects
 
+// we supply an id (market,event,tournament or simple) and return all the lines. so key is an int (id) and values is a vector of Line object ptrs.
+typedef unordered_map<int, vector<Line*>> reverse_lookup_lines;
+// we supply market_id + one of (event,tournament or simple) + specifiers and find out the unique Line.
+typedef unordered_map<string, Line*> reverse_lookup_ids_spec;
 
+reverse_lookup_lines market2lines;   // lookup based on market_id
+reverse_lookup_lines event2lines;    // lookup based on event_id
+reverse_lookup_lines tourn2lines;    // lookup based on tournament_id
+reverse_lookup_lines simple2lines;   // lookup based on simple_id
+ 
+reverse_lookup_ids_spec mrkt_event_spec2line;    // market_id + event_id + specifiers_value
+reverse_lookup_ids_spec mrkt_tourn_spec2line;    // market_id + tournament_id + specifiers_value
+reverse_lookup_ids_spec mrkt_simple_spec2line;   // market_id + simple_id + specifiers_value
+
+// whenever a new Line is created call this function to update reverse lookup tables
+void insert_line(Line &line) {	
+	bool debug_output = true;   
+	ostringstream key_oss;
+	string key;
+	int cat_id;   // id based on Line's category (event, tournament or simple)
+	string cat_name;
+	reverse_lookup_lines* cat2lines;  // hash table for one of cases 2,3,4
+	reverse_lookup_ids_spec* mrkt_cat_spec2line;  // hash table for one of cases 5,6,7
+
+	// hash table for case1: market_id. for all Line categories we update market2lines
+	int market_id = line.market_id;    
+	auto it = market2lines.find(market_id);   // market_id is the key
+	if (it == market2lines.end()) {   // key not found, we are seeing this market_id the first time.
+		market2lines[market_id] = vector<Line*>();  // so create an empty vector
+	}
+	market2lines[market_id].push_back(&line);   // insert new line to the vector
+
+	// now let's determine the category and the related lookup tables that will be updated
+	if (line.event_id > 0) {
+		cat_id = line.event_id;
+		cat_name = "EVENT";
+		cat2lines = &event2lines;
+		mrkt_cat_spec2line = &mrkt_event_spec2line;
+		if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
+	}
+	else if (line.tournament_id > 0) {
+		cat_id = line.tournament_id;
+		cat_name = "TOURNAMENT";
+		cat2lines = &tourn2lines;
+		mrkt_cat_spec2line = &mrkt_tourn_spec2line;
+	}
+	else if (line.simple_id > 0) {
+		cat_id = line.simple_id;
+		cat_name = "SIMPLE";
+		cat2lines = &simple2lines;
+		mrkt_cat_spec2line = &mrkt_simple_spec2line;
+	}
+	else {
+		cout << "Something wrong with this line: " << line.name << endl;
+		return;
+	}
+
+	// update hash table for cases 2,3,4:  event, tournament or simple
+	reverse_lookup_lines::const_iterator cat_it = cat2lines->find(cat_id);   // cat_id is the key
+	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
+		(*cat2lines)[cat_id] = vector<Line*>();  // so create an empty vector
+	}
+	(*cat2lines)[cat_id].push_back(&line);   // insert new line to the vector	
+	if (debug_output) {
+		cout << "New line for " << cat_name << "=" << cat_id << endl;
+		cout << "\tTotal lines: " << (*cat2lines)[cat_id].size() << endl;
+	}
+
+	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
+	// let's first build our key
+	key_oss.str("");  // reset our stream
+	key_oss << line.market_id << ";" << cat_id;
+	if (line.specifier_number > 0) {
+		key_oss << ";";  // add this only if there are specifiers for the line
+		for (int i = 0; i < line.specifier_number; i++) {
+			if (i != 0) key_oss << "&";
+			key_oss << line.specifier_value[i];
+		}
+	}
+	key = key_oss.str();
+	(*mrkt_cat_spec2line)[key] = &line;   // insert new line's pointer as value
+	if (debug_output) {
+		cout << "\t" << "Key for " << line.name << ": " << key << endl;
+	}			
+	if (line.tournament_id > 0) {  // let's pause for checking
+		cout << "Finally a tournament related line. Hit enter to continue ...";
+		getchar();
+	}
+	return;
+}
 
 int main(){
 using namespace std;
+timestamp();
+//printf("time=%d\r\n", timestamp());
 
 
 /*
@@ -2722,8 +2812,8 @@ DWORD WINAPI SSLWebSocketThread(LPVOID lparam) {
 DWORD WINAPI BetradarThread(LPVOID lparam) {
 
 	bool fullData = false;
-	int recvbuflen = DEFAULT_BUFLEN;
-	recvbuf = new char[DEFAULT_BUFLEN];
+	//int recvbuflen = DEFAULT_BUFLEN;
+	//recvbuf = new char[DEFAULT_BUFLEN];
 	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = NULL;
 	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = NULL;
 	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
@@ -5810,8 +5900,21 @@ void Base64Encode(const std::uint8_t* input, std::size_t inputLen, char*& output
 
 
 
+long timestamp() {
+	time_t start;
+	SYSTEMTIME st;
+	struct tm tm;
+	memset(&st, 0, sizeof(st));
+	memset(&tm, 0, sizeof(tm));
+	GetSystemTime(&st);
+
+	tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
+	tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
+	start = mktime(&tm);
+	return start * 1000 + st.wMilliseconds;
 
 
+}
 void openHandler(int clientID) {
 	ostringstream os;
 	os << "Stranger " << clientID << " has joined.";
@@ -6577,7 +6680,6 @@ static void run(amqp_connection_state_t conn)
 
 						if (odds != NULL) {
 							betstop_reason = 0;
-							
 							if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
 							_line->tournament_id = 0;
 							_line->event_id = 0;
@@ -7061,55 +7163,17 @@ static void run(amqp_connection_state_t conn)
 												std::strcat(socket_message_big, "\t");
 												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 												std::strcat(socket_message_big, socket_message_little);
-
-
-
-											
-
-
-
 										}
-
-
 									}
 
 
 									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
-										
-
-									
-
-
-
-
-
-
-
-
-
-
-
-
-
 								}
-
-
-							}
+								lines[lines_l] = _line[0];
+								insert_line(_line[0]);
+								lines_l++;
+}
 						}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 					}
 				if (race == 3) {
 					if(event_id>=MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
@@ -7668,33 +7732,13 @@ static void run(amqp_connection_state_t conn)
 									}
 
 									if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
-
-
-									
-
-
-
-
-
 								}
 
-
+								lines[lines_l] = _line[0];
+								insert_line(_line[0]);
+								lines_l++;
 							}
 						}
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
-				
 				}
 				if (race < 2) {
 					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
@@ -7706,10 +7750,7 @@ static void run(amqp_connection_state_t conn)
 						events_l++;
 
 					}
-
 					_event = events_id[event_id];
-
-
 					if (print == true) {
 						std::printf("\r\n***************************************************\r\n");
 						std::printf("%d\r\n", _event->id);
@@ -8504,40 +8545,22 @@ static void run(amqp_connection_state_t conn)
 
 
 								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
-								
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 							}
-
-
+							lines[lines_l] = _line[0];
+							insert_line(_line[0]);
+							lines_l++;
 						}
 					}
 				}
-
 }
-		
-		
-		
 		else {
 			if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
 			printf(doc.first_node()->name());std::printf("\r\n");
 		}
 
 		doc.clear();
+
+		//printf("lines_l=%d\r\n",lines_l);
 		//string String(socket_message_big);
 		
 		radarMessageHandler(socket_message_big, strlen(socket_message_big));
