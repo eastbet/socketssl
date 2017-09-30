@@ -2663,8 +2663,8 @@ loadCategoriesFromFiles();
 
 buffer_total_size = 0;
 for (int i = 0; i <categories_l; i++) {
-	cout << "Size: " << sizeof(categories[i]) << "  Name:" << categories[i].name
-		<< "(" << strlen(categories[i].name) << ")" << endl;
+	// cout << "Size: " << sizeof(categories[i]) << "  Name:" << categories[i].name
+	//	<< "(" << strlen(categories[i].name) << ")" << endl;
 	buffer_total_size += categories[i].getSize();
 }
 
@@ -2673,7 +2673,8 @@ data_buffer = (char*) malloc(buffer_total_size + 10);
 size_t offset = 0;
 
 // let's fill the buffer
-memcpy(data_buffer + offset, &categories_l, sizeof(int));
+int category_size = categories_l - 1;
+memcpy(data_buffer + offset, &category_size, sizeof(int));    // total number of Category objects.
 offset += sizeof(int);
 
 // fill each Category object
@@ -2693,6 +2694,7 @@ for (int i = 0; i < categories_l; i++) {
 	offset += sizeof(int);
 	memcpy(data_buffer + offset, c.name, strlen(c.name));
 	offset += strlen(c.name);
+	cout << c.name << ": " << c.id << "-" << c.sport_id << "-" << c.sort << endl;
 }
 data_buffer[offset] = 0;
 cout << offset << " " << buffer_total_size << endl;
@@ -5006,7 +5008,7 @@ void saveEventToFile(Event* event) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-    std::strcpy(file_path, "D://Betradar//Events//");
+    std::strcpy(file_path, "C://Betradar//Events//");
 	_itoa(event->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5066,8 +5068,8 @@ void loadEventsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "D://Betradar//Events//");
-	std::strcpy(find_path, "D://Betradar//Events//*.*");
+	std::strcpy(folder_path, "C://Betradar//Events//");
+	std::strcpy(find_path, "C://Betradar//Events//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5169,7 +5171,7 @@ void saveMarketToFile(Market* market) {
 	int i = 0;
 	int j = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Markets//");
+	std::strcpy(file_path, "C://Betradar//Markets//");
 	_itoa(market->id, buf, 10);
 	strcat(file_path, buf);
 	if (market->variable_text != NULL) { strcat(file_path, "_"); strcpy(variable_text, market->variable_text); 
@@ -5233,8 +5235,8 @@ void loadMarketsFromFiles() {
 	char file_path[MAX_PATH];
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
-	std::strcpy(folder_path, "D://Betradar//Markets//");
-	std::strcpy(find_path, "D://Betradar//Markets//*.*");
+	std::strcpy(folder_path, "C://Betradar//Markets//");
+	std::strcpy(find_path, "C://Betradar//Markets//*.*");
 	
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5345,7 +5347,7 @@ void saveTournamentToFile(Tournament* tournament) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Tournaments//");
+	std::strcpy(file_path, "C://Betradar//Tournaments//");
 	if (tournament->race == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
 	if (tournament->race == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
 	if (tournament->race == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
@@ -5393,17 +5395,17 @@ void loadTournamentsFromFiles() {
 		i = tournaments_l;
 
 		if (k == 0) {
-			std::strcpy(folder_path, "D://Betradar//Tournaments//Championships//");
-			std::strcpy(find_path, "D://Betradar//Tournaments//Championships//*.*");
+			std::strcpy(folder_path, "C://Betradar//Tournaments//Championships//");
+			std::strcpy(find_path, "C://Betradar//Tournaments//Championships//*.*");
 		}
 
 		if (k == 1) {
-			std::strcpy(folder_path, "D://Betradar//Tournaments//Race//");
-			std::strcpy(find_path, "D://Betradar//Tournaments//Race//*.*");
+			std::strcpy(folder_path, "C://Betradar//Tournaments//Race//");
+			std::strcpy(find_path, "C://Betradar//Tournaments//Race//*.*");
 		}
 		if (k == 2) {
-			std::strcpy(folder_path, "D://Betradar//Tournaments//Simple//");
-			std::strcpy(find_path, "D://Betradar//Tournaments//Simple//*.*");
+			std::strcpy(folder_path, "C://Betradar//Tournaments//Simple//");
+			std::strcpy(find_path, "C://Betradar//Tournaments//Simple//*.*");
 		}
 
 
@@ -5469,7 +5471,7 @@ void saveCategoryToFile(Category* category) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Categories//");
+	std::strcpy(file_path, "C://Betradar//Categories//");
    _itoa(category->id, buf, 10); 
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5499,8 +5501,8 @@ void loadCategoriesFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 		i = categories_l;
-			std::strcpy(folder_path, "D://Betradar//Categories//");
-			std::strcpy(find_path, "D://Betradar//Categories//*.*");
+			std::strcpy(folder_path, "C://Betradar//Categories//");
+			std::strcpy(find_path, "C://Betradar//Categories//*.*");
 		
 		Hd = FindFirstFile(find_path, &Fd);
 		if (INVALID_HANDLE_VALUE == Hd) {
@@ -5548,7 +5550,7 @@ void saveCompetitorToFile(Competitor* competitor) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Competitors//");
+	std::strcpy(file_path, "C://Betradar//Competitors//");
 	_itoa(competitor->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5581,8 +5583,8 @@ void loadCompetitorsFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 	i = competitors_l;
-	std::strcpy(folder_path, "D://Betradar//Competitors//");
-	std::strcpy(find_path, "D://Betradar//Competitors//*.*");
+	std::strcpy(folder_path, "C://Betradar//Competitors//");
+	std::strcpy(find_path, "C://Betradar//Competitors//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {
@@ -5638,7 +5640,7 @@ void savePlayerToFile(Player* player) {
 	char buf[20];
 	int i = 0;
 	char file_path[MAX_PATH];
-	std::strcpy(file_path, "D://Betradar//Players//");
+	std::strcpy(file_path, "C://Betradar//Players//");
 	_itoa(player->id, buf, 10);
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
@@ -5690,8 +5692,8 @@ void loadPlayersFromFiles() {
 	char folder_path[MAX_PATH];
 	char find_path[MAX_PATH];
 	i = players_l;
-	std::strcpy(folder_path, "D://Betradar//Players//");
-	std::strcpy(find_path, "D://Betradar//Players//*.*");
+	std::strcpy(folder_path, "C://Betradar//Players//");
+	std::strcpy(find_path, "C://Betradar//Players//*.*");
 
 	Hd = FindFirstFile(find_path, &Fd);
 	if (INVALID_HANDLE_VALUE == Hd) {

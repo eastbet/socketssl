@@ -111,15 +111,23 @@
 
 			//Log any messages sent from server
 			Server.bind('message', function( payload ) {
-			    console.log("payload type", typeof payload);
+			    // console.log("payload type", typeof payload);
                 if (typeof payload == "string") {
                    log(payload);
                 }
                 else {   // binary
                     var stream = new DataView(payload);
                     console.log("total bytes: ", stream.byteLength);
+					var offset = 0;
                     var objectsTotal = stream.getInt32(0, true);
+					offset += 4;
                     console.log("Total objects: ", objectsTotal);
+					for (var i=0; i<objectsTotal; i++) {
+					   var c = new Category;
+					   offset = c.fillFromStream(stream, offset);
+					   console.log(c);
+					   document.getElementById("debug").innerText += c.toString() + "\r\n";
+					}
                 }
 			    
 
@@ -129,12 +137,36 @@
 			Server.connect();
         }
 
+class Category {
+    constructor() {
+    }
+    toString() {
+	    return `${this.name}: ${this.id}-${this.sports_id}-${this.sort}`;
+        // return JSON.stringify(this);
+    }
+	fillFromStream(stream, offset) {
+	  this.id = stream.getInt32(offset, true); offset += 4;
+	  this.sports_id = stream.getInt32(offset, true); offset += 4;
+	  this.sort = stream.getUint8(offset, true); offset += 1;
+	  var nameLength = stream.getInt32(offset, true); offset += 4;
+	  this.name = "";
+	  var charCode;
+	  for (var i=0; i<nameLength; i++) {
+	     charCode = stream.getUint8(offset, true);  // assuming ascii
+		 offset += 1;
+	     this.name += String.fromCharCode(charCode);
+	  }
+	  return offset;
+	}
+}
+
     </script>
 </head>
 
 
 <body>
     <div id='body'>
+	    <pre id="debug"></pre>
         Server ip: <input type='text' id='ip' name='ip' value="bettestsocket.passion.bet">
         Server port: <input type='text' id='port' name='port' value="443">
         <button type="button" id='cntBtn'  onclick="connect();">Connect</button>
