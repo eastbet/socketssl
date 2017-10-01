@@ -2648,7 +2648,7 @@ reverse_lookup_ids_spec mrkt_simple_spec2line;   // market_id + simple_id + spec
 
 // whenever a new Line is created call this function to update reverse lookup tables
 void insert_line(Line &line) {	
-	bool debug_output = true;   
+	bool debug_output = false;//true;   
 	ostringstream key_oss;
 	string key;
 	int cat_id;   // id based on Line's category (event, tournament or simple)
@@ -2716,7 +2716,7 @@ void insert_line(Line &line) {
 	if (debug_output) {
 		cout << "\t" << "Key for " << line.name << ": " << key << endl;
 	}			
-	if (line.tournament_id > 0) {  // let's pause for checking
+	if (line.tournament_id > 0 && debug_output) {  // let's pause for checking
 		cout << "Finally a tournament related line. Hit enter to continue ...";
 		getchar();
 	}
