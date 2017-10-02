@@ -2730,12 +2730,87 @@ void insert_line(Line &line, int line_index) {
 	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
 	// let's first build our key
 
-	compound_key = line.getCatKey();
+	compound_key = line.getCompoundKey();
 
 	compound2line_index[compound_key] = line_index;   // insert new line's pointer as value
 	if (debug_output) {
 		cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
 	}			
+	if (line.tournament_id > 0) {  // let's pause for checking
+		cout << "Finally a tournament related line. Hit enter to continue ...";
+		getchar();
+	}
+	return;
+}
+
+int find_line_index(Line &line) {
+	string compound_key = line.getCompoundKey();
+	return compound2line_index[compound_key];
+}
+
+void delete_line(Line &line) {
+	bool debug_output = true;
+	int cat_id;
+	string compound_key;
+	string cat_name;
+
+	int line_index = find_line_index(line);
+
+	// hash table for case1: market_id. for all Line categories we update market2lines
+	int market_id = line.market_id;
+	auto it = market2lines.find(market_id);   // market_id is the key
+	if (it != market2lines.end()) {   // key found
+		market2lines[market_id].erase(line_index);
+		if (market2lines[market_id].size() == 0) {
+			market2lines.erase(it);   // erase the set as well
+		}
+	}
+    
+	// now let's determine the category and the related lookup tables that will be updated
+	id2lines_index* cat2lines;
+	if (line.event_id > 0) {
+		cat_id = line.event_id;
+		cat_name = "EVENT";
+		cat2lines = &event2lines;
+	}
+	else if (line.tournament_id > 0) {
+		cat_id = line.tournament_id;
+		cat_name = "TOURNAMENT";
+		cat2lines = &tourn2lines;
+	}
+	else if (line.simple_id > 0) {
+		cat_id = line.simple_id;
+		cat_name = "SIMPLE";
+		cat2lines = &simple2lines;
+	}
+	else {
+		cout << "Something wrong with this line: " << line.name << endl;
+		return;
+	}
+
+	// update hash table for cases 2,3,4:  event, tournament or simple
+	auto cat_it = cat2lines->find(cat_id);   // cat_id is the key
+	if (cat_it != cat2lines->end()) {   // key found
+		(*cat2lines)[cat_id].erase(line_index);
+		if ((*cat2lines)[cat_id].size() == 0) {
+			(*cat2lines).erase(cat_it);   // erase the set as well
+		}
+	}
+
+	if (debug_output) {
+		cout << "New line for " << cat_name << "=" << cat_id << endl;
+		cout << "\tTotal lines: " << (*cat2lines)[cat_id].size() << endl;
+	}
+
+	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
+	// let's first build our key
+
+	compound_key = line.getCompoundKey();
+
+	compound2line_index.erase(compound_key);
+	if (debug_output) {
+		cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
+	}
 	if (line.tournament_id > 0) {  // let's pause for checking
 		cout << "Finally a tournament related line. Hit enter to continue ...";
 		getchar();
