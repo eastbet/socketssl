@@ -116,26 +116,50 @@
                    log(payload);
                 }
                 else {   // binary
-                    var stream = new DataView(payload);
-                    console.log("total bytes: ", stream.byteLength);
-					var offset = 0;
-                    var objectsTotal = stream.getInt32(0, true);
-					offset += 4;
+                    var dataview = new DataView(payload);
+					var stream = new Stream(dataview);
+                    console.log("total bytes: ", dataview.byteLength);
+                    var objectsTotal = stream.readInt32();
                     console.log("Total objects: ", objectsTotal);
 					for (var i=0; i<objectsTotal; i++) {
 					   var c = new Category;
-					   offset = c.fillFromStream(stream, offset);
+					   c.fillFromStream(stream);
 					   console.log(c);
 					   document.getElementById("debug").innerText += c.toString() + "\r\n";
 					}
-                }
-			    
-
-			    
+                }			    			    
 			});
 
 			Server.connect();
         }
+		
+class Stream {
+    constructor(stream) {
+	  this.stream = stream;   // DataView
+	  this.offset = 0;
+	  this.littleEndian = true;
+    }
+	readInt32() {
+	   var result = this.stream.getInt32(this.offset, this.littleEndian);
+	   this.offset += 4;
+	   return result;
+	}
+	readUint8() {
+	   var result = this.stream.getUint8(this.offset, this.littleEndian);
+	   this.offset += 1;
+	   return result;
+	}
+	readString() {
+	  var strLength = this.readInt32(); 
+	  var result = "";
+	  var charCode;
+	  for (var i=0; i<strLength; i++) {
+	     charCode = this.readUint8();  // assuming ascii
+	     result += String.fromCharCode(charCode);
+	  }
+	  return result;
+	}
+}
 
 class Category {
     constructor() {
@@ -144,19 +168,11 @@ class Category {
 	    return `${this.name}: ${this.id}-${this.sports_id}-${this.sort}`;
         // return JSON.stringify(this);
     }
-	fillFromStream(stream, offset) {
-	  this.id = stream.getInt32(offset, true); offset += 4;
-	  this.sports_id = stream.getInt32(offset, true); offset += 4;
-	  this.sort = stream.getUint8(offset, true); offset += 1;
-	  var nameLength = stream.getInt32(offset, true); offset += 4;
-	  this.name = "";
-	  var charCode;
-	  for (var i=0; i<nameLength; i++) {
-	     charCode = stream.getUint8(offset, true);  // assuming ascii
-		 offset += 1;
-	     this.name += String.fromCharCode(charCode);
-	  }
-	  return offset;
+	fillFromStream(stream) {
+	  this.id = stream.readInt32(); 
+	  this.sports_id = stream.readInt32(); 	  
+	  this.sort = stream.readUint8(); 
+	  this.name = stream.readString();
 	}
 }
 

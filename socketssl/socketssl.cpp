@@ -2673,8 +2673,7 @@ data_buffer = (char*) malloc(buffer_total_size + 10);
 size_t offset = 0;
 
 // let's fill the buffer
-int category_size = categories_l - 1;
-memcpy(data_buffer + offset, &category_size, sizeof(int));    // total number of Category objects.
+memcpy(data_buffer + offset, &categories_l, sizeof(int));    // total number of Category objects.
 offset += sizeof(int);
 
 // fill each Category object
@@ -5823,21 +5822,6 @@ void Base64Encode(const std::uint8_t* input, std::size_t inputLen, char*& output
 };
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 void openHandler(int clientID) {
 	ostringstream os;
 	os << "Stranger " << clientID << " has joined.";
@@ -5856,9 +5840,8 @@ void openHandler(int clientID) {
 	zpLen=gzip("Welcome!", 7, zpMessage);
 	if (zpLen < 1) return;
 	server.wsSend(clientID, zpMessage, zpLen, false);
-	cout << buffer_total_size << endl;
-	cout << strlen(data_buffer) << endl;
-	server.wsSend(clientID, data_buffer, buffer_total_size - 1, true);  // true: send binary	    
+	// cout << buffer_total_size << endl;
+	server.wsSend(clientID, data_buffer, buffer_total_size, true);  // true: send binary	    
 	delete[] zpMessage;
 	
 }
