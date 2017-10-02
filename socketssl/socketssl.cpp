@@ -39,6 +39,7 @@
 #include <amqp_ssl_socket.h>
 #include <amqp_framing.h>
 #include <unordered_map>
+#include <unordered_set>
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -2366,7 +2367,11 @@ public:
 	int extended_specifier_number;
 	int next_betstop;
 	void operator = (const Line&);
+
+	string getCatKey();
+	string getCompoundKey();
 };
+
 void Line:: operator = (const Line & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
@@ -2461,6 +2466,7 @@ void Line:: operator = (const Line & rhs) {
 
 
 }
+
 Line::Line() {
 	id = 0;
 	betstop_reason=0;
@@ -2487,9 +2493,38 @@ Line::Line() {
 	extended_specifier_number = 0;
 	next_betstop = 0;
 	simple_id = 0;
-	
-
 };
+
+string Line::getCatKey() {
+	if (event_id > 0) {
+		return "e" + to_string(event_id);
+	}
+	else if (tournament_id > 0) {
+		return "t" + to_string(event_id);
+	}
+	else if (simple_id > 0) {
+		return "s" + to_string(simple_id);
+	}
+	else {
+		cout << "Something wrong with this line: " << name << endl;
+		return "";
+	}
+}
+
+string Line::getCompoundKey() {
+	ostringstream key_oss;
+	key_oss.str("");  // reset our stream
+	key_oss << getCatKey() << ";" << market_id;
+	if (specifier_number > 0) {
+		key_oss << ";";  // add this only if there are specifiers for the line
+		for (int i = 0; i < specifier_number; i++) {
+			if (i != 0) key_oss << "&";
+			key_oss << specifier_value[i];
+		}
+	}
+	return key_oss.str();
+}
+
 class Betstop {
 public:
 	Betstop();
@@ -2632,57 +2667,49 @@ webSocket server;
 
 // izzet: Reverse Lookup hash tables for Line objects
 
-// we supply an id (market,event,tournament or simple) and return all the lines. so key is an int (id) and values is a vector of Line object ptrs.
-typedef unordered_map<int, vector<Line*>> reverse_lookup_lines;
-// we supply market_id + one of (event,tournament or simple) + specifiers and find out the unique Line.
-typedef unordered_map<string, Line*> reverse_lookup_ids_spec;
+typedef unordered_map<int, unordered_set<int>> id2lines_index;
 
-reverse_lookup_lines market2lines;   // lookup based on market_id
-reverse_lookup_lines event2lines;    // lookup based on event_id
-reverse_lookup_lines tourn2lines;    // lookup based on tournament_id
-reverse_lookup_lines simple2lines;   // lookup based on simple_id
- 
-reverse_lookup_ids_spec mrkt_event_spec2line;    // market_id + event_id + specifiers_value
-reverse_lookup_ids_spec mrkt_tourn_spec2line;    // market_id + tournament_id + specifiers_value
-reverse_lookup_ids_spec mrkt_simple_spec2line;   // market_id + simple_id + specifiers_value
+id2lines_index market2lines;   // lookup based on market_id
+// lookups based on event_id | tournament_id | simple_id
+id2lines_index event2lines;
+id2lines_index tourn2lines;
+id2lines_index simple2lines;
+
+unordered_map<string, int> compound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
+
 
 // whenever a new Line is created call this function to update reverse lookup tables
-void insert_line(Line &line) {	
+void insert_line(Line &line, int line_index) {	
 	bool debug_output = true;   
-	ostringstream key_oss;
-	string key;
-	int cat_id;   // id based on Line's category (event, tournament or simple)
+	int cat_id;
+	string compound_key;
 	string cat_name;
-	reverse_lookup_lines* cat2lines;  // hash table for one of cases 2,3,4
-	reverse_lookup_ids_spec* mrkt_cat_spec2line;  // hash table for one of cases 5,6,7
 
 	// hash table for case1: market_id. for all Line categories we update market2lines
 	int market_id = line.market_id;    
 	auto it = market2lines.find(market_id);   // market_id is the key
 	if (it == market2lines.end()) {   // key not found, we are seeing this market_id the first time.
-		market2lines[market_id] = vector<Line*>();  // so create an empty vector
+		market2lines[market_id] = unordered_set<int>();  // so create an empty vector
 	}
-	market2lines[market_id].push_back(&line);   // insert new line to the vector
+	market2lines[market_id].insert(line_index);   // insert new line to the vector
 
 	// now let's determine the category and the related lookup tables that will be updated
+	id2lines_index* cat2lines;
 	if (line.event_id > 0) {
 		cat_id = line.event_id;
 		cat_name = "EVENT";
-		cat2lines = &event2lines;
-		mrkt_cat_spec2line = &mrkt_event_spec2line;
+		cat2lines = &event2lines;		
 		if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
 	}
 	else if (line.tournament_id > 0) {
 		cat_id = line.tournament_id;
 		cat_name = "TOURNAMENT";
 		cat2lines = &tourn2lines;
-		mrkt_cat_spec2line = &mrkt_tourn_spec2line;
 	}
 	else if (line.simple_id > 0) {
 		cat_id = line.simple_id;
 		cat_name = "SIMPLE";
 		cat2lines = &simple2lines;
-		mrkt_cat_spec2line = &mrkt_simple_spec2line;
 	}
 	else {
 		cout << "Something wrong with this line: " << line.name << endl;
@@ -2690,11 +2717,11 @@ void insert_line(Line &line) {
 	}
 
 	// update hash table for cases 2,3,4:  event, tournament or simple
-	reverse_lookup_lines::const_iterator cat_it = cat2lines->find(cat_id);   // cat_id is the key
+	auto cat_it = cat2lines->find(cat_id);   // cat_id is the key
 	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
-		(*cat2lines)[cat_id] = vector<Line*>();  // so create an empty vector
+		(*cat2lines)[cat_id] = unordered_set<int>();  // so create an empty set
 	}
-	(*cat2lines)[cat_id].push_back(&line);   // insert new line to the vector	
+	(*cat2lines)[cat_id].insert(line_index);   // insert new line to the vector	
 	if (debug_output) {
 		cout << "New line for " << cat_name << "=" << cat_id << endl;
 		cout << "\tTotal lines: " << (*cat2lines)[cat_id].size() << endl;
@@ -2702,19 +2729,12 @@ void insert_line(Line &line) {
 
 	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
 	// let's first build our key
-	key_oss.str("");  // reset our stream
-	key_oss << line.market_id << ";" << cat_id;
-	if (line.specifier_number > 0) {
-		key_oss << ";";  // add this only if there are specifiers for the line
-		for (int i = 0; i < line.specifier_number; i++) {
-			if (i != 0) key_oss << "&";
-			key_oss << line.specifier_value[i];
-		}
-	}
-	key = key_oss.str();
-	(*mrkt_cat_spec2line)[key] = &line;   // insert new line's pointer as value
+
+	compound_key = line.getCatKey();
+
+	compound2line_index[compound_key] = line_index;   // insert new line's pointer as value
 	if (debug_output) {
-		cout << "\t" << "Key for " << line.name << ": " << key << endl;
+		cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
 	}			
 	if (line.tournament_id > 0) {  // let's pause for checking
 		cout << "Finally a tournament related line. Hit enter to continue ...";
@@ -7170,7 +7190,7 @@ static void run(amqp_connection_state_t conn)
 									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
 								}
 								lines[lines_l] = _line[0];
-								insert_line(_line[0]);
+								insert_line(_line[0], lines_l);
 								lines_l++;
 }
 						}
@@ -7735,7 +7755,7 @@ static void run(amqp_connection_state_t conn)
 								}
 
 								lines[lines_l] = _line[0];
-								insert_line(_line[0]);
+								insert_line(_line[0], lines_l);
 								lines_l++;
 							}
 						}
@@ -8547,7 +8567,7 @@ static void run(amqp_connection_state_t conn)
 								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 							}
 							lines[lines_l] = _line[0];
-							insert_line(_line[0]);
+							insert_line(_line[0], lines_l);
 							lines_l++;
 						}
 					}
