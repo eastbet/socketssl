@@ -2376,6 +2376,8 @@ public:
 	int extended_specifier_number;
 	int next_betstop;
 	void operator = (const Line&);
+	string getCatKey();
+	string getCompoundKey();
 };
 void Line:: operator = (const Line & rhs) {
 	if (this == &rhs) return;
@@ -2500,7 +2502,6 @@ Line::Line() {
 	
 
 };
-
 string Line::getCatKey() {
 	if (event_id > 0) {
 		return "e" + to_string(event_id);
@@ -2516,7 +2517,6 @@ string Line::getCatKey() {
 		return "";
 	}
 }
-
 string Line::getCompoundKey() {
 	ostringstream key_oss;
 	key_oss.str("");  // reset our stream
@@ -2695,56 +2695,55 @@ webSocket server;
 // izzet: Reverse Lookup hash tables for Line objects
 
 // we supply an id (market,event,tournament or simple) and return all the lines. so key is an int (id) and values is a vector of Line object ptrs.
-typedef unordered_map<int, unordered_set<Line*>> reverse_lookup_lines;
-// we supply market_id + one of (event,tournament or simple) + specifiers and find out the unique Line.
-typedef unordered_map<string, Line*> reverse_lookup_ids_spec;
 
-reverse_lookup_lines market2lines;   // lookup based on market_id
-reverse_lookup_lines event2lines;    // lookup based on event_id
-reverse_lookup_lines tourn2lines;    // lookup based on tournament_id
-reverse_lookup_lines simple2lines;   // lookup based on simple_id
- 
-reverse_lookup_ids_spec mrkt_event_spec2line;    // market_id + event_id + specifiers_value
-reverse_lookup_ids_spec mrkt_tourn_spec2line;    // market_id + tournament_id + specifiers_value
-reverse_lookup_ids_spec mrkt_simple_spec2line;   // market_id + simple_id + specifiers_value
+typedef unordered_map<int, unordered_set<int>*> id2lines_index;
+enum LineCat { LC_EVENT, LC_TOURN, LC_SIMPLE };
 
-// whenever a new Line is created call this function to update reverse lookup tables
-void insert_line(Line &line) {	
-	bool debug_output = false;//true;   
-	ostringstream key_oss;
-	string key;
-	int cat_id;   // id based on Line's category (event, tournament or simple)
+void test_delete();
+void delete_line(Line &);
+void delete_line_cat(int, LineCat);
+
+id2lines_index market2lines;   // lookup based on market_id
+							   // lookups based on event_id | tournament_id | simple_id
+id2lines_index event2lines;
+id2lines_index tourn2lines;
+id2lines_index simple2lines;
+
+unordered_map<string, int> compound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
+
+
+												   // whenever a new Line is created call this function to update reverse lookup tables
+void insert_line(Line& line, const int line_index) {
+	bool debug_output = false;
+	int cat_id;
+	string compound_key;
 	string cat_name;
-	reverse_lookup_lines* cat2lines;  // hash table for one of cases 2,3,4
-	reverse_lookup_ids_spec* mrkt_cat_spec2line;  // hash table for one of cases 5,6,7
 
 	// hash table for case1: market_id. for all Line categories we update market2lines
-	int market_id = line.market_id;    
+	const int market_id = line.market_id;
 	auto it = market2lines.find(market_id);   // market_id is the key
 	if (it == market2lines.end()) {   // key not found, we are seeing this market_id the first time.
-		market2lines[market_id] = unordered_set<Line*>();  // so create an empty vector
+		market2lines[market_id] = new unordered_set<int>();  // so create an empty vector
 	}
-	market2lines[market_id].insert(&line);   // insert new line to the vector
+	market2lines[market_id]->insert(line_index);   // insert new line's index to the set
 
-	// now let's determine the category and the related lookup tables that will be updated
+												   // now let's determine the category and the related lookup tables that will be updated
+	id2lines_index* cat2lines;
 	if (line.event_id > 0) {
 		cat_id = line.event_id;
 		cat_name = "EVENT";
 		cat2lines = &event2lines;
-		mrkt_cat_spec2line = &mrkt_event_spec2line;
 		if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
 	}
 	else if (line.tournament_id > 0) {
 		cat_id = line.tournament_id;
 		cat_name = "TOURNAMENT";
 		cat2lines = &tourn2lines;
-		mrkt_cat_spec2line = &mrkt_tourn_spec2line;
 	}
 	else if (line.simple_id > 0) {
 		cat_id = line.simple_id;
 		cat_name = "SIMPLE";
 		cat2lines = &simple2lines;
-		mrkt_cat_spec2line = &mrkt_simple_spec2line;
 	}
 	else {
 		cout << "Something wrong with this line: " << line.name << endl;
@@ -2752,38 +2751,184 @@ void insert_line(Line &line) {
 	}
 
 	// update hash table for cases 2,3,4:  event, tournament or simple
-	reverse_lookup_lines::const_iterator cat_it = cat2lines->find(cat_id);   // cat_id is the key
+	auto cat_it = cat2lines->find(cat_id);   // cat_id is the key
 	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
-		(*cat2lines)[cat_id] = unordered_set<Line*>();  // so create an empty vector
+		(*cat2lines)[cat_id] = new unordered_set<int>();  // so create an empty set
 	}
-	(*cat2lines)[cat_id].insert(&line);   // insert new line to the vector	
+	(*cat2lines)[cat_id]->insert(line_index);   // insert new line to the set
 	if (debug_output) {
 		cout << "New line for " << cat_name << "=" << cat_id << endl;
-		cout << "\tTotal lines: " << (*cat2lines)[cat_id].size() << endl;
+		cout << "\tTotal lines: " << (*cat2lines)[cat_id]->size() << endl;
 	}
 
 	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
 	// let's first build our key
-	key_oss.str("");  // reset our stream
-	key_oss << line.market_id << ";" << cat_id;
-	if (line.specifier_number > 0) {
-		key_oss << ";";  // add this only if there are specifiers for the line
-		for (int i = 0; i < line.specifier_number; i++) {
-			if (i != 0) key_oss << "&";
-			key_oss << line.specifier_value[i];
-		}
-	}
-	key = key_oss.str();
-	(*mrkt_cat_spec2line)[key] = &line;   // insert new line's pointer as value
+
+	compound_key = line.getCompoundKey();
+	compound2line_index[compound_key] = line_index;   // insert new line's index as value
 	if (debug_output) {
-		cout << "\t" << "Key for " << line.name << ": " << key << endl;
-	}			
-	if (line.tournament_id > 0 && debug_output) {  // let's pause for checking
+		cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
+	}
+	if (line.tournament_id > 0) {  // let's pause for checking
 		cout << "Finally a tournament related line. Hit enter to continue ...";
 		getchar();
 	}
+	if ((lines_l + 1) % 50 == 0) {
+		cout << "TOTAL LINES = " << (lines_l + 1) << endl;
+	}
+	if ((lines_l + 1) % 1000 == 0) {
+		test_delete();
+		cout << "Hit enter to continue..." << endl;
+		// getchar();
+	}
 	return;
 }
+
+void test_delete() {
+	auto t1 = chrono::high_resolution_clock::now();
+	auto t2 = chrono::high_resolution_clock::now();
+	uint64_t time_diff;
+	int idx1 = rand() % lines_l;
+	int idx2 = rand() % lines_l;
+	Line line1 = lines[idx1];
+	Line line2 = lines[idx2];
+	int event_id = line2.event_id;
+	if (idx1 == idx2 || event_id == 0 || event2lines.find(event_id) == event2lines.end()) {
+		test_delete();
+		return;
+	}
+	cout << idx1 << " " << idx2 << " " << event_id << endl;
+	cout << "Testing delete line(" << line1.name << ") ..." << endl;
+	cout << "\t Its market(" << line1.market_id << ") has " << market2lines[line1.market_id]->size() << " lines now." << endl;
+	cout << "\t Its event(" << line1.event_id << ") has " << event2lines[line1.event_id]->size() << " lines now." << endl;
+	cout << "\t Deleting the line..." << endl;
+	t1 = chrono::high_resolution_clock::now();
+	delete_line(line1);
+	t2 = chrono::high_resolution_clock::now();
+	time_diff = chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count();
+	cout << "\t Deletion took: " << (time_diff / 1e6) << " milliseconds" << endl;
+	cout << "\t Its market has " << market2lines[line1.market_id]->size() << " lines now." << endl;
+	cout << "\t Its event has " << event2lines[line1.event_id]->size() << " lines now." << endl;
+
+	/*
+	cout << endl << "Testing delete event_id(" << event_id << ") ..." << endl;
+	t1 = chrono::high_resolution_clock::now();
+	delete_line_cat(event_id, LC_EVENT);
+	t2 = chrono::high_resolution_clock::now();
+	time_diff = chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count();
+	cout << "\t Deletion took: " << (time_diff / 1e6) << " milliseconds" << endl;
+	cout << "\t Testing if event's Line object are also deleted." << endl;
+	auto it = compound2line_index.find(line2.getCompoundKey());
+	if (it == compound2line_index.end()) {
+	cout << "\t SUCCESS. Lines are also deleted." << endl;
+	}
+	else {
+	cout << "\t FAILED. Lines are still in hash." << endl;
+	} */
+	return;
+}
+
+void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
+	id2lines_index* cat2lines;
+	string compound_key;
+	switch (cat) {
+	case LC_EVENT:
+		cat2lines = &event2lines;
+		break;
+	case LC_TOURN:
+		cat2lines = &tourn2lines;
+		break;
+	case LC_SIMPLE:
+		cat2lines = &simple2lines;
+		break;
+	default:
+		cout << "Wrong value for LineCat used." << endl;
+		return;
+	}
+	// delete from markets all Lines related to this category
+	// cout << "Deletion began for " << cat_id << endl;
+	auto cat_it = cat2lines->find(cat_id);
+	if (cat_it == cat2lines->end()) {
+		cout << "Not existing in hash: " << cat_id << endl;
+		return;
+	}
+	/*
+	for (auto set_it = cat_it->second->begin(); set_it != cat_it->second->end(); set_it++) {
+	int line_index = *set_it;
+	Line l = lines[line_index];
+	// market2lines[l.market_id]->erase(line_index);
+	// delete individual lines as well
+	compound_key = l.getCompoundKey();
+	// compound2line_index.erase(compound_key);
+	cout << "\t   Deleted: " << compound_key << " i:" << line_index << endl;
+	} */
+	// delete the whole entry from related hash table
+	// cat_it->second->clear();
+	// delete cat_it->second;
+	// cat2lines->erase(cat_id);	
+	return;
+}
+
+
+void delete_line(Line &line) {
+	int cat_id;
+	string compound_key = line.getCompoundKey();
+
+	auto line_it = compound2line_index.find(compound_key);
+	if (line_it == compound2line_index.end()) {
+		cout << "Line to be deleted not found.";
+		return;
+	}
+	const int line_index = line_it->second;
+	// cout << "T: " << lines[line_index].name << " --- " << line.name << endl;
+	// hash table for case1: market_id. for all Line categories we update market2lines
+	int market_id = line.market_id;
+	auto market_it = market2lines.find(market_id);   // market_id is the key
+	if (market_it != market2lines.end()) {   // key found
+		market_it->second->erase(line_index); // delete from set
+											  // if (market_it->second.size() == 0) {  // no more Lines for this market
+											  // market2lines.erase(market_it);   // remove the whole market as well -- ASK: Shall we do this?
+											  // }
+	}
+	return;
+	// now let's determine the category and the related lookup tables that will be updated
+	id2lines_index* cat2lines;
+	if (line.event_id > 0) {
+		cat_id = line.event_id;
+		cat2lines = &event2lines;
+	}
+	else if (line.tournament_id > 0) {
+		cat_id = line.tournament_id;
+		cat2lines = &tourn2lines;
+	}
+	else if (line.simple_id > 0) {
+		cat_id = line.simple_id;
+		cat2lines = &simple2lines;
+	}
+	else {
+		cout << "Something wrong with this line (all ids 0): " << line.name << endl;
+		return;
+	}
+
+	// update hash table for cases 2,3,4:  event, tournament or simple
+	auto cat_it = cat2lines->find(cat_id);   // cat_id is the key
+	if (cat_it != cat2lines->end()) {   // key found
+		cat_it->second->erase(line_index);
+		// if (cat_it->second.size() == 0) { // No more Lines for this event_id (tourn_id, simple_id)  
+		// (*cat2lines).erase(cat_it);   // erase the hash entry as well -- ASK: Shall we do this?
+		// }
+	}
+
+	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
+	cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
+	// compound2line_index.erase(line_it);
+	compound2line_index.erase(line.getCompoundKey());
+	// _ASSERT(_CrtCheckMemory());
+	// line_it = compound2line_index.find(compound_key);
+	// cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
+	return;
+}
+
 
 
 int main(){
@@ -7377,7 +7522,7 @@ static void run(amqp_connection_state_t conn)
 									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
 								}
 								lines[lines_l] = _line[0];
-								//insert_line(_line[0]);
+								insert_line(_line[0], lines_l);
 								lines_l++;
 }
 						}
@@ -7942,7 +8087,7 @@ static void run(amqp_connection_state_t conn)
 								}
 
 								lines[lines_l] = _line[0];
-								//insert_line(_line[0]);
+								insert_line(_line[0], lines_l);
 								lines_l++;
 							}
 						}
@@ -8754,7 +8899,7 @@ static void run(amqp_connection_state_t conn)
 								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 							}
 							lines[lines_l] = _line[0];
-							//insert_line(_line[0]);
+							insert_line(_line[0], lines_l);
 							lines_l++;
 						}
 					}
