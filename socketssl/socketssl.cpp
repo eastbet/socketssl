@@ -2500,6 +2500,37 @@ Line::Line() {
 	
 
 };
+
+string Line::getCatKey() {
+	if (event_id > 0) {
+		return "e" + to_string(event_id);
+	}
+	else if (tournament_id > 0) {
+		return "t" + to_string(event_id);
+	}
+	else if (simple_id > 0) {
+		return "s" + to_string(simple_id);
+	}
+	else {
+		cout << "Something wrong with this line: " << name << endl;
+		return "";
+	}
+}
+
+string Line::getCompoundKey() {
+	ostringstream key_oss;
+	key_oss.str("");  // reset our stream
+	key_oss << getCatKey() << ";" << market_id;
+	if (specifier_number > 0) {
+		key_oss << ";";  // add this only if there are specifiers for the line
+		for (int i = 0; i < specifier_number; i++) {
+			if (i != 0) key_oss << "&";
+			key_oss << specifier_value[i];
+		}
+	}
+	return key_oss.str();
+}
+
 class Betstop {
 public:
 	Betstop();
