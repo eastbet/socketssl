@@ -2783,7 +2783,6 @@ void insert_line(Line& line, const int line_index) {
 	}
 	return;
 }
-
 void test_delete() {
 	auto t1 = chrono::high_resolution_clock::now();
 	auto t2 = chrono::high_resolution_clock::now();
@@ -2827,7 +2826,6 @@ void test_delete() {
 	} */
 	return;
 }
-
 void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 	id2lines_index* cat2lines;
 	string compound_key;
@@ -2868,8 +2866,6 @@ void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 	// cat2lines->erase(cat_id);	
 	return;
 }
-
-
 void delete_line(Line &line) {
 	int cat_id;
 	string compound_key = line.getCompoundKey();
@@ -6169,8 +6165,6 @@ delete[] zip_message;
 return encode_message;
 
 };
-
-
 char* CreateStep_2(int& len) {
 	len = 0;
 	return nullptr;
