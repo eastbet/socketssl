@@ -2666,8 +2666,11 @@ webSocket server;
 
 
 // izzet: Reverse Lookup hash tables for Line objects
-
+// keys are ids (market_id, event_id etc.). values are sets of Line index values based on global lines array (ints)  
 typedef unordered_map<int, unordered_set<int>*> id2lines_index;
+
+// line category based on if event_id>0 (LC_EVENT), or tournament_id>0 (LC_TOURN), or simple_id>0 (LC_SIMPLE)
+// used for writing a single delete function delete_line_cat to handle all cases 
 enum LineCat {LC_EVENT, LC_TOURN, LC_SIMPLE};
 
 void test_delete();
@@ -2680,8 +2683,9 @@ id2lines_index event2lines;
 id2lines_index tourn2lines;
 id2lines_index simple2lines;
 
-unordered_map<string, int> compound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
-
+// lookup based on: (event_id | tournament_id | simple_id) + market_id + specifiers_value
+// see Line::getCompoundKey for how string keys are constructed
+unordered_map<string, int> compound2line_index;    
 
 // whenever a new Line is created call this function to update reverse lookup tables
 void insert_line(Line& line, const int line_index) {	
@@ -2747,9 +2751,9 @@ void insert_line(Line& line, const int line_index) {
 	if ((lines_l+1) % 50 == 0) {
 		cout << "TOTAL LINES = " << (lines_l+1) << endl;
 	}
-	if ((lines_l+1) % 1000 == 0) {
+	if ((lines_l+1) % 500 == 0) {
 		test_delete();
-		cout << "Hit enter to continue..." << endl;
+		// cout << "Hit enter to continue..." << endl;
 		// getchar();
 	}
 	return;
@@ -2761,27 +2765,28 @@ void test_delete() {
 	uint64_t time_diff;
 	int idx1 = rand() % lines_l;
 	int idx2 = rand() % lines_l;
-	Line line1 = lines[idx1];
-	Line line2 = lines[idx2];
-	int event_id = line2.event_id;
-	if (idx1 == idx2 || event_id == 0 || event2lines.find(event_id) == event2lines.end()) {
+	Line* line1 = &(lines[idx1]);
+	Line* line2 = &(lines[idx2]);
+	int event_id = line2->event_id;
+	if (idx1 == idx2 || event_id == 0 || 
+		event2lines.find(event_id) == event2lines.end() || event2lines.find(line1->event_id) == event2lines.end()) {
 		test_delete();
 		return;
 	}
-	cout << idx1 << " " << idx2 << " " << event_id << endl;
-	cout << "Testing delete line(" << line1.name << ") ..." << endl;
-	cout << "\t Its market(" << line1.market_id << ") has " << market2lines[line1.market_id]->size() << " lines now." << endl;
-	cout << "\t Its event(" << line1.event_id << ") has " << event2lines[line1.event_id]->size() << " lines now." << endl;
+	// cout << idx1 << " " << idx2 << " " << event_id << endl;
+	cout << "Testing delete line(" << line1->name << ") ..." << endl;
+	cout << "\t Its market(" << line1->market_id << ") has " << market2lines[line1->market_id]->size() << " lines now." << endl;
+	cout << "\t Its event(" << line1->event_id << ") has " << event2lines[line1->event_id]->size() << " lines now." << endl;
 	cout << "\t Deleting the line..." << endl;
 	t1 = chrono::high_resolution_clock::now();
-	delete_line(line1);
+	delete_line(*line1);
 	t2 = chrono::high_resolution_clock::now();
 	time_diff = chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count();
 	cout << "\t Deletion took: " << (time_diff / 1e6) << " milliseconds" << endl;
-	cout << "\t Its market has " << market2lines[line1.market_id]->size() << " lines now." << endl;
-	cout << "\t Its event has " << event2lines[line1.event_id]->size() << " lines now." << endl;
+	cout << "\t Its market has " << market2lines[line1->market_id]->size() << " lines now." << endl;
+	cout << "\t Its event has " << event2lines[line1->event_id]->size() << " lines now." << endl;
 
-	/*
+	
 	cout << endl << "Testing delete event_id(" << event_id << ") ..." << endl;
 	t1 = chrono::high_resolution_clock::now();
 	delete_line_cat(event_id, LC_EVENT);
@@ -2789,19 +2794,23 @@ void test_delete() {
 	time_diff = chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count();
 	cout << "\t Deletion took: " << (time_diff / 1e6) << " milliseconds" << endl;
 	cout << "\t Testing if event's Line object are also deleted." << endl;
-	auto it = compound2line_index.find(line2.getCompoundKey());
+	auto it = compound2line_index.find(line2->getCompoundKey());
 	if (it == compound2line_index.end()) {
 		cout << "\t SUCCESS. Lines are also deleted." << endl;
 	}
 	else {
 		cout << "\t FAILED. Lines are still in hash." << endl;
-	} */
+	} 
 	return;
 }
 
+// Call this function to delete an event_id (tournament_id, simple_id) from hash tables.
+// Clears also related Line objects from relevant hash tables
+// delete_line(event_id, LC_EVENT) or  delete_line(tournament_id, LC_TOURN) or delete_line(simple_id, LC_SIMPLE)
 void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 	id2lines_index* cat2lines;
 	string compound_key;
+	// determine which hash we should update
 	switch (cat) {
 		case LC_EVENT: 
 			cat2lines = &event2lines; 
@@ -2817,30 +2826,28 @@ void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 			return;
 	}
 	// delete from markets all Lines related to this category
-	// cout << "Deletion began for " << cat_id << endl;
 	auto cat_it = cat2lines->find(cat_id);
 	if (cat_it == cat2lines->end()) {
 		cout << "Not existing in hash: " << cat_id << endl;
 		return;
 	}
-	/*
 	for (auto set_it = cat_it->second->begin(); set_it != cat_it->second->end(); set_it++) {
 		int line_index = *set_it;
-		Line l = lines[line_index];
-		// market2lines[l.market_id]->erase(line_index);
+		Line* line_to_delete = &(lines[line_index]);
+		market2lines[line_to_delete->market_id]->erase(line_index);
 		// delete individual lines as well
-		compound_key = l.getCompoundKey();
-		// compound2line_index.erase(compound_key);
-		cout << "\t   Deleted: " << compound_key << " i:" << line_index << endl;
-	} */
-	// delete the whole entry from related hash table
-	// cat_it->second->clear();
-	// delete cat_it->second;
-	// cat2lines->erase(cat_id);	
+		compound_key = line_to_delete->getCompoundKey();
+		compound2line_index.erase(compound_key);
+	} 
+	// delete the whole entry from related hash table  -- ASK: Shall we keep the index and only clear set?
+	delete cat_it->second; // we created set with new so let's delete it
+	// cat2lines[cat_id] = NULL;
+	cat2lines->erase(cat_id);	
 	return;
 }
 
-
+// Just construct a Line object as in insert and call this function with that Line object 
+// to delete the original one from hash tables 
 void delete_line(Line &line) {
 	int cat_id;
 	string compound_key = line.getCompoundKey();
@@ -2851,18 +2858,17 @@ void delete_line(Line &line) {
 		return;
 	}
 	const int line_index = line_it->second;
-	// cout << "T: " << lines[line_index].name << " --- " << line.name << endl;
 	// hash table for case1: market_id. for all Line categories we update market2lines
 	int market_id = line.market_id;
-	auto market_it = market2lines.find(market_id);   // market_id is the key
+	auto market_it = market2lines.find(market_id);   
 	if (market_it != market2lines.end()) {   // key found
 		market_it->second->erase(line_index); // delete from set
 		// if (market_it->second.size() == 0) {  // no more Lines for this market
 			// market2lines.erase(market_it);   // remove the whole market as well -- ASK: Shall we do this?
 		// }
 	}
-	return;
-	// now let's determine the category and the related lookup tables that will be updated
+
+	// now let's determine the line category and the related lookup tables that should be updated
 	id2lines_index* cat2lines;
 	if (line.event_id > 0) {
 		cat_id = line.event_id;
@@ -2891,12 +2897,9 @@ void delete_line(Line &line) {
 	}
 
 	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
-	cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
-	// compound2line_index.erase(line_it);
-	compound2line_index.erase(line.getCompoundKey());
-	// _ASSERT(_CrtCheckMemory());
-	// line_it = compound2line_index.find(compound_key);
 	// cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
+	compound2line_index.erase(line_it);
+	// compound2line_index.erase(line.getCompoundKey());
 	return;
 }
 
