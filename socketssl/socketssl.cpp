@@ -137,16 +137,6 @@ typedef void(*messageCallback)(int, string);
 #define STEP_QUEUE 100
 
 
-
-
-
-
-
-
-
-
-
-
 HANDLE hThread1;
 DWORD dwThreadID1;
 DWORD ExitCode1;
@@ -169,7 +159,8 @@ char* data_step_1;
 char* data_step_2;
 int data_step_len_1;
 int data_step_len_2;
-
+int flag_big_data_write;
+std::mutex mutex_big_data;
 
 
 using namespace std;
@@ -243,7 +234,7 @@ public:
 	int step_buffer_len_1;
 	int step_buffer_len_2;
 	//int flag;
-	std::mutex mutex;
+	//std::mutex mutex;
 
 
 
@@ -1795,7 +1786,7 @@ public:
 	int id;
 	int season_id;
 	int simple_id;
-	int race = 0;
+	int type_radar = 0;
 	int sport_id;
 	int category_id;
 	int sort;
@@ -1815,7 +1806,7 @@ void Tournament:: operator = (const Tournament & rhs) {
 	category_id = rhs.category_id;
 	sport_id = rhs.sport_id;
 	sort = rhs.sort;
-	race = rhs.race;
+	type_radar = rhs.type_radar;
 	if (name != NULL) {
 		delete[] name; name = NULL;
 	}
@@ -1835,7 +1826,7 @@ void Tournament:: operator = (const Tournament & rhs) {
 }
 Tournament::Tournament() {
 	id = 0;
-	race = 0;
+	type_radar = 0;
 	category_id = 0;
 	sport_id = 0;
 	sort = 0;
@@ -1880,8 +1871,8 @@ public:
 	Event();
 	~Event() {
 		if (home_name != NULL) delete[] home_name; if (tv_channels != NULL) delete[] tv_channels; if (venue != NULL) delete[] venue; if (away_name != NULL) delete[] away_name;
-		if (set_scores != NULL) delete[] set_scores;  if (match_time != NULL) delete[] match_time; if (remaining_time != NULL) delete[] remaining_time; if (remaining_time_in_period != NULL) delete[] remaining_time_in_period; if (game_score != NULL) delete[] game_score; if (leg_score != NULL) delete[] leg_score; if (bases!= NULL) delete[] bases;
-		if (stoppage_time != NULL) delete[] stoppage_time; if (delayed_description != NULL) delete[] delayed_description;
+		if (set_scores != NULL) delete[] set_scores;  if (match_time != NULL) delete[] match_time; if (remaining_time != NULL) delete[] remaining_time; if (remaining_time_in_period != NULL) delete[] remaining_time_in_period; if (bases!= NULL) delete[] bases;
+		if (stoppage_time != NULL) delete[] stoppage_time; if (stoppage_time_announced != NULL) delete[] stoppage_time_announced; if (delayed_description != NULL) delete[] delayed_description;
 	};
 
 	
@@ -1897,6 +1888,7 @@ public:
 	int home_super_id = 0;
 	int away_super_id = 0;
 	int status; //0(not started) / 1(live) / 2(suspended) /	3(ended) / 4(closed) / abandoned - only one of these 6 is possible
+	int show;
 	int reporting;//
 	float home_score;
 	float away_score;
@@ -1910,16 +1902,20 @@ public:
 	char* venue;
 	char* remaining_time_in_period;
 	char* stoppage_time;
+	char* stoppage_time_announced;
 	int stopped;
 	int home_yellowcards;
 	int away_yellowcards;
+	int home_corners;
+	int away_corners;
+	int home_yellow_red_cards;
+	int away_yellow_red_cards;
 	int home_redcards;
 	int away_redcards;
 	int remaining_reds;
 	int current_server;
-	char* game_score;
 	int tiebreak;
-	int expedite;
+	int expedite_mode;
 	int home_suspend;
 	int away_suspend;
 	int strikes;
@@ -1932,9 +1928,11 @@ public:
 	int yards;
 	int visit;
 	char* tv_channels;
-	char* leg_score;
+	int home_legscore;
+	int away_legscore;
 	int throw_num;
 	int delivery;
+	int current_ct_team;
 	int home_remaining_bowls;
 	int away_remaining_bowls;
 	int current_end;
@@ -1955,9 +1953,10 @@ public:
 	int overtime_length;
 	int austrian_district;
 	int booked;
-	int race;
+	int type_radar;
 	int parent_id;
 	int delayed_id;
+	
 
 	void operator = (const Event&);
 
@@ -1969,6 +1968,7 @@ void Event:: operator = (const Event & rhs) {
 	match_status = rhs.match_status;
 	home_id = rhs.home_id;
 	bo = rhs.bo;
+	show = rhs.show;
 	winner_id = rhs.winner_id;
 	away_id = rhs.away_id;
 	home_super_id = rhs.home_super_id;
@@ -1978,8 +1978,16 @@ void Event:: operator = (const Event & rhs) {
 	home_score = rhs.home_score;
 	away_score = rhs.away_score;
 	delayed_id = rhs.delayed_id;
+	home_corners = rhs.home_corners;
+	away_corners = rhs.away_corners;
+	home_yellow_red_cards = rhs.home_yellow_red_cards;
+	away_yellow_red_cards = rhs.away_yellow_red_cards;
+
 	home_gamescore = rhs.home_gamescore;
 	away_gamescore = rhs.away_gamescore;
+	home_legscore = rhs.home_legscore;
+	away_legscore = rhs.away_legscore;
+
 	if (tv_channels != NULL) {
 		delete[] tv_channels; tv_channels = NULL;
 	}
@@ -2036,6 +2044,18 @@ void Event:: operator = (const Event & rhs) {
 		std::strcpy(stoppage_time, rhs.stoppage_time);
 	}
 
+	if (stoppage_time_announced != NULL) {
+		delete[] stoppage_time_announced; stoppage_time_announced = NULL;
+	}
+	if (rhs.stoppage_time_announced != NULL) {
+		stoppage_time_announced = new char[strlen(rhs.stoppage_time_announced) + 1];
+		std::strcpy(stoppage_time_announced, rhs.stoppage_time_announced);
+	}
+
+
+
+
+
 	if (remaining_time != NULL) {
 		delete[] remaining_time; remaining_time = NULL;
 	}
@@ -2052,13 +2072,7 @@ void Event:: operator = (const Event & rhs) {
 		std::strcpy(remaining_time_in_period, rhs.remaining_time_in_period);
 	}
 
-	if (game_score != NULL) {
-		delete[] game_score; game_score = NULL;
-	}
-	if (rhs.game_score != NULL) {
-		game_score = new char[strlen(rhs.game_score) + 1];
-		std::strcpy(game_score, rhs.game_score);
-	}
+	
 	if (away_name != NULL) {
 		delete[] away_name; away_name = NULL;
 	}
@@ -2076,15 +2090,6 @@ void Event:: operator = (const Event & rhs) {
 		std::strcpy(home_name, rhs.home_name);
 	}
 
-
-	if (leg_score != NULL) {
-		delete[] leg_score; leg_score = NULL;
-	}
-	if (rhs.leg_score != NULL) {
-		leg_score = new char[strlen(rhs.leg_score) + 1];
-		std::strcpy(leg_score, rhs.leg_score);
-	}
-
 	stopped = rhs.stopped;
 	home_yellowcards = rhs.home_yellowcards;
 	away_yellowcards = rhs.away_yellowcards;
@@ -2093,7 +2098,7 @@ void Event:: operator = (const Event & rhs) {
 	remaining_reds = rhs.remaining_reds;
 	current_server = rhs.current_server;
 	tiebreak = rhs.tiebreak;
-	expedite = rhs.expedite;
+	expedite_mode = rhs.expedite_mode;
 	home_suspend = rhs.home_suspend;
 	away_suspend = rhs.away_suspend;
 	strikes = rhs.strikes;
@@ -2107,6 +2112,7 @@ void Event:: operator = (const Event & rhs) {
 	visit = rhs.visit;
 	throw_num = rhs.throw_num;
 	delivery = rhs.delivery;
+	current_ct_team = rhs.current_ct_team;
 	home_remaining_bowls = rhs.home_remaining_bowls;
 	away_remaining_bowls = rhs.away_remaining_bowls;
 	current_end = rhs.current_end;
@@ -2120,7 +2126,7 @@ void Event:: operator = (const Event & rhs) {
 	timestamp = rhs.timestamp;
 	start_time = rhs.start_time;
 	next_live_time = rhs.next_live_time;
-	race = rhs.race;
+	type_radar = rhs.type_radar;
 	parent_id = rhs.parent_id;
 	sport_id = rhs.sport_id;
 	category_id = rhs.category_id;
@@ -2139,7 +2145,8 @@ Event::Event() {
 	tournament_id = 0;
 	away_name = NULL;// new char[NAME_LENTGH];
 	home_name = NULL;// new char[NAME_LENTGH];
-	int status = -1; //0(not started) / 1(live) / 2(suspended) /	3(ended) / 4(closed) / abandoned - only one of these 6 is possible
+	status = -1; //0(not started) / 1(live) / 2(suspended) /	3(ended) / 4(closed) / abandoned - only one of these 6 is possible
+	show = 0;
 	reporting = 0;//
 	home_score = 0;
 	away_score = 0;
@@ -2156,6 +2163,7 @@ Event::Event() {
 	remaining_time = NULL;// new char[16];
 	remaining_time_in_period = NULL;// new char[16];
 	stoppage_time = NULL;
+	stoppage_time_announced = NULL;
 	remaining_reds = 0;
 	stopped = 0;;
 	winner_id = 0;
@@ -2163,10 +2171,13 @@ Event::Event() {
 	away_yellowcards = 0;
 	home_redcards = 0;
 	away_redcards = 0;
+	home_corners = 0;
+	away_corners = 0;
+	home_yellow_red_cards = 0;
+	away_yellow_red_cards = 0;
 	current_server = 0;
-	game_score = NULL;// new char[16];
 	tiebreak = 0;
-	expedite = 0;
+	expedite_mode = 0;
 	home_suspend = 0;
 	away_suspend = 0;
 	strikes = 0;
@@ -2178,9 +2189,11 @@ Event::Event() {
 	try_num = 0;
 	yards = 0;
 	visit = 0;
-	leg_score = NULL;// new char[16];
+	home_legscore = 0;
+	away_legscore = 0;
 	throw_num = 0;
 	delivery = 0;
+	current_ct_team = 0;
 	home_remaining_bowls = 0;
 	away_remaining_bowls = 0;
 	current_end = 0;
@@ -2198,7 +2211,7 @@ Event::Event() {
 	overtime_length = 0;
 	austrian_district = 0;
 	booked = 0;
-	race = 0;
+	type_radar = 0;
 	parent_id = 0;
 	tv_channels = NULL;
 	venue = NULL;
@@ -2222,7 +2235,7 @@ public:
 	char* variable_text;
 	int variant;
 	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext
-	int line_type;
+	int line_type;//ID_TIP_EVENT SITE
 	char* name;
 	int outcome_number;
 	char** outcome_name;
@@ -2620,23 +2633,10 @@ Betstop** betstops_id = new Betstop*[MAX_BETSTOPS];
 Matchstatus** matchstatus_id = new Matchstatus*[MAX_MATCHSTATUS];
 int *max_markets_in = new int[MAX_MARKETS];
 
-void writeInteger(char* buffer, size_t &offset, int data, int num) {
-	memcpy(buffer + offset, &data, num);
-	offset += num;
-};
-void writeString(char* buffer, size_t &offset, char* data) {
-	int num = 0;
-	if (data != nullptr) num = strlen(data);
-	memcpy(buffer + offset, &num, 2);
-	offset += 2;
-	memcpy(buffer + offset, data, num);
-	offset += num;
-};
-void writeDouble(char* buffer, size_t &offset, double data) {
-	memcpy(buffer + offset, &data, sizeof(double));
-
-};
-
+void writeInteger(char*, size_t &, int , int);
+void writeString(char*, size_t &, char*);
+void writeDouble(char*, size_t &, double);
+void writeFloat(char*, size_t &, float);
 
 char* CreateStep_1(int&);
 char* CreateStep_2(int&);
@@ -2733,7 +2733,7 @@ void insert_line(Line& line, const int line_index) {
 		cat_id = line.event_id;
 		cat_name = "EVENT";
 		cat2lines = &event2lines;
-		if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
+		//if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
 	}
 	else if (line.tournament_id > 0) {
 		cat_id = line.tournament_id;
@@ -2756,23 +2756,28 @@ void insert_line(Line& line, const int line_index) {
 		(*cat2lines)[cat_id] = new unordered_set<int>();  // so create an empty set
 	}
 	(*cat2lines)[cat_id]->insert(line_index);   // insert new line to the set
-	if (debug_output) {
+	
+	/*if (debug_output) {
 		cout << "New line for " << cat_name << "=" << cat_id << endl;
 		cout << "\tTotal lines: " << (*cat2lines)[cat_id]->size() << endl;
-	}
+	}*/
 
 	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
 	// let's first build our key
 
 	compound_key = line.getCompoundKey();
 	compound2line_index[compound_key] = line_index;   // insert new line's index as value
+	/*
 	if (debug_output) {
 		cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
 	}
+
+
 	if (line.tournament_id > 0) {  // let's pause for checking
 		cout << "Finally a tournament related line. Hit enter to continue ...";
 		getchar();
 	}
+	
 	if ((lines_l + 1) % 50 == 0) {
 		cout << "TOTAL LINES = " << (lines_l + 1) << endl;
 	}
@@ -2781,6 +2786,8 @@ void insert_line(Line& line, const int line_index) {
 		cout << "Hit enter to continue..." << endl;
 		// getchar();
 	}
+	*/
+
 	return;
 }
 void test_delete() {
@@ -3016,6 +3023,7 @@ int data_step_len_temp_2 = 0;
 char** history_data_step_1 = new char*[STEP_QUEUE];
 char** history_data_step_2 = new char*[STEP_QUEUE];
 std::mutex mutex;
+flag_big_data_write = 0;
 
 for (j = 0; j < STEP_QUEUE; j++) {
 	history_data_step_2[j] = nullptr;
@@ -3042,14 +3050,16 @@ for (;;) { if (recovery_state != 0)  continue;
 	if (step_to_history_1 + step_to_history_2 < 2) printf("error STEP_QUEUE\r\n");
 
 	data_step_temp_1 = CreateStep_1(data_step_len_temp_1);
-	data_step_temp_2 = CreateStep_1(data_step_len_temp_2);
-	
-	mutex.lock();
+	data_step_temp_2 = CreateStep_2(data_step_len_temp_2);
+	flag_big_data_write = 1;
+	mutex_big_data.lock();
 	data_step_1 = data_step_temp_1;
 	data_step_2 = data_step_temp_2;
 	data_step_len_1 = data_step_len_temp_1;
 	data_step_len_2 = data_step_len_temp_2;
-	mutex.unlock();
+	mutex_big_data.unlock();
+	flag_big_data_write = 0;
+
 
 	//printf("createstep1len=%d\r\n", data_step_len_1);
 
@@ -3103,7 +3113,28 @@ DWORD WINAPI pushClientMessageThread(LPVOID lparam) {
 	return 0;
 }
 DWORD WINAPI startRecoveryThread(LPVOID) { startRecovery(); return 0; }
+void writeInteger(char* buffer, size_t &offset, int data, int num) {
+	memcpy(buffer + offset, &data, num);
+	offset += num;
+};
+void writeString(char* buffer, size_t &offset, char* data) {
+	int num = 0;
+	if (data != nullptr) num = strlen(data);
+	memcpy(buffer + offset, &num, 2);
+	offset += 2;
+	if (data != nullptr) {
+		memcpy(buffer + offset, data, num);
+		offset += num;
+	}
+};
+void writeDouble(char* buffer, size_t &offset, double data) {
+	memcpy(buffer + offset, &data, sizeof(double));
 
+};
+void writeFloat(char* buffer, size_t &offset, float data) {
+	memcpy(buffer + offset, &data, sizeof(float));
+
+};
 int GetMaxCompressedLen(int nLenSrc)
 {
 	int n16kBlocks = (nLenSrc + 16383) / 16384; // round up any fraction of a block
@@ -3204,7 +3235,7 @@ void getCategoriesTournaments() {
 	i = 0;
 	for (xml_node<> * tournament_node = root_node->first_node("tournament"); tournament_node; tournament_node = tournament_node->next_sibling())
 	{
-		tournaments[i].race = 0;
+		tournaments[i].type_radar = 0;
 
 		if (tournaments[i].name != NULL) {
 			delete[] tournaments[i].name; tournaments[i].name = NULL;
@@ -3217,13 +3248,13 @@ void getCategoriesTournaments() {
 		tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
 		if (tournaments[i].id == 0) {
 			tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
-			if (tournaments[i].id > 0)	tournaments[i].race = 1;
+			if (tournaments[i].id > 0)	tournaments[i].type_radar = 1;
 			else {
 				tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
-				if (tournaments[i].id > 0) tournaments[i].race = 2;
+				if (tournaments[i].id > 0) tournaments[i].type_radar = 2;
 				else {
 					tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 10));
-					if (tournaments[i].id > 0) tournaments[i].race = 3;
+					if (tournaments[i].id > 0) tournaments[i].type_radar = 3;
 				}
 			}
 		}
@@ -3236,7 +3267,7 @@ void getCategoriesTournaments() {
 		temp2 = atoi((char*)((char*)tournament_node->first_node("sport")->first_attribute("id")->value() + 9));
 
 		//printf("tournaments[i].id=%d\r\n", tournaments[i].id);
-		if (tournaments[i].race == 0) {
+		if (tournaments[i].type_radar == 0) {
 
 			if (tournaments[i].season_name != NULL) {
 				delete[] tournaments[i].season_name; tournaments[i].season_name = NULL;
@@ -3344,6 +3375,8 @@ void getSports() {
 		//printf("sportId=%d Name=%s", sports[i].id, sports[i].name);
 		if (sports[i].id < MAX_SPORTS) sports_id[sports[i].id] = &sports[i]; 
 		 else std::printf("ERROR DATA!\r\nsport id out of MAX_SPORTS in getSportss%d\r\n", sports[i].id);
+
+		// printf("SportId=%d,SportName=%s\r\n", sports[i].id, sports[i].name);
 		i++;
 		//sport_node->first_attribute("name")->value();
 		//cout << endl;
@@ -3397,7 +3430,7 @@ void getEvents(time_t sec,int days) {
 			events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 9));
 			if (events[i].id == 0) {
 				events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 14));
-				events[i].race = 1;
+				events[i].type_radar = 1;
 			}
 
 			if (events[i].id == 0) {
@@ -3437,7 +3470,7 @@ void getEvents(time_t sec,int days) {
 			events[i].start_time = (int)start;
 			events[i].booked = 0;
 
-			if (events[i].race == 0) {
+			if (events[i].type_radar == 0) {
 
 				strcpy(buf, event_node->first_attribute("liveodds")->value());
 				if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'd') events[i].booked = 1;
@@ -3479,8 +3512,8 @@ void getEvents(time_t sec,int days) {
 				events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 14));
 				if (events[i].tournament_id == 0) {
 					events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 21));
-					events[i].race = 2;
-				} else events[i].race = 0;
+					events[i].type_radar = 2;
+				} else events[i].type_radar = 0;
 
 				events[i].sport_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
 				events[i].category_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
@@ -3525,14 +3558,14 @@ void getEvents(time_t sec,int days) {
 
 				if (events[i].tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEvents %d\r\n", events[i].tournament_id); continue; }
 
-				if (events[i].race == 0) {
+				if (events[i].type_radar == 0) {
 					if (tournaments_id[events[i].tournament_id] == NULL) {
 						tournaments_id[events[i].tournament_id] = &tournaments[tournaments_l];
 						tournaments_l++;
 					}
 
 
-					tournaments_id[events[i].tournament_id]->race = events[i].race;
+					tournaments_id[events[i].tournament_id]->type_radar = events[i].type_radar;
 					tournaments_id[events[i].tournament_id]->id = events[i].tournament_id;
 					tournaments_id[events[i].tournament_id]->category_id = events[i].category_id;
 					tournaments_id[events[i].tournament_id]->sport_id = events[i].sport_id;
@@ -3543,14 +3576,14 @@ void getEvents(time_t sec,int days) {
 				}
 
 					
-				if (events[i].race == 2) {
+				if (events[i].type_radar == 2) {
 					if (simples_id[events[i].tournament_id] == NULL) {
 						simples_id[events[i].tournament_id] = &tournaments[tournaments_l];
 						tournaments_l++;
 					}
 
 
-					simples_id[events[i].tournament_id]->race = events[i].race;
+					simples_id[events[i].tournament_id]->type_radar = events[i].type_radar;
 					simples_id[events[i].tournament_id]->id = 0;
 					simples_id[events[i].tournament_id]->simple_id = events[i].tournament_id;
 					simples_id[events[i].tournament_id]->category_id = events[i].category_id;
@@ -3564,7 +3597,7 @@ void getEvents(time_t sec,int days) {
 
 					
 
-					if (event_node->first_node("season") && events[i].race==0) {
+					if (event_node->first_node("season") && events[i].type_radar==0) {
 						
 						if (tournaments_id[events[i].tournament_id]->season_name != NULL) { delete[] tournaments_id[events[i].tournament_id]->season_name; tournaments_id[events[i].tournament_id]->season_name = NULL; }
 						
@@ -3671,7 +3704,7 @@ void getEvents(time_t sec,int days) {
 					}
 
 
-					tournaments_id[events[i].tournament_id]->race = events[i].race;
+					tournaments_id[events[i].tournament_id]->type_radar = events[i].type_radar;
 					tournaments_id[events[i].tournament_id]->id = events[i].tournament_id;
 					tournaments_id[events[i].tournament_id]->category_id = events[i].category_id;
 					tournaments_id[events[i].tournament_id]->sport_id = events[i].sport_id;
@@ -3987,6 +4020,85 @@ void getMarkets() {
 
 
 		markets_l = i + 1;
+
+		//printf("markets[i].id=%d\r\n", markets[i].id);
+
+		if (markets[i].id == 219) markets[i].line_type = 1;// (Winner(incl.overtime) Basketball,American Football
+		if (markets[i].id == 16) markets[i].line_type = 4;// (Handicap)	Soccer,Basketball,Aussie Rules,Futsal,Handball,Ice Hockey,Rugby
+		if (markets[i].id == 1) markets[i].line_type = 2;// (1x2) Soccer,Basketball,American Football,Aussie Rules,Bandy,Baseball,Beach Soccer,Counter-Strike,Cricket,Darts,Field hockey,Floorball,Futsal,Handball,Ice Hockey,Pesapallo,Rugby,Snooker,Soccer Mythical,Waterpolo
+	    if (markets[i].id == 610) markets[i].line_type = 2;// (1x2)	Amercian Football
+		if (markets[i].id == 406) markets[i].line_type = 1;//Winner (incl. overtime and penalties) Handball,Ice Hockey
+		if (markets[i].id == 60) markets[i].line_type = 5;// 1st half - 1x2 Soccer,Basketball,American Football,Aussie Rules,Futsal,Handball,Rugby,Soccer Mythical
+		if (markets[i].id == 83) markets[i].line_type = 5;// 2nd half - 1x2 Soccer,Basketball,American Football,Handball,Soccer Mythical
+		if (markets[i].id == 113) markets[i].line_type = 5;// Overtime - 1x2 Soccer,Futsal,Ice Hockey
+		if (markets[i].id == 119) markets[i].line_type = 5;//Overtime 1st half - 1x2  Soccer
+		if (markets[i].id == 120) markets[i].line_type = 7;//Overtime 1st half - handicap Soccer
+		if (markets[i].id == 123) markets[i].line_type = 7;//Penalty shootout - winner
+		if (markets[i].id == 711) markets[i].line_type = 5;//{!inningnr} innings - 1x2 Cricket
+		if (markets[i].id == 645) markets[i].line_type = 5;//{!inningnr} innings over {overnr} - 1x2 Cricket
+		if (markets[i].id == 611) markets[i].line_type = 5;//{!quarternr} quarter - 1x2 (incl. overtime) Amercan Football valid for quartner=4
+		if (markets[i].id == 223) markets[i].line_type = 3;//Handicap (incl. overtime) Basketball,American Football
+		if (markets[i].id == 410) markets[i].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
+		if (markets[i].id == 66) markets[i].line_type = 7;//1st half - handicap
+		if (markets[i].id == 88) markets[i].line_type = 7;//2nd half - handicap
+		if (markets[i].id == 88) markets[i].line_type = 7;//2nd half - handicap
+		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+		if (markets[i].id == 303) markets[i].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
+		if (markets[i].id == 203) markets[i].line_type = 7;//{!setnr} set - game handicap Tennis
+		if (markets[i].id == 204) markets[i].line_type = 8;//{!setnr} set - total games  Tennis
+		if (markets[i].id == 746) markets[i].line_type = 7;//{!inningnr} inning - handicap Baseball
+		if (markets[i].id == 117) markets[i].line_type = 7;//Overtime - handicap Soccer,Handball
+        if (markets[i].id == 120) markets[i].line_type = 7;//Overtime 1st half - handicap Soccer
+		if (markets[i].id == 18) markets[i].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
+		if (markets[i].id == 412) markets[i].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
+    	if (markets[i].id == 68) markets[i].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
+		if (markets[i].id == 90) markets[i].line_type = 8;//2nd half - total Soccer,Soccer Mythical
+		if (markets[i].id == 446) markets[i].line_type = 8;//{!periodnr} period - total Ice Hockey
+		if (markets[i].id == 236) markets[i].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
+		if (markets[i].id == 528) markets[i].line_type = 8;//{!setnr} set - total Bowls
+		if (markets[i].id == 288) markets[i].line_type = 8;//{!inningnr} inning - total Baseball
+		if (markets[i].id == 116) markets[i].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
+		if (markets[i].id == 358) markets[i].line_type = 8;//1st over - total Cricket
+        if (markets[i].id == 340) markets[i].line_type = 6;//Winner (incl. super over) Cricket
+		if (markets[i].id == 225) markets[i].line_type = 4;// Total (incl. overtime) Basketball
+		if (markets[i].id == 501) markets[i].line_type = 8;//{!framenr} frame - total points Snooker
+		if (markets[i].id == 500) markets[i].line_type = 7;//{!framenr} frame - handicap points Snooker
+		if (markets[i].id == 527) markets[i].line_type = 7;//{!setnr} set - handicap Bowls
+		if (markets[i].id == 226) markets[i].line_type = 4;//US total (incl. overtime) Basketball,American Football
+		if (markets[i].id == 315) markets[i].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[i].id == 287) markets[i].line_type = 5;//{!inningnr} inning - 1x2 Baseball
+		if (markets[i].id == 245) markets[i].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[i].id == 235) markets[i].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
+		//if (markets[i].id == 445) markets[i].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+		if (markets[i].id == 246) markets[i].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
+		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+		//if (markets[i].id == 254) markets[i].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
+		if (markets[i].id == 256) markets[i].line_type = 7;//Handicap (incl. extra innings) Baseball
+		if (markets[i].id == 605) markets[i].line_type = 8;//{!inningnr} innings - total Cricket
+		if (markets[i].id == 251) markets[i].line_type = 6;// Winner (incl. extra innings) Baseball
+		if (markets[i].id == 189) markets[i].line_type = 4;//Total games Tennis
+		if (markets[i].id == 237) markets[i].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
+		if (markets[i].id == 538) markets[i].line_type = 2;//Head2head (1x2) Golf,Motorsport
+    	if (markets[i].id == 8) markets[i].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[i].id == 62) markets[i].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
+		if (markets[i].id == 125) markets[i].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
+    	if (markets[i].id == 115) markets[i].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[i].id == 202) markets[i].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
+		if (markets[i].id == 309) markets[i].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
+		if (markets[i].id == 29) markets[i].line_type = 11;//Both teams to score
+		if (markets[i].id == 196) markets[i].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
+
+
+		//if (markets[i].id == 75) markets[i].line_type = 12;//1st half - both teams to score
+		//if (markets[i].id == 29) markets[i].line_type = 11;//Both teams to score
+
+
+		
+
+
+
+
+
 
 
 		if (markets[i].variant >-1)
@@ -4323,9 +4435,9 @@ int getEventFixture(Event* event) {
 	char buf[10];
 	char buffer[4096];
 	char* recvbuf = new char[DEFAULT_BUFLEN];
-	//if (event->race == 1) return;
+	//if (event->type_radar == 1) return;
 	_itoa(event->id, buf, 10);
-	if (event->race == 0|| event->race == 2) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
+	if (event->type_radar == 0|| event->type_radar == 2) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
 	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:race_event:");
 	std::strcat(buffer, buf);
 	
@@ -4369,7 +4481,7 @@ int getEventFixture(Event* event) {
 	
 	
 
-	if (event->race == 1) {
+	if (event->type_radar == 1) {
 
 		if (root_node->first_node("fixture")->first_attribute("type") && root_node->first_node("fixture")->first_attribute("type")->value()[0] == 'p') 
 		 event->parent_id = -1;
@@ -4410,7 +4522,7 @@ int getEventFixture(Event* event) {
 					tournaments_l++;
 				}
 
-				tournaments_id[event->tournament_id]->race = event->race;
+				tournaments_id[event->tournament_id]->type_radar = event->type_radar;
 				tournaments_id[event->tournament_id]->id = event->tournament_id;
 				tournaments_id[event->tournament_id]->category_id = event->category_id;
 				tournaments_id[event->tournament_id]->sport_id = event->sport_id;
@@ -4449,7 +4561,7 @@ int getEventFixture(Event* event) {
 
 		}
 	}
-	if (event->race == 0 || event->race == 2) {
+	if (event->type_radar == 0 || event->type_radar == 2) {
 		std::strcpy(buf, root_node->first_node("fixture")->first_attribute("liveodds")->value());
 		if (buf[0] == 'b'&& buf[1] == 'o') event->booked = 1;
 
@@ -4482,7 +4594,7 @@ int getEventFixture(Event* event) {
 		}
 
 		event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 14));
-		if (event->tournament_id == 0) { event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 21)); event->race = 2; } else  event->race = 0;
+		if (event->tournament_id == 0) { event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 21)); event->type_radar = 2; } else  event->type_radar = 0;
 
 		event->sport_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
 		event->category_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
@@ -4494,14 +4606,14 @@ int getEventFixture(Event* event) {
 		delete[] recvbuf; doc.clear(); return -1;
 		}
 			else {
-				if (event->race == 0) {
+				if (event->type_radar == 0) {
 
 					if (tournaments_id[event->tournament_id] == NULL) {
 						tournaments_id[event->tournament_id] = &tournaments[tournaments_l];
 						tournaments_l++;
 					}
 
-					tournaments_id[event->tournament_id]->race = event->race;
+					tournaments_id[event->tournament_id]->type_radar = event->type_radar;
 					tournaments_id[event->tournament_id]->id = event->tournament_id;
 					tournaments_id[event->tournament_id]->category_id = event->category_id;
 					tournaments_id[event->tournament_id]->sport_id = event->sport_id;
@@ -4511,14 +4623,14 @@ int getEventFixture(Event* event) {
 					std::strcpy(tournaments_id[event->tournament_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
 				}
 			
-				if (event->race == 2) {
+				if (event->type_radar == 2) {
 
 					if (simples_id[event->tournament_id] == NULL) {
 						simples_id[event->tournament_id] = &tournaments[tournaments_l];
 						tournaments_l++;
 					}
 
-					simples_id[event->tournament_id]->race = event->race;
+					simples_id[event->tournament_id]->type_radar = event->type_radar;
 					simples_id[event->tournament_id]->id = 0;
 					simples_id[event->tournament_id]->simple_id = event->tournament_id;
 					simples_id[event->tournament_id]->category_id = event->category_id;
@@ -4536,7 +4648,7 @@ int getEventFixture(Event* event) {
 
 
 		
-				if (root_node->first_node("fixture")->first_node("tournament")->first_node("season") && event->race == 0) {
+				if (root_node->first_node("fixture")->first_node("tournament")->first_node("season") && event->type_radar == 0) {
 					if (tournaments_id[event->tournament_id]->season_name != NULL) { delete[] tournaments_id[event->tournament_id]->season_name; tournaments_id[event->tournament_id]->season_name = NULL; }
 					tournaments_id[event->tournament_id]->season_name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("name")->value()) + 1];
 					std::strcpy(tournaments_id[event->tournament_id]->season_name, root_node->first_node("fixture")->first_node("tournament")->first_node("season")->first_attribute("name")->value());
@@ -4680,13 +4792,13 @@ int getEventFixture(Event* event) {
 	if (event->bo == 0 && (event->sport_id == 5 || event->sport_id == 19)) getEventSummary(event);
 	
 	
-	if (event->race == 1 && event->tournament_id == 0 && event->parent_id > 0 && events_id[event->parent_id] != NULL) {
+	if (event->type_radar == 1 && event->tournament_id == 0 && event->parent_id > 0 && events_id[event->parent_id] != NULL) {
 		event->tournament_id = events_id[event->parent_id]->tournament_id;
 		event->sport_id = events_id[event->parent_id]->sport_id;
 		event->category_id = events_id[event->parent_id]->category_id;
 	}
 
-	if(event->race == 2) saveTournamentToFile(simples_id[event->tournament_id]);
+	if(event->type_radar == 2) saveTournamentToFile(simples_id[event->tournament_id]);
 	else saveTournamentToFile(tournaments_id[event->tournament_id]);
 	saveCategoryToFile(categories_id[event->category_id]);
 	saveEventToFile(event);
@@ -4697,9 +4809,9 @@ int getEventSummary(Event* event) {
 	char* recvbuf = new char[DEFAULT_BUFLEN];
 	char buf[10];
 	char buffer[1024];
-	//if (event->race == 1) return;
+	//if (event->type_radar == 1) return;
 	_itoa(event->id, buf, 10);
-	if (event->race == 0) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
+	if (event->type_radar == 0) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
 	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:race_event:");
 	std::strcat(buffer, buf);
 	std::strcat(buffer, "/summary.xml");
@@ -4837,16 +4949,16 @@ int getTournament(Tournament* tournament, bool extended) {
 
 
 	
-	if (tournament->race == 0 && tournament->id == 0) _itoa(tournament->season_id, buf, 10);
-	else if (tournament->race == 2 && tournament->id == 0) _itoa(tournament->simple_id, buf, 10);
+	if (tournament->type_radar == 0 && tournament->id == 0) _itoa(tournament->season_id, buf, 10);
+	else if (tournament->type_radar == 2 && tournament->id == 0) _itoa(tournament->simple_id, buf, 10);
 	else _itoa(tournament->id, buf, 10);
 	
 
 	std::strcpy(buffer, "/v1/sports/en/tournaments/");
-	if (tournament->race == 0 && tournament->id >0) 	std::strcat(buffer, "sr:tournament:"); else
-		if (tournament->race == 1) 	std::strcat(buffer, "sr:race_tournament:"); else
-			if (tournament->race == 2) 	std::strcat(buffer, "sr:simple_tournament:"); else
-				if (tournament->race == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:");
+	if (tournament->type_radar == 0 && tournament->id >0) 	std::strcat(buffer, "sr:tournament:"); else
+		if (tournament->type_radar == 1) 	std::strcat(buffer, "sr:race_tournament:"); else
+			if (tournament->type_radar == 2) 	std::strcat(buffer, "sr:simple_tournament:"); else
+				if (tournament->type_radar == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:");
 				else {
 					delete[] recvbuf; delete competitor; return -1;
 				};
@@ -4869,9 +4981,9 @@ int getTournament(Tournament* tournament, bool extended) {
 					delete[] recvbuf; delete competitor; doc.clear(); return -1;
 				}
 				if (tournament_node->first_attribute("id")) {
-					if (tournament->race == 0)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));else 
-				   if (tournament->race == 1)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
-					if (tournament->race == 2)  tournament->simple_id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
+					if (tournament->type_radar == 0)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));else 
+				   if (tournament->type_radar == 1)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
+					if (tournament->type_radar == 2)  tournament->simple_id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
 				}
 
 				if (tournament->name != NULL) {
@@ -4950,7 +5062,7 @@ int getTournament(Tournament* tournament, bool extended) {
 				
 				}
 				
-				if (tournament->race == 2) {
+				if (tournament->type_radar == 2) {
 					 simples_id[tournament->simple_id] = tournament;
 						
 				} else {
@@ -5302,7 +5414,7 @@ void saveEventToFile(Event* event) {
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 	WriteFile(File, &event->id, sizeof(int), &l, NULL);
-	WriteFile(File, &event->race, sizeof(int), &l, NULL);
+	WriteFile(File, &event->type_radar, sizeof(int), &l, NULL);
 	WriteFile(File, &event->sport_id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->category_id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->tournament_id, sizeof(int), &l, NULL);
@@ -5375,7 +5487,7 @@ void loadEventsFromFiles() {
 		File = CreateFile(file_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 		l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 		ReadFile(File, &events[i].id, sizeof(int), &l, NULL);
-		ReadFile(File, &events[i].race, sizeof(int), &l, NULL);
+		ReadFile(File, &events[i].type_radar, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].sport_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].category_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].tournament_id, sizeof(int), &l, NULL);
@@ -5612,7 +5724,72 @@ void loadMarketsFromFiles() {
 
 		
 		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
-			
+		
+		if (markets[k].id == 219) markets[k].line_type = 1;// (Winner(incl.overtime)
+		if (markets[k].id == 16) markets[k].line_type = 4;// (Handicap)	
+		if (markets[k].id == 1) markets[k].line_type = 2;// (1x2)	
+		if (markets[k].id == 610) markets[k].line_type = 2;// (1x2)	Amercian Football
+		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties)
+		if (markets[k].id == 60) markets[k].line_type = 5;// 1st half - 1x2
+		if (markets[k].id == 83) markets[k].line_type = 5;// 2nd half - 1x2
+		if (markets[k].id == 113) markets[k].line_type = 5;// Overtime - 1x2
+		if (markets[k].id == 119) markets[k].line_type = 5;//Overtime 1st half - 1x2
+		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap
+		if (markets[k].id == 123) markets[k].line_type = 7;//Penalty shootout - winner
+		if (markets[k].id == 711) markets[k].line_type = 5;//{!inningnr} innings - 1x2 cricket
+		if (markets[k].id == 645) markets[k].line_type = 5;//{!inningnr} innings over {overnr} - 1x2
+		if (markets[k].id == 611) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 (incl. overtime) Amercan Football valid for quartner=4
+		if (markets[k].id == 223) markets[k].line_type = 3;//Handicap (incl. overtime) Basketball,American Football
+		if (markets[k].id == 410) markets[k].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
+		if (markets[k].id == 66) markets[k].line_type = 7;//1st half - handicap
+		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
+		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
+		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+		if (markets[k].id == 303) markets[k].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
+		if (markets[k].id == 203) markets[k].line_type = 7;//{!setnr} set - game handicap Tennis
+		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
+		if (markets[k].id == 746) markets[k].line_type = 7;//{!inningnr} inning - handicap Baseball
+		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
+		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap Soccer
+		if (markets[k].id == 18) markets[k].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
+		if (markets[k].id == 412) markets[k].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
+		if (markets[k].id == 68) markets[k].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
+		if (markets[k].id == 90) markets[k].line_type = 8;//2nd half - total Soccer,Soccer Mythical
+		if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
+		if (markets[k].id == 236) markets[k].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
+		if (markets[k].id == 528) markets[k].line_type = 8;//{!setnr} set - total Bowls
+		if (markets[k].id == 288) markets[k].line_type = 8;//{!inningnr} inning - total Baseball
+		if (markets[k].id == 116) markets[k].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
+		if (markets[k].id == 358) markets[k].line_type = 8;//1st over - total Cricket
+		if (markets[k].id == 340) markets[k].line_type = 6;//Winner (incl. super over) Cricket
+		if (markets[k].id == 225) markets[k].line_type = 4;// Total (incl. overtime) Basketball
+		if (markets[k].id == 501) markets[k].line_type = 8;//{!framenr} frame - total points Snooker
+		if (markets[k].id == 500) markets[k].line_type = 7;//{!framenr} frame - handicap points Snooker
+		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap Bowls
+		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
+		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
+		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
+														   //if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
+		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
+		if (markets[k].id == 256) markets[k].line_type = 7;//Handicap (incl. extra innings) Baseball
+		if (markets[k].id == 605) markets[k].line_type = 8;//{!inningnr} innings - total Cricket
+		if (markets[k].id == 251) markets[k].line_type = 6;// Winner (incl. extra innings) Baseball
+		if (markets[k].id == 189) markets[k].line_type = 4;//Total games Tennis
+		if (markets[k].id == 237) markets[k].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
+		if (markets[k].id == 538) markets[k].line_type = 2;//Head2head (1x2) Golf,Motorsport
+		if (markets[k].id == 8) markets[k].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 62) markets[k].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 125) markets[k].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 115) markets[k].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 202) markets[k].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
+		if (markets[k].id == 309) markets[k].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
+		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
+		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
+
 			
 		
 
@@ -5636,14 +5813,14 @@ void saveTournamentToFile(Tournament* tournament) {
 	int i = 0;
 	char file_path[MAX_PATH];
 	std::strcpy(file_path, "C://Betradar//Tournaments//");
-	if (tournament->race == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
-	if (tournament->race == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
-	if (tournament->race == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
+	if (tournament->type_radar == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
+	if (tournament->type_radar == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
+	if (tournament->type_radar == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
 	strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 	WriteFile(File, &tournament->id, sizeof(int), &l, NULL);
-	WriteFile(File, &tournament->race, sizeof(int), &l, NULL);
+	WriteFile(File, &tournament->type_radar, sizeof(int), &l, NULL);
 	WriteFile(File, &tournament->simple_id, sizeof(int), &l, NULL);
 	WriteFile(File, &tournament->season_id, sizeof(int), &l, NULL);
 	WriteFile(File, &tournament->sport_id, sizeof(int), &l, NULL);
@@ -5713,7 +5890,7 @@ void loadTournamentsFromFiles() {
 			File = CreateFile(file_path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 			l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 			ReadFile(File, &tournaments[i].id, sizeof(int), &l, NULL);
-			ReadFile(File, &tournaments[i].race, sizeof(int), &l, NULL);
+			ReadFile(File, &tournaments[i].type_radar, sizeof(int), &l, NULL);
 			ReadFile(File, &tournaments[i].simple_id, sizeof(int), &l, NULL);
 			ReadFile(File, &tournaments[i].season_id, sizeof(int), &l, NULL);
 			ReadFile(File, &tournaments[i].sport_id, sizeof(int), &l, NULL);
@@ -6129,7 +6306,7 @@ for (i = 0; i < categories_l; i++) {
 }
 writeInteger(buffer, offset, tournaments_l, 2);
 for (i = 0; i < tournaments_l; i++) {
-	writeInteger(buffer, offset, tournaments[i].race, 1);
+	writeInteger(buffer, offset, tournaments[i].type_radar, 1);
 	writeInteger(buffer, offset, tournaments[i].id, 4);
 	writeInteger(buffer, offset, tournaments[i].season_id,4);
 	writeInteger(buffer, offset, tournaments[i].simple_id, 4);
@@ -6166,8 +6343,188 @@ return encode_message;
 
 };
 char* CreateStep_2(int& len) {
+	int i, j, l, k = 0;
+	int events_show_l = 0;
+	int event_lines_l = 0;
+
+	char* buffer = new char[SEND_BUFLEN];
 	len = 0;
-	return nullptr;
+	size_t offset = 0;
+	size_t retry_offset = 0;
+	offset += 2;
+	
+
+	 for (i = 0; i < events_l; i++) {
+	 if (events[i].show == 0 || events[i].status) continue;
+	 events_show_l++;
+	 writeInteger(buffer, offset, events[i].id, 4);
+	 writeInteger(buffer, offset, events[i].type_radar, 1);
+	 writeInteger(buffer, offset, events[i].status, 1);
+	 writeInteger(buffer, offset, events[i].sport_id, 2);
+	 writeInteger(buffer, offset, events[i].category_id, 2);
+	 writeInteger(buffer, offset, events[i].tournament_id, 4);
+	 writeInteger(buffer, offset, events[i].start_time, 4);
+	 writeInteger(buffer, offset, events[i].period_length, 1);
+	 writeInteger(buffer, offset, events[i].overtime_length, 1);
+	 if(events[i].sport_id == 5) writeInteger(buffer, offset, events[i].bo, 1);
+	 writeString(buffer, offset, events[i].home_name);
+	 writeString(buffer, offset, events[i].away_name);
+	 writeString(buffer, offset, events[i].tv_channels);
+	 if (events[i].status == 0)  writeInteger(buffer, offset, events[i].booked, 1);
+	 if (events[i].status > 0) {
+		 
+		 writeInteger(buffer, offset, (int)(events[i].home_score*100),2);
+		 writeInteger(buffer, offset, (int)(events[i].away_score*100),2);
+		 writeString(buffer, offset, events[i].set_scores);
+		 writeString(buffer, offset, events[i].match_time);
+		 writeString(buffer, offset, events[i].remaining_time);
+		 writeString(buffer, offset, events[i].remaining_time_in_period);
+		 writeString(buffer, offset, matchstatus_id[events[i].match_status]->description);
+		 writeInteger(buffer, offset, events[i].stopped, 1);
+		 //writeInteger(buffer, offset, events[i].stopped, 1); 
+		 if (events[i].sport_id == 1) {
+			 writeInteger(buffer, offset, events[i].home_redcards, 1);
+			 writeInteger(buffer, offset, events[i].home_yellowcards, 1);
+			 writeInteger(buffer, offset, events[i].away_redcards, 1);
+			 writeInteger(buffer, offset, events[i].away_yellowcards, 1);
+			 writeString(buffer, offset, events[i].stoppage_time);
+			 writeString(buffer, offset, events[i].stoppage_time_announced);
+			 writeInteger(buffer, offset, events[i].home_corners, 1);
+			 writeInteger(buffer, offset, events[i].away_corners, 1);
+			 writeInteger(buffer, offset, events[i].home_yellow_red_cards, 1);
+			 writeInteger(buffer, offset, events[i].away_yellow_red_cards, 1);
+			  }
+
+		 if (events[i].sport_id == 5) {
+			 writeInteger(buffer, offset, events[i].home_gamescore, 1);
+			 writeInteger(buffer, offset, events[i].away_gamescore, 1);
+			 writeInteger(buffer, offset, events[i].tiebreak, 1);
+		 }
+
+		 if (events[i].sport_id == 20) writeInteger(buffer, offset, events[i].expedite_mode, 1);
+
+
+		 if (events[i].sport_id == 4 || events[i].sport_id == 6 || events[i].sport_id == 29) {
+			 writeInteger(buffer, offset, events[i].home_suspend, 1); writeInteger(buffer, offset, events[i].away_suspend, 1);
+		 }
+
+		 
+    	 if (events[i].sport_id == 5|| events[i].sport_id == 20 || events[i].sport_id == 34 || events[i].sport_id == 19 || events[i].sport_id == 23 || events[i].sport_id == 22 || events[i].sport_id == 31) 
+			 writeInteger(buffer, offset, events[i].current_server, 1);
+		
+		 
+		 if (events[i].sport_id == 3) {
+			 writeInteger(buffer, offset, events[i].home_batter,1);
+			 writeInteger(buffer, offset, events[i].away_batter, 1);
+			 writeInteger(buffer, offset, events[i].outs, 1);
+			 writeInteger(buffer, offset, events[i].balls,1);
+			 writeInteger(buffer, offset, events[i].strikes, 1);
+			 writeString(buffer, offset, events[i].bases);
+		 }
+	
+		 if (events[i].sport_id == 16) {
+			 writeInteger(buffer, offset, events[i].possession, 1);
+			 writeInteger(buffer, offset, events[i].try_num, 1);
+			 writeInteger(buffer, offset, events[i].yards, 1);
+}
+			
+
+
+
+		 if (events[i].sport_id == 19) {
+			 writeInteger(buffer, offset, events[i].visit, 1);
+			 writeInteger(buffer, offset, events[i].remaining_reds, 1);
+		}
+
+
+		 if (events[i].sport_id == 22) {
+			 writeInteger(buffer, offset, events[i].home_legscore, 1);
+			 writeInteger(buffer, offset, events[i].away_legscore, 1);
+			 writeInteger(buffer, offset, events[i].throw_num, 1);
+			 writeInteger(buffer, offset, events[i].visit, 1);
+		}
+
+		 if (events[i].sport_id == 32) {
+			 writeInteger(buffer, offset, events[i].delivery, 1);
+			 writeInteger(buffer, offset, events[i].home_remaining_bowls, 1);
+			 writeInteger(buffer, offset, events[i].away_remaining_bowls, 1);
+			 writeInteger(buffer, offset, events[i].current_end, 1);
+	   }
+
+		 if (events[i].sport_id == 21) {
+			 writeInteger(buffer, offset, events[i].home_dismissals, 1);
+			 writeInteger(buffer, offset, events[i].away_dismissals, 1);
+			 writeInteger(buffer, offset, events[i].home_penalty_runs, 1);
+			 writeInteger(buffer, offset, events[i].away_penalty_runs, 1);
+			 writeInteger(buffer, offset, events[i].innings, 1);
+			 writeInteger(buffer, offset, events[i].over, 1);
+			 writeInteger(buffer, offset, events[i].delivery, 1);
+
+		 }
+
+		 if (events[i].sport_id == 0) writeInteger(buffer, offset,events[i].current_ct_team, 1);
+	 
+		 writeInteger(buffer, offset, events[i].position, 1);
+	 
+	 } 
+	 
+
+	     
+	 if (event2lines.find(events[i].id) == event2lines.end()) { writeInteger(buffer, offset, 0, 2); continue; }
+	  
+	  event_lines_l = 0;
+	  retry_offset = offset;
+	  offset += 2;
+
+
+	 
+	  for (unordered_set<int>::iterator it = event2lines[events[i].id]->begin(); it != event2lines[events[i].id]->end(); ++it)
+	  {   	  
+		  if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events[i].status == 0) continue;
+	      event_lines_l++;
+		  writeInteger(buffer, offset, lines[*(it)].id, 4);
+		  writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
+		  writeInteger(buffer, offset, lines[*(it)].market_id, 2);
+		  writeInteger(buffer, offset, lines[*(it)].favourite, 1);
+		  writeInteger(buffer, offset, lines[*(it)].status, 1);
+		  writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
+		  for (j = 0; j < lines[*(it)].outcome_number; j++) {
+			  writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 2);
+			  writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
+			  writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+			  writeInteger(buffer, offset, (int)lines[*(it)].outcome_odds[j]*100, 4);
+		  }
+
+		  writeInteger(buffer, offset, lines[*(it)].specifier_number, 1);
+		  for (j = 0; j < lines[*(it)].specifier_number; j++) 
+		  writeString(buffer, offset, lines[*(it)].specifier_value[j]);
+		  
+
+	  
+	  
+	  }
+
+	  writeInteger(buffer, retry_offset, event_lines_l, 2);
+	  printf("event_lines_l=%d\r\n", event_lines_l);
+
+	  k = k + event_lines_l;
+
+}
+
+retry_offset = 0;
+
+printf("events_show_l=%d num lines=%d\r\n", events_show_l,k);
+
+writeInteger(buffer, retry_offset, events_show_l, 2);
+
+	char* zip_message = nullptr;
+	int zip_len = gzip(buffer, offset, zip_message, 2);
+	delete[] buffer;
+	if (zip_len < 1) return nullptr;
+	char* encode_message = SendframeEncode(zip_message, zip_len, len);
+	delete[] zip_message;
+	return encode_message;
+
 };
 char* SendframeEncode(char* message, int messageLen, int &totalLength) {
 	char *buf = nullptr;
@@ -6833,7 +7190,7 @@ static void run(amqp_connection_state_t conn)
 	int u = 0;
 	bool print = false;
 	int event_id = 0;
-	int race = 0;
+	int type_radar = 0;
 	int status = 0;
 	int betstop_reason = 0;
 	int index_separator[100];
@@ -6850,6 +7207,7 @@ static void run(amqp_connection_state_t conn)
 	char* socket_message_big = new char[145000];
 	char* socket_message_little = new char[4096];
 	int outcomeNameError=0;
+
 	
 
 
@@ -6889,19 +7247,19 @@ static void run(amqp_connection_state_t conn)
 		
 		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
 
-			 race = 0;
+			 type_radar = 0;
 				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); race = 3; }
-				if (event_id == 0) {event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); race = 1;}
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); race = 2; }
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
+				if (event_id == 0) {event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1;}
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
 
-				if (race == 2) {
+				if (type_radar == 2) {
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
 					if (simples_id[event_id] == NULL) {
 						std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
 						tournaments[tournaments_l].id = 0;
 						tournaments[tournaments_l].simple_id = event_id;
-						tournaments[tournaments_l].race = 2;
+						tournaments[tournaments_l].type_radar = 2;
 						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture change simple %d\r\n", event_id); continue; }
 						tournaments_l++;
 
@@ -6911,13 +7269,13 @@ static void run(amqp_connection_state_t conn)
 
 
 				}
-				if (race == 3) {
+				if (type_radar == 3) {
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run fixture change %d\r\n", event_id); continue; }
 					if (seasons_id[event_id] == NULL) {
 						std::printf("Tournament not found in run fixture change. Run getTournament(). season_id=%d\r\n", event_id);
 						tournaments[tournaments_l].id = 0;
 						tournaments[tournaments_l].season_id = event_id;
-						tournaments[tournaments_l].race = 0;
+						tournaments[tournaments_l].type_radar = 0;
 						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournament season id not found in run %d\r\n", event_id); continue; }
 						else {
 							if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournament season id not found after succes in getTournament run %d\r\n", event_id); 
@@ -6930,12 +7288,12 @@ static void run(amqp_connection_state_t conn)
 						std::printf("fixture_change succes for tournamnet season id=%d\r\n", event_id);
 					
 					}
-				if (race < 2) {
+				if (type_radar < 2) {
 					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
 					if (events_id[event_id] == NULL) {
 						std::printf("Event not found in fixture_change. %d\r\n", event_id);
 						k = events_l; events_l++;
-						events[k].id = event_id; events[k].race = race;
+						events[k].id = event_id; events[k].type_radar = type_radar;
 						events_id[event_id] = &events[k];
 					}
 					if (getEventFixture(events_id[event_id]) == -1) { std::printf("fixtur_change error. %d\r\n", event_id); continue; }
@@ -6947,25 +7305,25 @@ static void run(amqp_connection_state_t conn)
 		else 
 
 			if (std::strcmp("odds_change", doc.first_node()->name()) == 0) {
-				race = 0;
+				type_radar = 0;
 				event_id = 0;
 				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); race = 3; }
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); race = 1; }
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); race = 2; }
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
 				if (event_id == 0) { std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value()); 
 				continue;
 				}
 
 				
-				if (race == 2) {
+				if (type_radar == 2) {
 					
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run odds_change %d\r\n", event_id); continue; }
 					if (simples_id[event_id] == NULL) {
 						std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
 						tournaments[tournaments_l].id = 0;
 						tournaments[tournaments_l].simple_id = event_id;
-						tournaments[tournaments_l].race = 2;
+						tournaments[tournaments_l].type_radar = 2;
 						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run simple %d\r\n", event_id); continue; }
 					     tournaments_l++;
 											
@@ -7185,7 +7543,7 @@ static void run(amqp_connection_state_t conn)
 											outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
 											if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
 											else {
-												std::printf("_line->type=%d line->market_id=%d  _tournament->race=%d  _line->simple_id =%d \r\n", _line->type, _line->market_id, _tournament->race, _line->simple_id); std::printf(outcome_node->first_attribute("id")->value());
+												std::printf("_line->type=%d line->market_id=%d  _tournament->type_radar=%d  _line->simple_id =%d \r\n", _line->type, _line->market_id, _tournament->type_radar, _line->simple_id); std::printf(outcome_node->first_attribute("id")->value());
 
 											}
 										}
@@ -7515,19 +7873,36 @@ static void run(amqp_connection_state_t conn)
 
 									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
 								}
-								lines[lines_l] = _line[0];
-								insert_line(_line[0], lines_l);
-								lines_l++;
+
+								auto it = compound2line_index.find(_line[0].getCompoundKey());
+								if (it == compound2line_index.end()) {
+									_line[0].id = lines_l;
+									lines[lines_l] = _line[0];
+								    insert_line(_line[0], lines_l);
+									lines_l++;
+								
+								}
+								else {
+									_line[0].id = it->second;
+									lines[it->second] = _line[0];
+
+									//printf("Line Update\r\n");
+								}
+								
+
+
+
+								
 }
 						}
 					}
-				if (race == 3) {
+				if (type_radar == 3) {
 					if(event_id>=MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
 					if (seasons_id[event_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). season_id=%d\r\n", event_id);
 						tournaments[tournaments_l].id = 0;
 						tournaments[tournaments_l].season_id = event_id;
-						tournaments[tournaments_l].race = 0;
+						tournaments[tournaments_l].type_radar = 0;
 						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments season id not found in run season %d\r\n", event_id); continue; }
 						else tournaments_l++;
 					}
@@ -7745,7 +8120,7 @@ static void run(amqp_connection_state_t conn)
 											outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
 											if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
 											else {
-												std::printf("_line->type=%d line->market_id=%d  _tournament->race=%d  _line->tournament_id =%d \r\n", _line->type, _line->market_id, _tournament->race, _line->tournament_id); std::printf(outcome_node->first_attribute("id")->value());
+												std::printf("_line->type=%d line->market_id=%d  _tournament->type_radar=%d  _line->tournament_id =%d \r\n", _line->type, _line->market_id, _tournament->type_radar, _line->tournament_id); std::printf(outcome_node->first_attribute("id")->value());
 
 											}
 										}
@@ -8080,23 +8455,38 @@ static void run(amqp_connection_state_t conn)
 									if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
 								}
 
-								lines[lines_l] = _line[0];
-								insert_line(_line[0], lines_l);
-								lines_l++;
+								auto it = compound2line_index.find(_line[0].getCompoundKey());
+								if (it == compound2line_index.end()) {
+									_line[0].id = lines_l;
+									lines[lines_l] = _line[0];
+									insert_line(_line[0], lines_l);
+									lines_l++;
+
+								}
+								else {
+									_line[0].id = it->second;
+									lines[it->second] = _line[0];
+
+									//printf("Line Update\r\n");
+								}
+
 							}
 						}
 				}
-				if (race < 2) {
+				if (type_radar < 2) {
 					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
 					if (events_id[event_id] == NULL) {
-						std::printf("Event not found. Run getFixture to get event_id=%d race=%d\r\n", event_id, race);
+						std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
 						events[events_l].id = event_id;
-						events[events_l].race = race; 
+						events[events_l].type_radar = type_radar; 
 						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", event_id); continue; }
 						events_l++;
 
 					}
 					_event = events_id[event_id];
+					_event->show = 1;
+
+
 					if (print == true) {
 						std::printf("\r\n***************************************************\r\n");
 						std::printf("%d\r\n", _event->id);
@@ -8124,20 +8514,20 @@ static void run(amqp_connection_state_t conn)
 
 					
 					if (_event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->tournament_id); continue; }
-					if (_event->race==0 && tournaments_id[_event->tournament_id] == NULL) {
+					if (_event->type_radar==0 && tournaments_id[_event->tournament_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
 						tournaments[tournaments_l].id = _event->tournament_id;
-						tournaments[tournaments_l].race = _event->race;
+						tournaments[tournaments_l].type_radar = _event->type_radar;
 						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nTournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
 						else tournaments_l++;
 
 
 					}
-					if (_event->race == 2 && simples_id[_event->tournament_id] == NULL) {
+					if (_event->type_radar == 2 && simples_id[_event->tournament_id] == NULL) {
 						std::printf("Simple Tournament not found. Run getTournament(). simples_id=%d\r\n", _event->tournament_id);
 						tournaments[tournaments_l].simple_id = _event->tournament_id;
 						tournaments[tournaments_l].id = 0;
-						tournaments[tournaments_l].race = _event->race;
+						tournaments[tournaments_l].type_radar = _event->type_radar;
 						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nSimple Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
 						else tournaments_l++;
 
@@ -8146,13 +8536,13 @@ static void run(amqp_connection_state_t conn)
 
 
 					if (print == true) {
-						if (_event->race == 0) std::printf(tournaments_id[_event->tournament_id]->name);
-						if (_event->race == 2) std::printf(simples_id[_event->tournament_id]->name);
+						if (_event->type_radar == 0) std::printf(tournaments_id[_event->tournament_id]->name);
+						if (_event->type_radar == 2) std::printf(simples_id[_event->tournament_id]->name);
 						std::printf("\r\n");
 					}
 
-						if (_event->race == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
-						if (_event->race == 2) std::strcat(socket_message_big, simples_id[_event->tournament_id]->name);
+						if (_event->type_radar == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
+						if (_event->type_radar == 2) std::strcat(socket_message_big, simples_id[_event->tournament_id]->name);
 						std::strcat(socket_message_big, "\r\n");
 
 						
@@ -8164,10 +8554,10 @@ static void run(amqp_connection_state_t conn)
 					if (_event->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\nsevent category_id out of MAX_CATEGORIES in run %d\r\n", _event->category_id); continue; }
 					if (categories_id[_event->category_id] == NULL) {
 						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _event->category_id);
-						if (_event->race == 0) {
+						if (_event->type_radar == 0) {
 							if (getTournament(tournaments_id[_event->tournament_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
 						}
-						if (_event->race == 2) {
+						if (_event->type_radar == 2) {
 							if (getTournament(simples_id[_event->tournament_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
 						}
 
@@ -8187,11 +8577,39 @@ static void run(amqp_connection_state_t conn)
 
 					xml_node<> * sport_event_status = doc.first_node()->first_node("sport_event_status");
 					if (sport_event_status != NULL) {
+
+						xml_node<> * statistics = sport_event_status->first_node("statistics");
+
+						if (statistics != NULL) {
+						
+							if (statistics->first_node("yellow_cards")) {
+								_event->home_yellowcards = atoi(statistics->first_node("yellow_cards")->first_attribute("home")->value());
+								_event->away_yellowcards = atoi(statistics->first_node("yellow_cards")->first_attribute("away")->value());
+							}
+							
+							if (statistics->first_node("red_cards")) {
+								_event->home_redcards = atoi(statistics->first_node("red_cards")->first_attribute("home")->value());
+								_event->away_redcards = atoi(statistics->first_node("red_cards")->first_attribute("away")->value());
+							}
+							if (statistics->first_node("yellow_red_cards")) {
+								_event->home_yellow_red_cards = atoi(statistics->first_node("yellow_red_cards")->first_attribute("home")->value());
+								_event->away_yellow_red_cards = atoi(statistics->first_node("yellow_red_cards")->first_attribute("away")->value());
+							}
+						
+							if (statistics->first_node("corners")) {
+								_event->home_corners = atoi(statistics->first_node("corners")->first_attribute("home")->value());
+								_event->away_corners = atoi(statistics->first_node("corners")->first_attribute("away")->value());
+							}
+												
+						}
+
+
 						if (sport_event_status->first_attribute("status")) _event->status = atoi(sport_event_status->first_attribute("status")->value());
 						if (sport_event_status->first_attribute("possession")) _event->possession = atoi(sport_event_status->first_attribute("possession")->value());
 						if (sport_event_status->first_attribute("try")) _event->try_num = atoi(sport_event_status->first_attribute("try")->value());
 						if (sport_event_status->first_attribute("throw")) _event->throw_num = atoi(sport_event_status->first_attribute("throw")->value());
 						if (sport_event_status->first_attribute("delivery")) _event->delivery = atoi(sport_event_status->first_attribute("delivery")->value());
+						if (sport_event_status->first_attribute("current_ct_team")) _event->delivery = atoi(sport_event_status->first_attribute("current_ct_team")->value());
 						if (sport_event_status->first_attribute("yards")) _event->yards = atoi(sport_event_status->first_attribute("yards")->value());
 						if (sport_event_status->first_attribute("innings")) _event->innings = atoi(sport_event_status->first_attribute("innings")->value());
 						if (sport_event_status->first_attribute("over")) _event->over = atoi(sport_event_status->first_attribute("over")->value());
@@ -8214,7 +8632,9 @@ static void run(amqp_connection_state_t conn)
 						if (sport_event_status->first_attribute("home_score")) _event->home_score = atof(sport_event_status->first_attribute("home_score")->value());
 						if (sport_event_status->first_attribute("away_gamescore")) _event->away_gamescore = atoi(sport_event_status->first_attribute("away_gamescore")->value());
 						if (sport_event_status->first_attribute("home_gamescore")) _event->home_gamescore = atoi(sport_event_status->first_attribute("home_gamescore")->value());
-						if (sport_event_status->first_attribute("visit")) _event->visit = atoi(sport_event_status->first_attribute("visit")->value());
+						if (sport_event_status->first_attribute("away_legscore")) _event->away_legscore = atoi(sport_event_status->first_attribute("away_legscore")->value());
+						if (sport_event_status->first_attribute("home_legscore")) _event->home_legscore = atoi(sport_event_status->first_attribute("home_legscore")->value());
+                        if (sport_event_status->first_attribute("visit")) _event->visit = atoi(sport_event_status->first_attribute("visit")->value());
 						if (sport_event_status->first_attribute("reporting")) _event->reporting = atoi(sport_event_status->first_attribute("reporting")->value());
 						if (sport_event_status->first_attribute("remaining_reds")) _event->remaining_reds = atoi(sport_event_status->first_attribute("remaining_reds")->value());
 						if (sport_event_status->first_attribute("match_status")) _event->match_status = atoi(sport_event_status->first_attribute("match_status")->value());
@@ -8242,8 +8662,8 @@ static void run(amqp_connection_state_t conn)
 						if (sport_event_status->first_attribute("tiebreak") && sport_event_status->first_attribute("tiebreak")->value()[0] == 't' && sport_event_status->first_attribute("tiebreak")->value()[1] == 'r')  _event->tiebreak = 1;
 						if (sport_event_status->first_attribute("tiebreak") && sport_event_status->first_attribute("tiebreak")->value()[0] == 'f' && sport_event_status->first_attribute("tiebreak")->value()[1] == 'a')  _event->tiebreak = 0;
 
-						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 't' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'r')  _event->expedite = 1;
-						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 'f' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'a')  _event->expedite = 0;
+						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 't' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'r')  _event->expedite_mode = 1;
+						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 'f' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'a')  _event->expedite_mode = 0;
 
 
 
@@ -8293,6 +8713,12 @@ static void run(amqp_connection_state_t conn)
 								_event->stoppage_time = new char[strlen(clock->first_attribute("stoppage_time")->value()) + 1];
 								std::strcpy(_event->stoppage_time, clock->first_attribute("stoppage_time")->value());
 							}
+							if (clock->first_attribute("stoppage_time_announced")) {
+								if (_event->stoppage_time_announced != NULL) delete[] _event->stoppage_time_announced;
+								_event->stoppage_time_announced = new char[strlen(clock->first_attribute("stoppage_time_announced")->value()) + 1];
+								std::strcpy(_event->stoppage_time_announced, clock->first_attribute("stoppage_time_announced")->value());
+							}
+							
 
 							if (clock->first_attribute("remaining_time")) {
 								if (_event->remaining_time != NULL) delete[] _event->remaining_time;
@@ -8326,8 +8752,8 @@ static void run(amqp_connection_state_t conn)
 						std::printf("period_length=%d ", _event->period_length);
 						std::printf("numbers of set=%d ", _event->bo);
 						std::printf("status=%d ", _event->status); std::printf("possession=%d ", _event->possession); std::printf("home_score=%g ", _event->away_score);
-						std::printf("away_score=%g ", _event->away_score); std::printf("home_yellowcards=%d ", _event->home_yellowcards); std::printf("away_yellowcards=%d ", _event->away_yellowcards); std::printf("home_redcards=%d ", _event->home_redcards); std::printf("away_redcards=%d ", _event->away_redcards); std::printf("expedite_mode=%d ", _event->expedite); std::printf("tiebreak=%d ", _event->tiebreak); std::printf("outs=%d ", _event->outs); std::printf("strikes=%d ", _event->strikes); std::printf("balls=%d ", _event->balls);  std::printf("home_remaining_bowls=%d ", _event->home_remaining_bowls);
-						std::printf("away_remaining_bowls=%d ", _event->away_remaining_bowls); std::printf("home_batter=%d ", _event->home_batter); std::printf("awway_batter=%d ", _event->away_batter); std::printf("winner_id=%d ", _event->winner_id); std::printf("home_suspend=%d ", _event->home_suspend); std::printf("away_suspend=%d ", _event->away_suspend); std::printf("match_status=%d ", _event->match_status); std::printf("remaining_reds=%d ", _event->remaining_reds); std::printf("reporting=%d ", _event->reporting); std::printf("position=%d ", _event->position); std::printf("home_gamescore=%d ", _event->home_gamescore); std::printf("away_gamescore=%d ", _event->away_gamescore); std::printf("visit=%d ", _event->visit); std::printf("home_dismissals=%d ", _event->home_dismissals); std::printf("away_dismissals=%d ", _event->away_dismissals); std::printf("home_penalty_runs=%d ", _event->home_penalty_runs);	std::printf("away_penalty_runs=%d ", _event->away_penalty_runs);
+						std::printf("away_score=%g ", _event->away_score); std::printf("home_yellowcards=%d ", _event->home_yellowcards); std::printf("away_yellowcards=%d ", _event->away_yellowcards); std::printf("home_redcards=%d ", _event->home_redcards); std::printf("away_redcards=%d ", _event->away_redcards); std::printf("expedite_mode=%d ", _event->expedite_mode); std::printf("tiebreak=%d ", _event->tiebreak); std::printf("outs=%d ", _event->outs); std::printf("strikes=%d ", _event->strikes); std::printf("balls=%d ", _event->balls);  std::printf("home_remaining_bowls=%d ", _event->home_remaining_bowls);
+						std::printf("away_remaining_bowls=%d ", _event->away_remaining_bowls); std::printf("home_batter=%d ", _event->home_batter); std::printf("away_batter=%d ", _event->away_batter); std::printf("winner_id=%d ", _event->winner_id); std::printf("home_suspend=%d ", _event->home_suspend); std::printf("away_suspend=%d ", _event->away_suspend); std::printf("match_status=%d ", _event->match_status); std::printf("remaining_reds=%d ", _event->remaining_reds); std::printf("reporting=%d ", _event->reporting); std::printf("position=%d ", _event->position); std::printf("home_gamescore=%d ", _event->home_gamescore); std::printf("away_gamescore=%d ", _event->away_gamescore); std::printf("visit=%d ", _event->visit); std::printf("home_dismissals=%d ", _event->home_dismissals); std::printf("away_dismissals=%d ", _event->away_dismissals); std::printf("home_penalty_runs=%d ", _event->home_penalty_runs);	std::printf("away_penalty_runs=%d ", _event->away_penalty_runs);
 						std::printf("over=%d ", _event->over); std::printf("try_num=%d ", _event->try_num); std::printf("trow_num=%d ", _event->throw_num);
 						std::printf("delivery=%d ", _event->delivery); std::printf("yards=%d ", _event->yards); std::printf("current_server=%d ", _event->current_server);
 						std::printf("innings=%d ", _event->innings);
@@ -8491,7 +8917,7 @@ static void run(amqp_connection_state_t conn)
 										outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
 										if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
 										else {
-											std::printf("_line->type=%d line->market_id=%d  _event->race=%d  _line->event_id =%d \r\n", _line->type, _line->market_id, _event->race, _line->event_id); std::printf(outcome_node->first_attribute("id")->value());
+											std::printf("_line->type=%d line->market_id=%d  _event->type_radar=%d  _line->event_id =%d \r\n", _line->type, _line->market_id, _event->type_radar, _line->event_id); std::printf(outcome_node->first_attribute("id")->value());
 
 										}
 									}
@@ -8551,7 +8977,7 @@ static void run(amqp_connection_state_t conn)
 
 								replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
 								if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
-								if (_event->race > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
+								if (_event->type_radar > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
 
 
 								if (print == true) {
@@ -8608,7 +9034,7 @@ static void run(amqp_connection_state_t conn)
 
 										replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 										if (_event->away_name != NULL) replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-										if (_event->race > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+										if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 
 
 
@@ -8726,7 +9152,7 @@ static void run(amqp_connection_state_t conn)
 
 												replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 												replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-												if (_event->race > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+												if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 
 
 
@@ -8774,12 +9200,12 @@ static void run(amqp_connection_state_t conn)
 											if (competitors_id[_line->outcome_id[i]] == NULL) {
 												std::printf("Competitor id=%d not found in market id=%d in event_id=%d  in run function. getTournament\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
 												//tournaments[tournaments_l].id = _event->tournament_id;
-												//tournaments[tournaments_l].race = _event->race;
+												//tournaments[tournaments_l].type_radar = _event->type_radar;
 											
-												if (_event->race == 0 && getTournament(tournaments_id[_event->tournament_id], false) == -1)
+												if (_event->type_radar == 0 && getTournament(tournaments_id[_event->tournament_id], false) == -1)
 													std::printf("ERROR!\r\nTournaments not found in run %d \r\n", _event->tournament_id);
 											
-												if (_event->race == 2 && getTournament(simples_id[_event->tournament_id], false) == -1)
+												if (_event->type_radar == 2 && getTournament(simples_id[_event->tournament_id], false) == -1)
 													std::printf("ERROR!\r\nSimples Tournaments not found in run %d \r\n", _event->tournament_id);
 											
 											}
@@ -8810,7 +9236,7 @@ static void run(amqp_connection_state_t conn)
 												}
 												replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 												replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-												if (_event->race > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+												if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 											}
 											else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 										}
@@ -8861,7 +9287,7 @@ static void run(amqp_connection_state_t conn)
 
 										replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
 										replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-										if (_event->race > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+										if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
 
 
 										//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
@@ -8892,9 +9318,25 @@ static void run(amqp_connection_state_t conn)
 
 								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 							}
-							lines[lines_l] = _line[0];
-							insert_line(_line[0], lines_l);
-							lines_l++;
+							
+							auto it = compound2line_index.find(_line[0].getCompoundKey());
+							if (it == compound2line_index.end()) {
+								_line[0].id = lines_l;
+								lines[lines_l] = _line[0];
+								insert_line(_line[0], lines_l);
+								lines_l++;
+
+							}
+							else {
+								_line[0].id = it->second;
+								lines[it->second] = _line[0];
+
+								//printf("Line Update\r\n");
+							}
+
+
+							
+
 						}
 					}
 				}
