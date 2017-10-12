@@ -155,12 +155,17 @@ DWORD WINAPI startRecoveryThread(LPVOID);
 
 
 int recovery_state = -1;
-char* data_step_1;
-char* data_step_2;
-int data_step_len_1;
-int data_step_len_2;
-int flag_big_data_write;
-std::mutex mutex_big_data;
+
+int* data_step_len_1 = new int[STEP_QUEUE];
+int* data_step_len_2 = new int[STEP_QUEUE];
+char** array_data_step_1 = new char*[STEP_QUEUE];
+char** array_data_step_2 = new char*[STEP_QUEUE];
+int current_data_step_1 = -1;
+int current_data_step_2 = -1;
+int current_data_step_temp_1 = -1;
+int current_data_step_temp_2 = -1;
+
+
 
 
 using namespace std;
@@ -1097,6 +1102,8 @@ void webSocket::startServer(int port) {
 	char* writeBuffer = nullptr;
 	size_t writeBufferLen = 0;
 	int iResult = 0;
+	int current = 0;
+	int i = 0;
 	struct sockaddr_in serv_addr, cli_addr;
 
 	memset(&serv_addr, '0', sizeof(serv_addr));
@@ -1208,8 +1215,40 @@ void webSocket::startServer(int port) {
 		timeout.tv_usec = 100;
 		//if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) 
 		
+
+		for (int j = 0; j < STEP_QUEUE; j++) {
+
+			if (array_data_step_1[j] != nullptr) {
+				for (i = 0; i <= fdmax; i++) {
+					if (socketIDmap.find(i) != socketIDmap.end()) continue;
+					if (wsClients[socketIDmap[i]] == NULL) continue;
+					if (wsClients[socketIDmap[i]]->step_buffer_1 == array_data_step_1[j]) break;
+				}
+
+				if (i > fdmax) {
+					if (j != current_data_step_1 && j != current_data_step_temp_1) { printf("delete1\r\n"); delete[] array_data_step_1[j]; printf("delete2\r\n"); }  if (j != current_data_step_1&& j != current_data_step_temp_1) array_data_step_1[j] = nullptr;
+				}
+			}
+
+			if (array_data_step_2[j] != nullptr) {
+				for (i = 0; i <= fdmax; i++) {
+					if (socketIDmap.find(i) != socketIDmap.end()) continue;
+					if (wsClients[socketIDmap[i]] == NULL) continue;
+
+					if (wsClients[socketIDmap[i]]->step_buffer_2 == array_data_step_2[j]) break;
+				}
+
+				if (i > fdmax) { if (j != current_data_step_2 && j != current_data_step_temp_2) { printf("_delete1\r\n"); delete[] array_data_step_2[j]; printf("_delete2\r\n");
+				} if (j != current_data_step_2) array_data_step_2[j] = nullptr; }
+			}
+		}
+
 		if (select(fdmax + 1, &read_fds, &write_fds, NULL, &timeout) != SOCKET_ERROR)
 		{
+
+
+		
+
 
 
 			for (int i = 0; i <= fdmax; i++) {
@@ -1379,10 +1418,11 @@ void webSocket::startServer(int port) {
 							}
 							
 							else if (wsClients[socketIDmap[i]]->step_buffer_len_1 == -1 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-								if (data_step_1 != nullptr) {
-									writeopcode = 6;
-									wsClients[socketIDmap[i]]->step_buffer_1 = data_step_1;
-									wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1;
+								if (current_data_step_1 != -1) {
+							        writeopcode = 6;
+									current = current_data_step_1;
+									wsClients[socketIDmap[i]]->step_buffer_1 = array_data_step_1[current];
+									wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1[current];
 
 
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_1, wsClients[socketIDmap[i]]->step_buffer_len_1);
@@ -1394,10 +1434,11 @@ void webSocket::startServer(int port) {
 								writeopcode = 6;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_1, wsClients[socketIDmap[i]]->step_buffer_len_1);}
 							else if (wsClients[socketIDmap[i]]->step_buffer_len_2 == -1 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-								if (data_step_2 != nullptr) {
+								if (current_data_step_2 != -1) {
 									writeopcode = 7;
-									wsClients[socketIDmap[i]]->step_buffer_2 = data_step_2;
-									wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2;
+									current = current_data_step_2;
+									wsClients[socketIDmap[i]]->step_buffer_2 = array_data_step_2[current];
+									wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2[current];
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_2, wsClients[socketIDmap[i]]->step_buffer_len_2);
 								}
 
@@ -1513,9 +1554,10 @@ void webSocket::startServer(int port) {
 									wsClients[socketIDmap[i]]->ready_state = WS_READY_STATE_OPEN;
 									delete[] wsClients[socketIDmap[i]]->handshake_message;
 									wsClients[socketIDmap[i]]->handshake_message = nullptr;
-									if (data_step_1 != nullptr) {
-										wsClients[socketIDmap[i]]->step_buffer_1 = data_step_1;
-										wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1;
+									if (current_data_step_1 != -1) {
+										current = current_data_step_1;
+										wsClients[socketIDmap[i]]->step_buffer_1 = array_data_step_1[current];
+										wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1[current];
 									}
 									if (callOnOpen != NULL) callOnOpen(socketIDmap[i]);
 								}
@@ -1549,9 +1591,10 @@ void webSocket::startServer(int port) {
 								if (writeopcode == 6) {
 									wsClients[socketIDmap[i]]->step_buffer_1 = nullptr;
 									wsClients[socketIDmap[i]]->step_buffer_len_1 = 0;
-									if (data_step_2 != nullptr) {
-										wsClients[socketIDmap[i]]->step_buffer_2 = data_step_2;
-										wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2;
+									if (current_data_step_2 != -1) {
+										current = current_data_step_2;
+										wsClients[socketIDmap[i]]->step_buffer_2 = array_data_step_2[current];
+										wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2[current];
 									}
 
 								}
@@ -3015,80 +3058,70 @@ DWORD WINAPI GenerateBigStepThread(LPVOID) {
 int i = 0;
 int j = 0;
 int k = 0;
-int step_to_history_1 = 0;
-int step_to_history_2 = 0;
-data_step_1 = nullptr;
-data_step_2 = nullptr;
-char* data_step_temp_1 = nullptr;
-char* data_step_temp_2 = nullptr;
-int data_step_len_temp_1 = 0;
-int data_step_len_temp_2 = 0;
 
-char** history_data_step_1 = new char*[STEP_QUEUE];
-char** history_data_step_2 = new char*[STEP_QUEUE];
-std::mutex mutex;
-flag_big_data_write = 0;
 
 for (j = 0; j < STEP_QUEUE; j++) {
-	history_data_step_2[j] = nullptr;
-	history_data_step_1[j] = nullptr;
+	array_data_step_2[j] = nullptr;
+	array_data_step_1[j] = nullptr;
+	data_step_len_1[j] = 0;
+	data_step_len_2[j] = 0;
 }
 
-vector<int> clientIDs;
+//vector<int> clientIDs;
 
 
 
 for (;;) { if (recovery_state != 0)  continue;
-	clientIDs.clear();
-	step_to_history_1 = 0;
-	step_to_history_2 = 0;
+	//clientIDs.clear();
+	current_data_step_temp_1 = -1;
+	current_data_step_temp_2 = -1;
+
+	
+	/*
+	clientIDs = server.getClientIDs();
+	for (j = 0; j < STEP_QUEUE; j++) {
+
+		if (array_data_step_1[j] != nullptr && j != current_data_step_1) {
+			for (i = 0; i < clientIDs.size(); i++) {
+				if (server.wsClients[clientIDs[i]] == NULL) continue;
+				if (server.wsClients[clientIDs[i]]->step_buffer_1 == array_data_step_1[j]) break;
+			}
+
+			if (i == clientIDs.size()) { delete[] array_data_step_1[j]; array_data_step_1[j] = nullptr; }
+		}
+
+		if (array_data_step_2[j] != nullptr && j != current_data_step_2) {
+			for (i = 0; i < clientIDs.size(); i++) {
+				if (server.wsClients[clientIDs[i]] == NULL) continue;
+				if (server.wsClients[clientIDs[i]]->step_buffer_2 == array_data_step_2[j]) break;
+			}
+
+			if (i == clientIDs.size()) { delete[] array_data_step_2[j]; array_data_step_2[j] = nullptr; }
+		}
+	}
+
+	*/
 
 
 	for (j = 0; j < STEP_QUEUE; j++) {
-		if (step_to_history_1 + step_to_history_2 == 2) break;
-        if (step_to_history_1 == 0 && history_data_step_1[j] == nullptr) { history_data_step_1[j] = data_step_1; step_to_history_1 = 1; }
-		if (step_to_history_2 == 0 && history_data_step_2[j] == nullptr) { history_data_step_2[j] = data_step_2; step_to_history_2 = 1; }
+		if (current_data_step_temp_1 >-1 && current_data_step_temp_2 >-1 ) break;
+        if (current_data_step_temp_1 == -1 && array_data_step_1[j] == nullptr)  current_data_step_temp_1 = j; 
+		if (current_data_step_temp_2 == -1 && array_data_step_2[j] == nullptr)  current_data_step_temp_2 = j; 
 
 	}
 	
-	if (step_to_history_1 + step_to_history_2 < 2) printf("error STEP_QUEUE\r\n");
-
-	data_step_temp_1 = CreateStep_1(data_step_len_temp_1);
-	data_step_temp_2 = CreateStep_2(data_step_len_temp_2);
-	flag_big_data_write = 1;
-	mutex_big_data.lock();
-	data_step_1 = data_step_temp_1;
-	data_step_2 = data_step_temp_2;
-	data_step_len_1 = data_step_len_temp_1;
-	data_step_len_2 = data_step_len_temp_2;
-	mutex_big_data.unlock();
-	flag_big_data_write = 0;
+	if (current_data_step_temp_1 == -1 || current_data_step_temp_2 == -1) {
+		printf("error STEP_QUEUE\r\n"); Sleep(1000); continue;
+	}
 
 
-	//printf("createstep1len=%d\r\n", data_step_len_1);
+	array_data_step_1[current_data_step_temp_1] = CreateStep_1(data_step_len_1[current_data_step_temp_1]);
+	current_data_step_1 = current_data_step_temp_1;
+	array_data_step_2[current_data_step_temp_2] = CreateStep_2(data_step_len_2[current_data_step_temp_2]);
+	current_data_step_2 = current_data_step_temp_2;
 
-	clientIDs = server.getClientIDs();
-	for (j = 0; j < STEP_QUEUE; j++) {
-		if (history_data_step_1[j] != nullptr) {
-			for (i = 0; i < clientIDs.size(); i++) {
-				if (server.wsClients[clientIDs[i]] == NULL) continue;
-				if (server.wsClients[clientIDs[i]]->step_buffer_1 == history_data_step_1[j]) break;
-			}
+	Sleep(100);
 
-			if (i == clientIDs.size()) { delete[] history_data_step_1[j]; history_data_step_1[j] = nullptr; }
-		}
-
-		if (history_data_step_2[j] != nullptr) {
-			for (i = 0; i < clientIDs.size(); i++) {
-				if (server.wsClients[clientIDs[i]] == NULL) continue;
-				if (server.wsClients[clientIDs[i]]->step_buffer_2 == history_data_step_2[j]) break;
-			}
-
-			if (i == clientIDs.size()) { delete[] history_data_step_2[j]; history_data_step_2[j] = nullptr; }
-		}
-}
-
-	Sleep(1000);
 }
 
 
@@ -8524,7 +8557,7 @@ static void run(amqp_connection_state_t conn)
 						std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
 						events[events_l].id = event_id;
 						events[events_l].type_radar = type_radar; 
-						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", event_id); continue; }
+						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture1 error return in run %d .\r\n", event_id); continue; }
 						events_l++;
 
 					}
@@ -8562,7 +8595,7 @@ static void run(amqp_connection_state_t conn)
 						std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
 						tournaments[tournaments_l].id = _event->tournament_id;
 						tournaments[tournaments_l].type_radar = _event->type_radar;
-						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nTournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
+						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nTournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture2 error return in run %d .\r\n", _event->id); continue; } }
 						else tournaments_l++;
 
 
@@ -8572,7 +8605,7 @@ static void run(amqp_connection_state_t conn)
 						tournaments[tournaments_l].simple_id = _event->simple_id;
 						tournaments[tournaments_l].id = 0;
 						tournaments[tournaments_l].type_radar = _event->type_radar;
-						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nSimple Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture error return in run %d .\r\n", _event->id); continue; } }
+						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nSimple Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture3 error return in run %d .\r\n", _event->id); continue; } }
 						else tournaments_l++;
 
 
