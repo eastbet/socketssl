@@ -199,6 +199,8 @@ public:
 		last_message_queue_socket = 0;
 		step_buffer_1=nullptr;
 		step_buffer_2=nullptr;
+		current1 = -1;
+		current2 = -1;
 		step_buffer_len_2 = -1;
 		step_buffer_len_1 = -1;
         //flag = 0;
@@ -238,6 +240,8 @@ public:
 	char* step_buffer_2;
 	int step_buffer_len_1;
 	int step_buffer_len_2;
+	int current1;
+	int current2;
 	//int flag;
 	//std::mutex mutex;
 
@@ -1208,40 +1212,58 @@ void webSocket::startServer(int port) {
 	struct timeval timeout;
 	time_t nextPingTime = time(NULL) + 20;
 	
-	while (FD_ISSET(ListenSocket, &r_fds)|| FD_ISSET(ListenSocket, &w_fds)) {
+	while (FD_ISSET(ListenSocket, &r_fds) || FD_ISSET(ListenSocket, &w_fds)) {
 		read_fds = r_fds;
 		write_fds = w_fds;
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 100;
 		//if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) 
+
+		//printf("---------------------------------------\r\n");
+		/*
+			for (int j = 0; j < STEP_QUEUE; j++) {
+
+				if (array_data_step_1[j] != nullptr && j != current_data_step_1 && j != current_data_step_temp_1) {
+					
+					for (i = 0; i <= fdmax; i++) {
+						if (socketIDmap.size() == 0) continue;
+						if (socketIDmap.find(i) != socketIDmap.end()) continue;
+						if (wsClients[socketIDmap[i]] == NULL) continue;
+						if (wsClients[socketIDmap[i]]->step_buffer_1 != nullptr) printf("NONULLPTR1\r\n");
+						if (wsClients[socketIDmap[i]]->step_buffer_1 == array_data_step_1[j]) { printf("j1=%d\r\n", j); printf("BRAEK1\r\n"); printf("current_data_step_1=%d current_data_step_temp_1=%d\r\n", current_data_step_1, current_data_step_temp_1); break; }
+					}
+
+					if (i > fdmax) {
+						
+						if (j != current_data_step_1 && j != current_data_step_temp_1) { printf("j1=%d\r\n", j); printf("DELETE1\r\n"); printf("current_data_step_1=%d current_data_step_temp_1=%d\r\n", current_data_step_1, current_data_step_temp_1); delete[] array_data_step_1[j]; array_data_step_1[j] = nullptr;
+						}
+						
+					}
+				}
+
+				if (array_data_step_2[j] != nullptr  && j != current_data_step_2 && j != current_data_step_temp_2) {
+				
+					for (i = 0; i <= fdmax; i++) {
+						if (socketIDmap.size() == 0) continue;
+						if (socketIDmap.find(i) != socketIDmap.end()) continue;
+						if (wsClients[socketIDmap[i]] == NULL) continue;
+						if (wsClients[socketIDmap[i]]->step_buffer_2 != nullptr) printf("NONULLPTR2\r\n");
+						if (wsClients[socketIDmap[i]]->step_buffer_2 == array_data_step_2[j]) { printf("j2=%d\r\n", j); printf("BRAEK2\r\n"); printf("current_data_step_2=%d current_data_step_temp_2=%d\r\n", current_data_step_2, current_data_step_temp_2); break; }
+					}
+
+					if (i > fdmax) {
+						if (j != current_data_step_2 && j != current_data_step_temp_2) { 
+							printf("j2=%d\r\n", j);  printf("DELETE2\r\n"); printf("current_data_step_2=%d current_data_step_temp_2=%d\r\n", current_data_step_2, current_data_step_temp_2); 
+							delete[] array_data_step_2[j]; array_data_step_2[j] = nullptr;
+						}
+						
+					}
+				}
+			}
 		
 
-		for (int j = 0; j < STEP_QUEUE; j++) {
 
-			if (array_data_step_1[j] != nullptr) {
-				for (i = 0; i <= fdmax; i++) {
-					if (socketIDmap.find(i) != socketIDmap.end()) continue;
-					if (wsClients[socketIDmap[i]] == NULL) continue;
-					if (wsClients[socketIDmap[i]]->step_buffer_1 == array_data_step_1[j]) break;
-				}
-
-				if (i > fdmax) {
-					if (j != current_data_step_1 && j != current_data_step_temp_1) { printf("delete1\r\n"); delete[] array_data_step_1[j]; printf("delete2\r\n"); }  if (j != current_data_step_1&& j != current_data_step_temp_1) array_data_step_1[j] = nullptr;
-				}
-			}
-
-			if (array_data_step_2[j] != nullptr) {
-				for (i = 0; i <= fdmax; i++) {
-					if (socketIDmap.find(i) != socketIDmap.end()) continue;
-					if (wsClients[socketIDmap[i]] == NULL) continue;
-
-					if (wsClients[socketIDmap[i]]->step_buffer_2 == array_data_step_2[j]) break;
-				}
-
-				if (i > fdmax) { if (j != current_data_step_2 && j != current_data_step_temp_2) { printf("_delete1\r\n"); delete[] array_data_step_2[j]; printf("_delete2\r\n");
-				} if (j != current_data_step_2) array_data_step_2[j] = nullptr; }
-			}
-		}
+	*/
 
 		if (select(fdmax + 1, &read_fds, &write_fds, NULL, &timeout) != SOCKET_ERROR)
 		{
@@ -2414,7 +2436,7 @@ public:
 	int market_id;
 	int event_id;
 	int team;
-	int status;
+	int status; //0 (inactive)// 1 (active) //-1(suspended) //- 3 (cleared, settled) //- 4 (cancelled)	//handed_over(-2)
 	int favourite;
 	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext
 	int variant;
@@ -3067,17 +3089,17 @@ for (j = 0; j < STEP_QUEUE; j++) {
 	data_step_len_2[j] = 0;
 }
 
-//vector<int> clientIDs;
+vector<int> clientIDs;
 
 
 
 for (;;) { if (recovery_state != 0)  continue;
-	//clientIDs.clear();
+	clientIDs.clear();
 	current_data_step_temp_1 = -1;
 	current_data_step_temp_2 = -1;
 
 	
-	/*
+	
 	clientIDs = server.getClientIDs();
 	for (j = 0; j < STEP_QUEUE; j++) {
 
@@ -3100,7 +3122,7 @@ for (;;) { if (recovery_state != 0)  continue;
 		}
 	}
 
-	*/
+	
 
 
 	for (j = 0; j < STEP_QUEUE; j++) {
@@ -3114,13 +3136,16 @@ for (;;) { if (recovery_state != 0)  continue;
 		printf("error STEP_QUEUE\r\n"); Sleep(1000); continue;
 	}
 
-
+	//printf("CreateStep_1\r\n");
 	array_data_step_1[current_data_step_temp_1] = CreateStep_1(data_step_len_1[current_data_step_temp_1]);
+	//printf("CreateStep_1 end\r\n");kl
 	current_data_step_1 = current_data_step_temp_1;
+	//printf("CreateStep_2\r\n");
 	array_data_step_2[current_data_step_temp_2] = CreateStep_2(data_step_len_2[current_data_step_temp_2]);
+	//printf("CreateStep_2 end\r\n");
 	current_data_step_2 = current_data_step_temp_2;
 
-	Sleep(100);
+	//Sleep(100);
 
 }
 
