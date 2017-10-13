@@ -408,75 +408,87 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, char* me
 		char *buf = nullptr;
 		size_t totalLength;
 
-		// set max payload length per frame
-		int bufferSize = DEFAULT_BUFLEN;
+		if (opcode == WS_OPCODE_PING || opcode == WS_OPCODE_PONG || opcode == WS_OPCODE_CLOSE) {
 
-		// work out amount of frames to send, based on $bufferSize
-		int frameCount = ceil((float)messageLen / bufferSize);
-		if (frameCount == 0)
-			frameCount = 1;
+			// set max payload length per frame
+			int bufferSize = DEFAULT_BUFLEN;
 
-		// set last frame variables
-		int maxFrame = frameCount - 1;
-		int lastframe_bufferLength = (messageLen % bufferSize) != 0 ? (messageLen % bufferSize) : (messageLen != 0 ? bufferSize : 0);
+			// work out amount of frames to send, based on $bufferSize
+			int frameCount = ceil((float)messageLen / bufferSize);
+			if (frameCount == 0)
+				frameCount = 1;
 
-		// loop around all frames to send
+			// set last frame variables
+			int maxFrame = frameCount - 1;
+			int lastframe_bufferLength = (messageLen % bufferSize) != 0 ? (messageLen % bufferSize) : (messageLen != 0 ? bufferSize : 0);
 
-		
-
-		for (int i = 0; i < frameCount; i++) {
-			// fetch fin, opcode and buffer length for frame
-			unsigned char fin = i != maxFrame ? 0 : WS_FIN;
-			opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
-
-			size_t bufferLength = i != maxFrame ? bufferSize : lastframe_bufferLength;
+			// loop around all frames to send
 
 
 
-			// set payload length variables for frame
-			if (bufferLength <= 125) {
-				// int payloadLength = bufferLength;
-				totalLength = bufferLength + 2;
-				buf = new char[totalLength];
-				buf[0] = fin | opcode;
-				buf[1] = bufferLength;
-				memcpy(buf + 2, message, messageLen);
+			for (int i = 0; i < frameCount; i++) {
+				// fetch fin, opcode and buffer length for frame
+				unsigned char fin = i != maxFrame ? 0 : WS_FIN;
+				opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
+
+				size_t bufferLength = i != maxFrame ? bufferSize : lastframe_bufferLength;
+
+
+
+				// set payload length variables for frame
+				if (bufferLength <= 125) {
+					// int payloadLength = bufferLength;
+					totalLength = bufferLength + 2;
+					buf = new char[totalLength];
+					buf[0] = fin | opcode;
+					buf[1] = bufferLength;
+					memcpy(buf + 2, message, messageLen);
+				}
+				else if (bufferLength <= 65535) {
+					// int payloadLength = WS_PAYLOAD_LENGTH_16;
+					totalLength = bufferLength + 4;
+					buf = new char[totalLength];
+					buf[0] = fin | opcode;
+					buf[1] = WS_PAYLOAD_LENGTH_16;
+					buf[2] = bufferLength >> 8;
+					buf[3] = bufferLength;
+					memcpy(buf + 4, message, messageLen);
+				}
+				else {
+					// int payloadLength = WS_PAYLOAD_LENGTH_63;
+					totalLength = bufferLength + 10;
+					buf = new char[totalLength];
+					buf[0] = fin | opcode;
+					buf[1] = WS_PAYLOAD_LENGTH_63;
+					buf[2] = 0;
+					buf[3] = 0;
+					buf[4] = 0;
+					buf[5] = 0;
+					buf[6] = bufferLength >> 24;
+					buf[7] = bufferLength >> 16;
+					buf[8] = bufferLength >> 8;
+					buf[9] = bufferLength;
+					memcpy(buf + 10, message, messageLen);
+				}
+
 			}
-			else if (bufferLength <= 65535) {
-				// int payloadLength = WS_PAYLOAD_LENGTH_16;
-				totalLength = bufferLength + 4;
-				buf = new char[totalLength];
-				buf[0] = fin | opcode;
-				buf[1] = WS_PAYLOAD_LENGTH_16;
-				buf[2] = bufferLength >> 8;
-				buf[3] = bufferLength;
-				memcpy(buf + 4, message, messageLen);
-			}
-			else {
-				// int payloadLength = WS_PAYLOAD_LENGTH_63;
-				totalLength = bufferLength + 10;
-				buf = new char[totalLength];
-				buf[0] = fin | opcode;
-				buf[1] = WS_PAYLOAD_LENGTH_63;
-				buf[2] = 0;
-				buf[3] = 0;
-				buf[4] = 0;
-				buf[5] = 0;
-				buf[6] = bufferLength >> 24;
-				buf[7] = bufferLength >> 16;
-				buf[8] = bufferLength >> 8;
-				buf[9] = bufferLength;
-				memcpy(buf + 10, message, messageLen);
-			}
+
+			if (opcode == WS_OPCODE_PING) { if (wsClients[clientID]->message_ping != nullptr) delete[] wsClients[clientID]->message_ping; wsClients[clientID]->message_ping = buf; wsClients[clientID]->message_ping_length = totalLength; }
+			else
+				if (opcode == WS_OPCODE_PONG) { if (wsClients[clientID]->message_pong != nullptr) delete[] wsClients[clientID]->message_pong; wsClients[clientID]->message_pong = buf; wsClients[clientID]->message_pong_length = totalLength; }
+				else
+					if (opcode == WS_OPCODE_CLOSE) { if (wsClients[clientID]->message_close != nullptr) delete[] wsClients[clientID]->message_close; wsClients[clientID]->message_close = buf; wsClients[clientID]->message_close_length = totalLength; }
 
 		}
-		
-			if (opcode == WS_OPCODE_PING) { if (wsClients[clientID]->message_ping != nullptr) delete[] wsClients[clientID]->message_ping; wsClients[clientID]->message_ping = buf; wsClients[clientID]->message_ping_length = totalLength; } else
-			if (opcode == WS_OPCODE_PONG) { if (wsClients[clientID]->message_pong != nullptr) delete[] wsClients[clientID]->message_pong; wsClients[clientID]->message_pong = buf; wsClients[clientID]->message_pong_length = totalLength; } else
-            if (opcode == WS_OPCODE_CLOSE) { if (wsClients[clientID]->message_close != nullptr) delete[] wsClients[clientID]->message_close; wsClients[clientID]->message_close = buf; wsClients[clientID]->message_close_length = totalLength; } else 
 			
-			{
 			
+			else 
+			
+			{    
+
+				totalLength = messageLen;
+				buf = new char[totalLength];
+				memcpy(buf, message, messageLen);
 			
 			//wsClients[clientID]->mutex.lock();
 			
@@ -2864,27 +2876,28 @@ void test_delete() {
 	uint64_t time_diff;
 	int idx1 = rand() % lines_l;
 	int idx2 = rand() % lines_l;
-	Line line1 = lines[idx1];
-	Line line2 = lines[idx2];
-	int event_id = line2.event_id;
-	if (idx1 == idx2 || event_id == 0 || event2lines.find(event_id) == event2lines.end()) {
+	Line* line1 = &(lines[idx1]);
+	Line* line2 = &(lines[idx2]);
+	int event_id = line2->event_id;
+	if (idx1 == idx2 || event_id == 0 ||
+		event2lines.find(event_id) == event2lines.end() || event2lines.find(line1->event_id) == event2lines.end()) {
 		test_delete();
 		return;
 	}
-	cout << idx1 << " " << idx2 << " " << event_id << endl;
-	cout << "Testing delete line(" << line1.name << ") ..." << endl;
-	cout << "\t Its market(" << line1.market_id << ") has " << market2lines[line1.market_id]->size() << " lines now." << endl;
-	cout << "\t Its event(" << line1.event_id << ") has " << event2lines[line1.event_id]->size() << " lines now." << endl;
+	// cout << idx1 << " " << idx2 << " " << event_id << endl;
+	cout << "Testing delete line(" << line1->name << ") ..." << endl;
+	cout << "\t Its market(" << line1->market_id << ") has " << market2lines[line1->market_id]->size() << " lines now." << endl;
+	cout << "\t Its event(" << line1->event_id << ") has " << event2lines[line1->event_id]->size() << " lines now." << endl;
 	cout << "\t Deleting the line..." << endl;
 	t1 = chrono::high_resolution_clock::now();
-	delete_line(line1);
+	delete_line(*line1);
 	t2 = chrono::high_resolution_clock::now();
 	time_diff = chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count();
 	cout << "\t Deletion took: " << (time_diff / 1e6) << " milliseconds" << endl;
-	cout << "\t Its market has " << market2lines[line1.market_id]->size() << " lines now." << endl;
-	cout << "\t Its event has " << event2lines[line1.event_id]->size() << " lines now." << endl;
+	cout << "\t Its market has " << market2lines[line1->market_id]->size() << " lines now." << endl;
+	cout << "\t Its event has " << event2lines[line1->event_id]->size() << " lines now." << endl;
 
-	/*
+
 	cout << endl << "Testing delete event_id(" << event_id << ") ..." << endl;
 	t1 = chrono::high_resolution_clock::now();
 	delete_line_cat(event_id, LC_EVENT);
@@ -2892,18 +2905,20 @@ void test_delete() {
 	time_diff = chrono::duration_cast<chrono::nanoseconds>(t2 - t1).count();
 	cout << "\t Deletion took: " << (time_diff / 1e6) << " milliseconds" << endl;
 	cout << "\t Testing if event's Line object are also deleted." << endl;
-	auto it = compound2line_index.find(line2.getCompoundKey());
+	auto it = compound2line_index.find(line2->getCompoundKey());
 	if (it == compound2line_index.end()) {
-	cout << "\t SUCCESS. Lines are also deleted." << endl;
+		cout << "\t SUCCESS. Lines are also deleted." << endl;
 	}
 	else {
-	cout << "\t FAILED. Lines are still in hash." << endl;
-	} */
+		cout << "\t FAILED. Lines are still in hash." << endl;
+	}
 	return;
 }
+
 void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 	id2lines_index* cat2lines;
 	string compound_key;
+	// determine which hash we should update
 	switch (cat) {
 	case LC_EVENT:
 		cat2lines = &event2lines;
@@ -2919,28 +2934,28 @@ void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 		return;
 	}
 	// delete from markets all Lines related to this category
-	// cout << "Deletion began for " << cat_id << endl;
 	auto cat_it = cat2lines->find(cat_id);
 	if (cat_it == cat2lines->end()) {
 		cout << "Not existing in hash: " << cat_id << endl;
 		return;
 	}
-	/*
 	for (auto set_it = cat_it->second->begin(); set_it != cat_it->second->end(); set_it++) {
-	int line_index = *set_it;
-	Line l = lines[line_index];
-	// market2lines[l.market_id]->erase(line_index);
-	// delete individual lines as well
-	compound_key = l.getCompoundKey();
-	// compound2line_index.erase(compound_key);
-	cout << "\t   Deleted: " << compound_key << " i:" << line_index << endl;
-	} */
-	// delete the whole entry from related hash table
-	// cat_it->second->clear();
-	// delete cat_it->second;
-	// cat2lines->erase(cat_id);	
+		int line_index = *set_it;
+		Line* line_to_delete = &(lines[line_index]);
+		market2lines[line_to_delete->market_id]->erase(line_index);
+		// delete individual lines as well
+		compound_key = line_to_delete->getCompoundKey();
+		compound2line_index.erase(compound_key);
+	}
+	// delete the whole entry from related hash table  -- ASK: Shall we keep the index and only clear set?
+	delete cat_it->second; // we created set with new so let's delete it
+						   // cat2lines[cat_id] = NULL;
+	cat2lines->erase(cat_id);
 	return;
 }
+
+// Just construct a Line object as in insert and call this function with that Line object 
+// to delete the original one from hash tables 
 void delete_line(Line &line) {
 	int cat_id;
 	string compound_key = line.getCompoundKey();
@@ -2951,18 +2966,17 @@ void delete_line(Line &line) {
 		return;
 	}
 	const int line_index = line_it->second;
-	// cout << "T: " << lines[line_index].name << " --- " << line.name << endl;
 	// hash table for case1: market_id. for all Line categories we update market2lines
 	int market_id = line.market_id;
-	auto market_it = market2lines.find(market_id);   // market_id is the key
+	auto market_it = market2lines.find(market_id);
 	if (market_it != market2lines.end()) {   // key found
 		market_it->second->erase(line_index); // delete from set
 											  // if (market_it->second.size() == 0) {  // no more Lines for this market
 											  // market2lines.erase(market_it);   // remove the whole market as well -- ASK: Shall we do this?
 											  // }
 	}
-	return;
-	// now let's determine the category and the related lookup tables that will be updated
+
+	// now let's determine the line category and the related lookup tables that should be updated
 	id2lines_index* cat2lines;
 	if (line.event_id > 0) {
 		cat_id = line.event_id;
@@ -2991,15 +3005,11 @@ void delete_line(Line &line) {
 	}
 
 	// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
-	cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
-	// compound2line_index.erase(line_it);
-	compound2line_index.erase(line.getCompoundKey());
-	// _ASSERT(_CrtCheckMemory());
-	// line_it = compound2line_index.find(compound_key);
 	// cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
+	compound2line_index.erase(line_it);
+	// compound2line_index.erase(line.getCompoundKey());
 	return;
 }
-
 
 
 int main(){
@@ -3010,10 +3020,10 @@ hThread1 = CreateThread(NULL, 0, &GenerateBigStepThread, 0, THREAD_TERMINATE, &d
 
 int port = 1443;
 
-server.setOpenHandler(openHandler);
-server.setCloseHandler(closeHandler);
-server.setMessageHandler(messageHandler);
-server.setPeriodicHandler(periodicHandler);
+//server.setOpenHandler(openHandler);
+//server.setCloseHandler(closeHandler);
+//server.setMessageHandler(messageHandler);
+//server.setPeriodicHandler(periodicHandler);
 server.startServer(port);
 
 return 0;
@@ -3044,6 +3054,9 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
+	
+
+	
 	if (full_data == false) {
 		//getMarkets();
 		loadMarketsFromFiles();
@@ -3794,7 +3807,7 @@ void getEvents(time_t sec,int days) {
 
 			if(events[i].id<MAX_EVENTS) events_id[events[i].id] = &events[i]; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEvents%d\r\n", events[i].id);
 			
-	//	if ((events[i].booked == 2 && booked_num<20 && events[i].start_time>time(nullptr)) && (events[i].sport_id == 21 || events[i].sport_id == 1)) {postBooked(events[i].id); booked_num++;}
+		//if ((events[i].booked == 2 && booked_num<50 && events[i].start_time>time(nullptr)) && (events[i].sport_id == 1|| events[i].sport_id == 2|| events[i].sport_id == 4|| events[i].sport_id == 5 || events[i].sport_id == 12 || events[i].sport_id == 23|| events[i].sport_id == 6)) {postBooked(events[i].id); booked_num++;}
 
 			i++;
 
@@ -6456,8 +6469,9 @@ char* CreateStep_2(int& len) {
 
 
 	 for (i = 0; i < events_l; i++) {
-	 if (events[i].show == 0 || events[i].status) continue;
+	 if (events[i].show == 0) continue;
 	 events_show_l++;
+	 writeInteger(buffer, offset, 0, 1);
 	 writeInteger(buffer, offset, events[i].id, 4);
 	 writeInteger(buffer, offset, events[i].type_radar, 1);
 	 writeInteger(buffer, offset, events[i].status, 1);
@@ -6585,6 +6599,7 @@ char* CreateStep_2(int& len) {
 	  for (unordered_set<int>::iterator it = event2lines[events[i].id]->begin(); it != event2lines[events[i].id]->end(); ++it)
 	  {   	  
 		  if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events[i].status == 0) continue;
+		  if (lines[*(it)].status == 0|| lines[*(it)].status == -3) continue;
 	      event_lines_l++;
 		  writeInteger(buffer, offset, lines[*(it)].id, 4);
 		  writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
@@ -6698,17 +6713,6 @@ char* SendframeEncode(char* message, int messageLen, int &totalLength) {
 	return buf;
 };
 
-
-
-
-
-
-
-
-
-
-
-
 long timestamp() {
 	time_t start;
 	SYSTEMTIME st;
@@ -6796,15 +6800,10 @@ void periodicHandler() {
 	}
 }
 void radarMessageHandler(char* message, int messageLen) {
-	char* zip_message = nullptr;
-	int zip_len = gzip(message, messageLen, zip_message);
-	if (zip_len < 1) return;
-	vector<int> clientIDs = server.getClientIDs();
-	for (int i = 0; i < clientIDs.size(); i++) {
-		server.wsSend(clientIDs[i], zip_message, zip_len);
-	}
-	delete[] zip_message;
+vector<int> clientIDs = server.getClientIDs();
+for (int i = 0; i < clientIDs.size(); i++) 	server.wsSend(clientIDs[i], message, messageLen);
 }
+
 int httpsServer() {
 	WSADATA wsaData;
 	int iResult = 0;
@@ -7308,6 +7307,14 @@ static void run(amqp_connection_state_t conn)
 	for (int i = 0; i < 500; i++) outcome_name[i] = NULL;
 	Line* _line = new Line();
 	char* socket_message_big = new char[145000];
+	char* buffer = new char[145000];
+	size_t offset = 0;
+	size_t retry_offset = 0;
+	int event_lines_l = 0;
+	char* zip_message = nullptr;
+	int zip_len = 0;
+	char* encode_message;// = SendframeEncode(zip_message, zip_len, len);
+	int encode_message_len=0;
 	char* socket_message_little = new char[4096];
 	int outcomeNameError=0;
 
@@ -7340,6 +7347,7 @@ static void run(amqp_connection_state_t conn)
 	std::strncpy(maxbuf, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
 		maxbuf[envelope.message.body.len] = 0;
 		socket_message_big[0] = 0;
+		offset= 0;
 		doc.parse<0>(maxbuf);
 		
 		
@@ -7418,6 +7426,7 @@ static void run(amqp_connection_state_t conn)
 				continue;
 				}
 
+
 				
 				if (type_radar == 2) {
 					
@@ -7440,6 +7449,14 @@ static void run(amqp_connection_state_t conn)
 
 						if (sports_id[_tournament->sport_id] == NULL) { std::printf("Sport not found in run simple. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
 
+						if (recovery_state == 0) {
+							writeInteger(buffer, offset, 1, 2);
+							writeInteger(buffer, offset, type_radar, 1);
+							writeInteger(buffer, offset, event_id, 4);
+							retry_offset = offset;
+							offset += 2;
+							event_lines_l = 0;
+						}
 
 						if (print == true) {
 							std::printf("\r\n***************************************************\r\n");
@@ -7977,6 +7994,10 @@ static void run(amqp_connection_state_t conn)
 									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
 								}
 
+
+
+
+
 								auto it = compound2line_index.find(_line[0].getCompoundKey());
 								if (it == compound2line_index.end()) {
 									_line[0].id = lines_l;
@@ -7991,6 +8012,43 @@ static void run(amqp_connection_state_t conn)
 
 									//printf("Line Update\r\n");
 								}
+ 
+
+								if (recovery_state == 0) {
+									
+
+
+									//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
+									//if (_line->status == 0 || _line->status == -3) continue;
+									event_lines_l++;
+									writeInteger(buffer, offset, _line->id, 4);
+									writeInteger(buffer, offset, _line->betstop_reason, 1);
+									writeInteger(buffer, offset, _line->market_id, 2);
+									writeInteger(buffer, offset, _line->favourite, 1);
+									writeInteger(buffer, offset, _line->status, 1);
+									//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+									writeInteger(buffer, offset, _line->outcome_number, 2);
+									for (int j = 0; j < _line->outcome_number; j++) {
+										writeInteger(buffer, offset, _line->outcome_id[j], 2);
+										writeInteger(buffer, offset, _line->outcome_active[j], 1);
+										writeInteger(buffer, offset, _line->outcome_team[j], 1);
+										writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
+									}
+
+									writeInteger(buffer, offset, _line->specifier_number, 1);
+									for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
+
+
+
+								}
+
+
+
+
+
+
+
+
 								
 
 
@@ -7998,6 +8056,8 @@ static void run(amqp_connection_state_t conn)
 								
 }
 						}
+						if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
+
 					}
 				if (type_radar == 3) {
 					if(event_id>=MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
@@ -8015,6 +8075,17 @@ static void run(amqp_connection_state_t conn)
 						if (_tournament->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nstournament sport_id out of MAX_SPORTS in run season%d\r\n", _tournament->sport_id); continue; }
 						
 						if (sports_id[_tournament->sport_id] == NULL) { std::printf("Sport not found in run season. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
+
+
+						if (recovery_state == 0) {
+							writeInteger(buffer, offset, 1, 2);
+							writeInteger(buffer, offset, type_radar, 1);
+							writeInteger(buffer, offset, _tournament->id, 4);
+							retry_offset = offset;
+							offset += 2;
+							event_lines_l = 0;
+						}
+
 
 
 						if (print == true) {
@@ -8573,9 +8644,44 @@ static void run(amqp_connection_state_t conn)
 									//printf("Line Update\r\n");
 								}
 
+
+								if (recovery_state == 0) {
+
+
+
+									//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
+									//if (_line->status == 0 || _line->status == -3) continue;
+									event_lines_l++;
+									writeInteger(buffer, offset, _line->id, 4);
+									writeInteger(buffer, offset, _line->betstop_reason, 1);
+									writeInteger(buffer, offset, _line->market_id, 2);
+									writeInteger(buffer, offset, _line->favourite, 1);
+									writeInteger(buffer, offset, _line->status, 1);
+									//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+									writeInteger(buffer, offset, _line->outcome_number, 2);
+									for (int j = 0; j < _line->outcome_number; j++) {
+										writeInteger(buffer, offset, _line->outcome_id[j], 2);
+										writeInteger(buffer, offset, _line->outcome_active[j], 1);
+										writeInteger(buffer, offset, _line->outcome_team[j], 1);
+										writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
+									}
+
+									writeInteger(buffer, offset, _line->specifier_number, 1);
+									for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
+
+
+
+								}
+
+
+
+
+
+
 							}
 						}
-				}
+						if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
+}
 				if (type_radar < 2) {
 					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
 					if (events_id[event_id] == NULL) {
@@ -8863,6 +8969,131 @@ static void run(amqp_connection_state_t conn)
 					}
 
 					xml_node<> * odds = doc.first_node()->first_node("odds");
+
+
+					if (recovery_state == 0) {
+						writeInteger(buffer, offset, 1, 2);
+						writeInteger(buffer, offset, type_radar, 1);
+						writeInteger(buffer, offset, _event->id, 4);
+						writeInteger(buffer, offset, _event->type_radar, 1);
+						writeInteger(buffer, offset, _event->status, 1);
+						writeInteger(buffer, offset, _event->sport_id, 2);
+						writeInteger(buffer, offset, _event->category_id, 2);
+						if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
+						else writeInteger(buffer, offset, _event->simple_id, 4);
+						writeInteger(buffer, offset, _event->start_time, 4);
+						writeInteger(buffer, offset, _event->period_length, 1);
+						writeInteger(buffer, offset, _event->overtime_length, 1);
+						if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
+						writeString(buffer, offset, _event->home_name);
+						writeString(buffer, offset, _event->away_name);
+						writeString(buffer, offset, _event->tv_channels);
+						if (_event->status == 0)  writeInteger(buffer, offset, _event->booked, 1);
+						if (_event->status > 0) {
+
+							writeInteger(buffer, offset, (int)(_event->home_score * 100), 2);
+							writeInteger(buffer, offset, (int)(_event->away_score * 100), 2);
+							writeString(buffer, offset, _event->set_scores);
+							writeString(buffer, offset, _event->match_time);
+							writeString(buffer, offset, _event->remaining_time);
+							writeString(buffer, offset, _event->remaining_time_in_period);
+							writeString(buffer, offset, matchstatus_id[_event->match_status]->description);
+							writeInteger(buffer, offset, _event->stopped, 1);
+							//writeInteger(buffer, offset, _event->stopped, 1); 
+							if (_event->sport_id == 1) {
+								writeInteger(buffer, offset, _event->home_redcards, 1);
+								writeInteger(buffer, offset, _event->home_yellowcards, 1);
+								writeInteger(buffer, offset, _event->away_redcards, 1);
+								writeInteger(buffer, offset, _event->away_yellowcards, 1);
+								writeString(buffer, offset, _event->stoppage_time);
+								writeString(buffer, offset, _event->stoppage_time_announced);
+								writeInteger(buffer, offset, _event->home_corners, 1);
+								writeInteger(buffer, offset, _event->away_corners, 1);
+								writeInteger(buffer, offset, _event->home_yellow_red_cards, 1);
+								writeInteger(buffer, offset, _event->away_yellow_red_cards, 1);
+							}
+
+							if (_event->sport_id == 5) {
+								writeInteger(buffer, offset, _event->home_gamescore, 1);
+								writeInteger(buffer, offset, _event->away_gamescore, 1);
+								writeInteger(buffer, offset, _event->tiebreak, 1);
+							}
+
+							if (_event->sport_id == 20) writeInteger(buffer, offset, _event->expedite_mode, 1);
+
+
+							if (_event->sport_id == 4 || _event->sport_id == 6 || _event->sport_id == 29) {
+								writeInteger(buffer, offset, _event->home_suspend, 1); writeInteger(buffer, offset, _event->away_suspend, 1);
+							}
+
+
+							if (_event->sport_id == 5 || _event->sport_id == 20 || _event->sport_id == 34 || _event->sport_id == 19 || _event->sport_id == 23 || _event->sport_id == 22 || _event->sport_id == 31)
+								writeInteger(buffer, offset, _event->current_server, 1);
+
+
+							if (_event->sport_id == 3) {
+								writeInteger(buffer, offset, _event->home_batter, 1);
+								writeInteger(buffer, offset, _event->away_batter, 1);
+								writeInteger(buffer, offset, _event->outs, 1);
+								writeInteger(buffer, offset, _event->balls, 1);
+								writeInteger(buffer, offset, _event->strikes, 1);
+								writeString(buffer, offset, _event->bases);
+							}
+
+							if (_event->sport_id == 16) {
+								writeInteger(buffer, offset, _event->possession, 1);
+								writeInteger(buffer, offset, _event->try_num, 1);
+								writeInteger(buffer, offset, _event->yards, 1);
+							}
+
+
+
+
+							if (_event->sport_id == 19) {
+								writeInteger(buffer, offset, _event->visit, 1);
+								writeInteger(buffer, offset, _event->remaining_reds, 1);
+							}
+
+
+							if (_event->sport_id == 22) {
+								writeInteger(buffer, offset, _event->home_legscore, 1);
+								writeInteger(buffer, offset, _event->away_legscore, 1);
+								writeInteger(buffer, offset, _event->throw_num, 1);
+								writeInteger(buffer, offset, _event->visit, 1);
+							}
+
+							if (_event->sport_id == 32) {
+								writeInteger(buffer, offset, _event->delivery, 1);
+								writeInteger(buffer, offset, _event->home_remaining_bowls, 1);
+								writeInteger(buffer, offset, _event->away_remaining_bowls, 1);
+								writeInteger(buffer, offset, _event->current_end, 1);
+							}
+
+							if (_event->sport_id == 21) {
+								writeInteger(buffer, offset, _event->home_dismissals, 1);
+								writeInteger(buffer, offset, _event->away_dismissals, 1);
+								writeInteger(buffer, offset, _event->home_penalty_runs, 1);
+								writeInteger(buffer, offset, _event->away_penalty_runs, 1);
+								writeInteger(buffer, offset, _event->innings, 1);
+								writeInteger(buffer, offset, _event->over, 1);
+								writeInteger(buffer, offset, _event->delivery, 1);
+
+							}
+
+							if (_event->sport_id == 0) writeInteger(buffer, offset, _event->current_ct_team, 1);
+
+							writeInteger(buffer, offset, _event->position, 1);
+
+						}
+
+						if (event2lines.find(_event->id) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
+						else writeInteger(buffer, offset, event2lines[_event->id]->size(), 2);
+						retry_offset = offset;
+						offset += 2;
+						event_lines_l = 0;
+					}
+
+
 
 
 
@@ -9438,12 +9669,69 @@ static void run(amqp_connection_state_t conn)
 								//printf("Line Update\r\n");
 							}
 
+							if (recovery_state == 0) {
 
+
+
+								//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
+								//if (_line->status == 0 || _line->status == -3) continue;
+								event_lines_l++;
+								writeInteger(buffer, offset, _line->id, 4);
+								writeInteger(buffer, offset, _line->betstop_reason, 1);
+								writeInteger(buffer, offset, _line->market_id, 2);
+								writeInteger(buffer, offset, _line->favourite, 1);
+								writeInteger(buffer, offset, _line->status, 1);
+								//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+								writeInteger(buffer, offset, _line->outcome_number, 2);
+								for (int j = 0; j < _line->outcome_number; j++) {
+									writeInteger(buffer, offset, _line->outcome_id[j], 2);
+									writeInteger(buffer, offset, _line->outcome_active[j], 1);
+									writeInteger(buffer, offset, _line->outcome_team[j], 1);
+									writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
+								}
+
+								writeInteger(buffer, offset, _line->specifier_number, 1);
+								for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
+
+
+
+							}
 							
 
 						}
 					}
+					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
+
+}
+
+
+
+				if (recovery_state == 0) {
+					zip_len = gzip(buffer, offset, zip_message, 2);
+					//delete[] buffer;
+					if (zip_len > 1)
+					{
+						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
+						radarMessageHandler(encode_message, encode_message_len);
+						//printf("encode_message_len=%d\r\n", encode_message_len);
+						delete[] encode_message;
+						encode_message = nullptr;
+
+					}
+					delete[] zip_message;
+					zip_message = nullptr;
 				}
+//delete[] zip_message;
+
+
+
+
+
+
+
+
+
+
 }
 		else {
 			if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
@@ -9455,7 +9743,7 @@ static void run(amqp_connection_state_t conn)
 		//printf("lines_l=%d\r\n",lines_l);
 		//string String(socket_message_big);
 		
-		radarMessageHandler(socket_message_big, strlen(socket_message_big));
+		//radarMessageHandler(socket_message_big, strlen(socket_message_big));
 		
 		
 /*
@@ -9520,6 +9808,7 @@ static void run(amqp_connection_state_t conn)
 					delete[] maxbuf;
 					delete[] socket_message_big;
 					delete[] socket_message_little;
+					delete[] buffer;
 
 					
 					return;
@@ -9552,6 +9841,7 @@ static void run(amqp_connection_state_t conn)
 							delete[] maxbuf;
 							delete[] socket_message_big;
 							delete[] socket_message_little;
+							delete[] buffer;
 							
 							return;
 						}
@@ -9581,6 +9871,7 @@ static void run(amqp_connection_state_t conn)
 						delete[] maxbuf;
 						delete[] socket_message_big;
 						delete[] socket_message_little;
+						delete[] buffer;
 						return;
 
 					case AMQP_CONNECTION_CLOSE_METHOD:
@@ -9600,6 +9891,7 @@ static void run(amqp_connection_state_t conn)
 						delete[] maxbuf;
 						delete[] socket_message_big;
 						delete[] socket_message_little;
+						delete[] buffer;
 						return;
 
 					default:
@@ -9615,6 +9907,7 @@ static void run(amqp_connection_state_t conn)
 						delete[] maxbuf;
 						delete[] socket_message_big;
 						delete[] socket_message_little;
+						delete[] buffer;
 
 						return;
 					}
