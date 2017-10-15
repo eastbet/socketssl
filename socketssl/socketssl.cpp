@@ -3011,6 +3011,8 @@ void delete_line(Line &line) {
 	return;
 }
 
+int booking = 0;
+
 
 int main(){
 using namespace std;
@@ -3056,9 +3058,16 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
 	
 
+	if (booking > 0) {
+		getEvents(0, 10);
+		return 0;
+	}
+
 	
 	if (full_data == false) {
 		//getMarkets();
+		//getEvents(0, 10);
+		//return 0;
 		loadMarketsFromFiles();
 		loadCategoriesFromFiles();
 		loadTournamentsFromFiles();
@@ -3556,6 +3565,8 @@ void getEvents(time_t sec,int days) {
 				strcpy(buf, event_node->first_attribute("liveodds")->value());
 				if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'd') events[i].booked = 1;
 				if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'b') events[i].booked = 2; 
+
+				
 				
 	
 
@@ -3806,9 +3817,9 @@ void getEvents(time_t sec,int days) {
 			}
 
 			if(events[i].id<MAX_EVENTS) events_id[events[i].id] = &events[i]; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEvents%d\r\n", events[i].id);
-			
-		//if ((events[i].booked == 2 && booked_num<50 && events[i].start_time>time(nullptr)) && (events[i].sport_id == 1|| events[i].sport_id == 2|| events[i].sport_id == 4|| events[i].sport_id == 5 || events[i].sport_id == 12 || events[i].sport_id == 23|| events[i].sport_id == 6)) {postBooked(events[i].id); booked_num++;}
-
+			//&& events[i].start_time>time(nullptr)
+		if (booking > 0 && events[i].booked == 2 &&events[i].status == 0 && booked_num < booking) {postBooked(events[i].id); booked_num++;}
+		//&& (events[i].sport_id == 1 || events[i].sport_id == 2 || events[i].sport_id == 4 || events[i].sport_id == 5 || events[i].sport_id == 12 || events[i].sport_id == 23 || events[i].sport_id == 6))
 			i++;
 
 		}
@@ -4107,7 +4118,7 @@ void getMarkets() {
 		if (markets[i].id == 219) markets[i].line_type = 1;// (Winner(incl.overtime) Basketball,American Football
 		if (markets[i].id == 16) markets[i].line_type = 3;// (Handicap)	Soccer,Basketball,Aussie Rules,Futsal,Handball,Ice Hockey,Rugby
 		if (markets[i].id == 1) markets[i].line_type = 2;// (1x2) Soccer,Basketball,American Football,Aussie Rules,Bandy,Baseball,Beach Soccer,Counter-Strike,Cricket,Darts,Field hockey,Floorball,Futsal,Handball,Ice Hockey,Pesapallo,Rugby,Snooker,Soccer Mythical,Waterpolo
-		if (markets[k].id == 186) markets[k].line_type = 1;//Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
+		if (markets[i].id == 186) markets[i].line_type = 1;//Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
 		if (markets[i].id == 610) markets[i].line_type = 2;// (1x2)	Amercian Football
 		if (markets[i].id == 406) markets[i].line_type = 1;//Winner (incl. overtime and penalties) Handball,Ice Hockey
 		if (markets[i].id == 60) markets[i].line_type = 5;// 1st half - 1x2 Soccer,Basketball,American Football,Aussie Rules,Futsal,Handball,Rugby,Soccer Mythical
@@ -4123,7 +4134,6 @@ void getMarkets() {
 		if (markets[i].id == 410) markets[i].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
 		if (markets[i].id == 66) markets[i].line_type = 7;//1st half - handicap
 		if (markets[i].id == 88) markets[i].line_type = 7;//2nd half - handicap
-		if (markets[i].id == 88) markets[i].line_type = 7;//2nd half - handicap
 		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 		if (markets[i].id == 303) markets[i].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
 		if (markets[i].id == 203) markets[i].line_type = 7;//{!setnr} set - game handicap Tennis
@@ -4133,24 +4143,26 @@ void getMarkets() {
         if (markets[i].id == 120) markets[i].line_type = 7;//Overtime 1st half - handicap Soccer
 		if (markets[i].id == 18) markets[i].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
 		if (markets[i].id == 412) markets[i].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
+		if (markets[i].id == 238) markets[i].line_type = 4;//Total points Badminton,Beach Volley,Squash,Table Tennis,Volleyball
     	if (markets[i].id == 68) markets[i].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
 		if (markets[i].id == 90) markets[i].line_type = 8;//2nd half - total Soccer,Soccer Mythical
 		if (markets[i].id == 446) markets[i].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[i].id == 236) markets[i].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
+		if (markets[i].id == 310) markets[i].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
 		if (markets[i].id == 528) markets[i].line_type = 8;//{!setnr} set - total Bowls
 		if (markets[i].id == 288) markets[i].line_type = 8;//{!inningnr} inning - total Baseball
 		if (markets[i].id == 116) markets[i].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
 		if (markets[i].id == 358) markets[i].line_type = 8;//1st over - total Cricket
-		if (markets[k].id == 395) markets[k].line_type = 6;//{!mapnr} map - winner Dota 2,League of Legends,StarCraft
-		if (markets[k].id == 330) markets[k].line_type = 6;//{!mapnr} map - winner (incl. overtime) Counter-Strike
-		if (markets[k].id == 334) markets[k].line_type = 5;//{!mapnr} map - 1x2 Counter-Strike
+		if (markets[i].id == 395) markets[i].line_type = 6;//{!mapnr} map - winner Dota 2,League of Legends,StarCraft
+		if (markets[i].id == 330) markets[i].line_type = 6;//{!mapnr} map - winner (incl. overtime) Counter-Strike
+		if (markets[i].id == 334) markets[i].line_type = 5;//{!mapnr} map - 1x2 Counter-Strike
 
 
-		if (markets[k].id == 340) markets[k].line_type = 1;//Winner (incl. super over) Cricket
-		if (markets[k].id == 251) markets[k].line_type = 1;// Winner (incl. extra innings) Baseball
+		if (markets[i].id == 340) markets[i].line_type = 1;//Winner (incl. super over) Cricket
+		if (markets[i].id == 251) markets[i].line_type = 1;// Winner (incl. extra innings) Baseball
 		//if (markets[k].id == 426) markets[k].line_type = 5;//{!periodnr} period 1x2 & winner (incl. overtime and penalties) Ice Hockey
 		//if (markets[k].id == 429) markets[k].line_type = 5;//{!periodnr} period 1x2 & 1x2 Ice Hockey
-		if (markets[k].id == 443) markets[k].line_type = 5;//{!periodnr} period 1x2  Ice Hockey
+		if (markets[i].id == 443) markets[i].line_type = 5;//{!periodnr} period 1x2  Ice Hockey
 
 		if (markets[i].id == 225) markets[i].line_type = 4;// Total (incl. overtime) Basketball
 		if (markets[i].id == 501) markets[i].line_type = 8;//{!framenr} frame - total points Snooker
@@ -4159,9 +4171,10 @@ void getMarkets() {
 		if (markets[i].id == 226) markets[i].line_type = 4;//US total (incl. overtime) Basketball,American Football
 		if (markets[i].id == 315) markets[i].line_type = 5;//{!setnr} set - 1x2 Bowls
 		if (markets[i].id == 287) markets[i].line_type = 5;//{!inningnr} inning - 1x2 Baseball
-		if (markets[i].id == 245) markets[i].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		//if (markets[i].id == 245) markets[i].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
 		if (markets[i].id == 235) markets[i].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
 		//if (markets[i].id == 445) markets[i].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+		//if (markets[i].id == 446) markets[i].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[i].id == 246) markets[i].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
 		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 		//if (markets[i].id == 254) markets[i].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
@@ -4172,13 +4185,18 @@ void getMarkets() {
 		if (markets[i].id == 538) markets[i].line_type = 2;//Head2head (1x2) Golf,Motorsport
     	if (markets[i].id == 8) markets[i].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
 		if (markets[i].id == 62) markets[i].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
+		if (markets[i].id == 84) markets[i].line_type = 10;//2nd half - {!goalnr} goal Soccer,Futsal
+		if (markets[i].id == 444) markets[i].line_type = 10;//{!periodnr} period - {!goalnr} goal Ice Hockey
+		//if (markets[i].id == 245) markets[i].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[i].id == 210) markets[i].line_type = 10;//{!setnr} set game{ gamenr } -winner Tennis
 		if (markets[i].id == 125) markets[i].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
     	if (markets[i].id == 115) markets[i].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
 		if (markets[i].id == 202) markets[i].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
 		if (markets[i].id == 309) markets[i].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
 		if (markets[i].id == 29) markets[i].line_type = 11;//Both teams to score
 		if (markets[i].id == 196) markets[i].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
-
+		
+		//if (markets[i].id == 444) printf("line_type1=%\r\n", markets[i].line_type);
 
 		//if (markets[i].id == 75) markets[i].line_type = 12;//1st half - both teams to score
 		//if (markets[i].id == 29) markets[i].line_type = 11;//Both teams to score
@@ -5384,16 +5402,19 @@ return split_array;
 				 else if (index_char1[i] == '+' && value[0] != '-') {
 					 std::strcat(retValue, "+");  std::strcat(retValue, value);
 				 }
-				 else if (index_char1[i] == '%' && value[0] == 's' && value[1] == 'r') {
+				 else if (index_char1[i] == '%' && value[0] == 's' && value[1] == 'r'&& value[3] == 'p') {
+					 
 					 id = atoi((char*)((char*)value + 10));
 
+				
+					 
 					 if (id >= MAX_PLAYERS) {
 						 std::printf("\r\n ERROR in replace. player_id out of MAX_PLAYERS. player_id=%d\r\n", id);
 						 return;
 
 					 }
 					 if (players_id[id] == NULL) {
-						 std::printf("Player id=%d not found in replace. player_id=%d . getPlayer\r\n", id);
+						 std::printf("Player1  not found in replace. player_id=%d . getPlayer\r\n", id);
 						 players[players_l].id = id; if (getPlayer(&players[players_l]) == -1)
 						 {
 							 std::printf("error player id=%d  not found \r\n ", id); return;
@@ -5409,6 +5430,40 @@ return split_array;
 				 
 			 
 		 }
+
+
+				 else if (index_char1[i] == '%' && value[0] == 's' && value[1] == 'r'&& value[3] == 'c') {
+
+					 id = atoi((char*)((char*)value + 14));
+
+				
+
+					 if (id >= MAX_COMPETITORS) {
+						 std::printf("\r\n ERROR in replace. competitor_id out of MAX_COMPETITORS. competitor_id=%d\r\n", id);
+						 return;
+
+					 }
+					 
+
+					 if (competitors_id[id] == NULL) {
+						 std::printf("\r\nCompetitors id=%d not found in replace . Run getCompetitor\r\n", id);
+						 competitors[competitors_l].id =id;
+						 if (getCompetitor(&competitors[competitors_l]) == -1) {
+							 std::printf(" Error getCompetitor in replace.  id competitor=%d \r\n", id);
+							 return;
+						 }
+						 else competitors_l++;
+					 }
+
+
+
+					 if (competitors_id[id] != NULL) std::strcat(retValue, competitors_id[id]->name);
+					 else return;
+
+
+
+
+				 }
 		 else if (index_char2[i] == '+') {
 			  r = atoi(value) + index3[i];
 			 _itoa(r,buf, 10);
@@ -5852,11 +5907,13 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
 		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap Soccer
 		if (markets[k].id == 18) markets[k].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
+		if (markets[k].id == 238) markets[k].line_type = 4;//Total points Badminton,Beach Volley,Squash,Table Tennis,Volleyball
 		if (markets[k].id == 412) markets[k].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
 		if (markets[k].id == 68) markets[k].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
 		if (markets[k].id == 90) markets[k].line_type = 8;//2nd half - total Soccer,Soccer Mythical
 		if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[k].id == 236) markets[k].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
+		if (markets[k].id == 310) markets[k].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
 		if (markets[k].id == 528) markets[k].line_type = 8;//{!setnr} set - total Bowls
 		if (markets[k].id == 288) markets[k].line_type = 8;//{!inningnr} inning - total Baseball
 		if (markets[k].id == 116) markets[k].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
@@ -5879,9 +5936,10 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
 		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
 		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
-		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
 		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
-														   //if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+		//if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+		//if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
 		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
@@ -5893,6 +5951,10 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 538) markets[k].line_type = 2;//Head2head (1x2) Golf,Motorsport
 		if (markets[k].id == 8) markets[k].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
 		if (markets[k].id == 62) markets[k].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 84) markets[k].line_type = 10;//2nd half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 444) markets[k].line_type = 10;//{!periodnr} period - {!goalnr} goal Ice Hockey
+		//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 210) markets[k].line_type = 10;//{!setnr} set game{ gamenr } -winner Tennis
 		if (markets[k].id == 125) markets[k].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
 		if (markets[k].id == 115) markets[k].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
 		if (markets[k].id == 202) markets[k].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
@@ -5900,7 +5962,6 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
 		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
 
-			
 		
 
 		k++;
@@ -6469,10 +6530,12 @@ char* CreateStep_2(int& len) {
 
 
 	 for (i = 0; i < events_l; i++) {
-	 if (events[i].show == 0) continue;
+	 if (events[i].show == 0|| events[i].status == 4 || events[i].status == 3) continue;
 	 events_show_l++;
 	 writeInteger(buffer, offset, 0, 1);
 	 writeInteger(buffer, offset, events[i].id, 4);
+	 writeInteger(buffer, offset, events[i].home_id, 4);
+	 writeInteger(buffer, offset, events[i].away_id, 4);
 	 writeInteger(buffer, offset, events[i].type_radar, 1);
 	 writeInteger(buffer, offset, events[i].status, 1);
 	 writeInteger(buffer, offset, events[i].sport_id, 2);
@@ -7095,9 +7158,7 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 		}
 	} while (iResult > 0);
 
-	//printf("fff4444444");
-	//printf(recv);
-
+	
 	delete[] sendBuf;
 	closesocket(sdkSocket);
 	SSL_shutdown(ssl);
@@ -7408,7 +7469,7 @@ static void run(amqp_connection_state_t conn)
 						events_id[event_id] = &events[k];
 					}
 					if (getEventFixture(events_id[event_id]) == -1) { std::printf("fixtur_change error. %d\r\n", event_id); continue; }
-					std::printf("fixture_change success. %d\r\n");
+					std::printf("fixture_change success. event_id=%d \r\n",event_id);
 
 				}
 			
@@ -7805,7 +7866,7 @@ static void run(amqp_connection_state_t conn)
 											}
 											if (_line->outcome_team[i] != 3) {
 												if (players_id[_line->outcome_id[i]] == NULL) {
-													std::printf("Player id=%d not found in market id=%d in simple_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->simple_id);
+													std::printf("Player2 id=%d not found in market id=%d in simple_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->simple_id);
 													players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
 													{
 														std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
@@ -8440,7 +8501,7 @@ static void run(amqp_connection_state_t conn)
 											}
 											if(_line->outcome_team[i] != 3){
 											if (players_id[_line->outcome_id[i]] == NULL) {
-												std::printf("Player id=%d not found in market id=%d in tournament_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->tournament_id);
+												std::printf("Player3 id=%d not found in market id=%d in tournament_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->tournament_id);
 												players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
 												{
 													std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
@@ -8975,6 +9036,9 @@ static void run(amqp_connection_state_t conn)
 						writeInteger(buffer, offset, 1, 2);
 						writeInteger(buffer, offset, type_radar, 1);
 						writeInteger(buffer, offset, _event->id, 4);
+						writeInteger(buffer, offset, _event->home_id, 4);
+						writeInteger(buffer, offset, _event->away_id, 4);
+
 						writeInteger(buffer, offset, _event->type_radar, 1);
 						writeInteger(buffer, offset, _event->status, 1);
 						writeInteger(buffer, offset, _event->sport_id, 2);
@@ -9402,7 +9466,7 @@ static void run(amqp_connection_state_t conn)
 										}
 
 										if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 2) {
-											std::printf("Player id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+											std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
 											if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
 												std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", events_id[_line->event_id]->away_id, _line->event_id);
 												continue;
@@ -9421,7 +9485,7 @@ static void run(amqp_connection_state_t conn)
 										}
 
 										if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 1) {
-											std::printf("Player id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+											std::printf("Player5 id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
 											if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
 												std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", events_id[_line->event_id]->home_id, _line->event_id);
 												continue;
@@ -9441,7 +9505,7 @@ static void run(amqp_connection_state_t conn)
 									
 
 										if (_line->outcome_team[i] < 3 && players_id[_line->outcome_id[i]] == NULL) {
-											std::printf("Player id=%d  not found in run after get competitor. getPlayer\r\n ", _line->outcome_id[i]);
+											std::printf("Player6 id=%d  not found in run after get competitor. getPlayer\r\n ", _line->outcome_id[i]);
 											players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
 											{
 												std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
