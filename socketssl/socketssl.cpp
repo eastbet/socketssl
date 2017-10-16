@@ -140,7 +140,7 @@ typedef void(*messageCallback)(int, string);
 HANDLE hThread1;
 DWORD dwThreadID1;
 DWORD ExitCode1;
-void GenerateBigStepThread();
+void GenerateBigStep();
 
 
 HANDLE hThread2;
@@ -3107,7 +3107,7 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	return 0;
 
 }
-void GenerateBigStepThread() {
+void GenerateBigStep() {
 int i = 0;
 int j = 0;
 int k = 0;
@@ -7411,7 +7411,7 @@ static void run(amqp_connection_state_t conn)
 		amqp_rpc_reply_t ret;
 		amqp_envelope_t envelope;
 	
-		if (recovery_state == 0) GenerateBigStepThread();
+		if (recovery_state == 0) GenerateBigStep();
 
 		status = 0;
 		now = now_microseconds();
