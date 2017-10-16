@@ -140,7 +140,7 @@ typedef void(*messageCallback)(int, string);
 HANDLE hThread1;
 DWORD dwThreadID1;
 DWORD ExitCode1;
-DWORD WINAPI GenerateBigStepThread(LPVOID);
+void GenerateBigStepThread();
 
 
 HANDLE hThread2;
@@ -2314,7 +2314,7 @@ public:
 	//int site_id;
 	char* variable_text;
 	int variant;
-	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext
+	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext//4 liveodds:outcometext
 	int line_type;//ID_TIP_EVENT SITE
 	char* name;
 	int outcome_number;
@@ -2763,7 +2763,7 @@ void die_on_error(int, char const*);
 void die_on_amqp_error(amqp_rpc_reply_t, char const *);
 void amqp_dump(void const *, size_t);
 uint64_t now_microseconds(void);
-void microsleep(int);
+//void microsleep(int);
 void rabbitmqssl();
 static void run(amqp_connection_state_t);
 static int rows_eq(int *, int *);
@@ -3012,13 +3012,13 @@ void delete_line(Line &line) {
 }
 
 int booking = 0;
-
+//std::mutex _mutex;
 
 int main(){
 using namespace std;
 timestamp();
 hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
-hThread1 = CreateThread(NULL, 0, &GenerateBigStepThread, 0, THREAD_TERMINATE, &dwThreadID1);
+//hThread1 = CreateThread(NULL, 0, &GenerateBigStepThread, 0, THREAD_TERMINATE, &dwThreadID1);
 
 int port = 1443;
 
@@ -3026,6 +3026,8 @@ int port = 1443;
 //server.setCloseHandler(closeHandler);
 //server.setMessageHandler(messageHandler);
 //server.setPeriodicHandler(periodicHandler);
+
+//while (port == 1443) Sleep(1);
 server.startServer(port);
 
 return 0;
@@ -3051,6 +3053,13 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	for (int i = 0; i < MAX_MARKETS; i++) max_markets_in[i] = 2;
 	for (int i = 0; i < MAX_BETSTOPS; i++) betstops_id[i] = NULL;
 	for (int i = 0; i < MAX_MATCHSTATUS; i++) matchstatus_id[i] = NULL;
+	for (int j = 0; j < STEP_QUEUE; j++) {
+		array_data_step_2[j] = nullptr;
+		array_data_step_1[j] = nullptr;
+		data_step_len_1[j] = 0;
+		data_step_len_2[j] = 0;
+	}
+
 
 	getSports();
 
@@ -3098,24 +3107,18 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	return 0;
 
 }
-DWORD WINAPI GenerateBigStepThread(LPVOID) {
+void GenerateBigStepThread() {
 int i = 0;
 int j = 0;
 int k = 0;
 
 
-for (j = 0; j < STEP_QUEUE; j++) {
-	array_data_step_2[j] = nullptr;
-	array_data_step_1[j] = nullptr;
-	data_step_len_1[j] = 0;
-	data_step_len_2[j] = 0;
-}
 
 vector<int> clientIDs;
 
 
 
-for (;;) { if (recovery_state != 0)  continue;
+if (recovery_state != 0)  return;
 	clientIDs.clear();
 	current_data_step_temp_1 = -1;
 	current_data_step_temp_2 = -1;
@@ -3155,21 +3158,21 @@ for (;;) { if (recovery_state != 0)  continue;
 	}
 	
 	if (current_data_step_temp_1 == -1 || current_data_step_temp_2 == -1) {
-		printf("error STEP_QUEUE\r\n"); Sleep(1000); continue;
+		printf("error STEP_QUEUE\r\n"); return;
 	}
 
-	//printf("CreateStep_1\r\n");
+	//printf("CreateStep_1--------------------------------------------\r\n");
 	array_data_step_1[current_data_step_temp_1] = CreateStep_1(data_step_len_1[current_data_step_temp_1]);
-	//printf("CreateStep_1 end\r\n");kl
+	//printf("CreateStep_1-------------------------------------------- end\r\n");
 	current_data_step_1 = current_data_step_temp_1;
-	//printf("CreateStep_2\r\n");
+	//printf("CreateStep_2--------------------------------------------\r\n");
 	array_data_step_2[current_data_step_temp_2] = CreateStep_2(data_step_len_2[current_data_step_temp_2]);
-	//printf("CreateStep_2 end\r\n");
+	//printf("CreateStep_2 --------------------------------------------end\r\n");
 	current_data_step_2 = current_data_step_temp_2;
 
 	//Sleep(100);
 
-}
+
 
 
 
@@ -3854,7 +3857,9 @@ int getVariantMarkets(Market* market, char* urn) {
 	for (i = 0; i < MAX_OUTCOME; i++) outcome_name[i] = new char[MAX_OUTCOME_NAME];
 
 	if(market->type==3) std::strcpy(buffer, "/v1/pre/descriptions/en/markets/");
-	else std::strcpy(buffer, "/v1/descriptions/en/markets/");
+	else if (urn[0]=='l' && urn[1] == 'o' && urn[2] == ':') std::strcpy(buffer, "/v1/liveodds/descriptions/en/markets/");
+	else  std::strcpy(buffer, "/v1/descriptions/en/markets/"); 
+	
 	_itoa(market->id, buf, 10);
 	std::strcat(buffer, buf);
 	std::strcat(buffer, "/variants/");
@@ -3905,7 +3910,7 @@ int getVariantMarkets(Market* market, char* urn) {
 	  _market = markets_id[market->id][j];
 
 	
-	  if (_market->type == 3 && root_node->first_node("market") && root_node->first_node("market")->first_attribute("name")) {
+	  if ((_market->type == 3 ||( _market->type ==0 && _market->variant>-1 && _market->variable_text != NULL && _market->variable_text[0] == 'l' && _market->variable_text[1] == 'o' && _market->variable_text[2] == ':')) && root_node->first_node("market") && root_node->first_node("market")->first_attribute("name")) {
 		  if (_market->name != NULL) delete[] _market->name;
 		  _market->name = new char[strlen(root_node->first_node("market")->first_attribute("name")->value()) + 1];
 		  std::strcpy(_market->name, root_node->first_node("market")->first_attribute("name")->value());
@@ -3920,7 +3925,7 @@ int getVariantMarkets(Market* market, char* urn) {
 
 
 	if (root_node->first_node("market") && root_node->first_node("market")->first_node("outcomes")) for (xml_node<> * outcome_node = root_node->first_node("market")->first_node("outcomes")->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
-		if(_market->type==3)outcome_id[_market->outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + 16));
+		if(_market->type==3) outcome_id[_market->outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + 16));
 			else outcome_id[_market->outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + strlen(_market->variable_text)+1));
 		std::strcpy(outcome_name[_market->outcome_number], outcome_node->first_attribute("name")->value());
 		_market->outcome_number++;
@@ -4137,6 +4142,16 @@ void getMarkets() {
 		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 		if (markets[i].id == 303) markets[i].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
 		if (markets[i].id == 203) markets[i].line_type = 7;//{!setnr} set - game handicap Tennis
+		
+		if (markets[i].id == 527) markets[i].line_type = 7;//{!setnr} set - handicap  Bowls
+		if (markets[i].id == 314) markets[i].line_type = 4;//Total sets - Bowls Darts
+		if (markets[i].id == 315) markets[i].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[i].id == 188) markets[i].line_type = 3;//Set handicap Bowls
+		if (markets[i].id == 493) markets[i].line_type = 3;//Frame handicap Snooker
+		if (markets[i].id == 494) markets[i].line_type = 4;//Total handicap Snooker
+		if (markets[i].id == 499) markets[i].line_type = 6;//{!framenr} frame - winner Snooker
+
+
 		if (markets[i].id == 204) markets[i].line_type = 8;//{!setnr} set - total games  Tennis
 		if (markets[i].id == 746) markets[i].line_type = 7;//{!inningnr} inning - handicap Baseball
 		if (markets[i].id == 117) markets[i].line_type = 7;//Overtime - handicap Soccer,Handball
@@ -4150,6 +4165,7 @@ void getMarkets() {
 		if (markets[i].id == 236) markets[i].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
 		if (markets[i].id == 310) markets[i].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
 		if (markets[i].id == 528) markets[i].line_type = 8;//{!setnr} set - total Bowls
+
 		if (markets[i].id == 288) markets[i].line_type = 8;//{!inningnr} inning - total Baseball
 		if (markets[i].id == 116) markets[i].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
 		if (markets[i].id == 358) markets[i].line_type = 8;//1st over - total Cricket
@@ -4176,6 +4192,7 @@ void getMarkets() {
 		//if (markets[i].id == 445) markets[i].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
 		//if (markets[i].id == 446) markets[i].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[i].id == 246) markets[i].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
+		if (markets[i].id == 247) markets[i].line_type = 6;// {!gamenr} game - total points Badminton,Squash,Table Tennis
 		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 		//if (markets[i].id == 254) markets[i].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
 		if (markets[i].id == 256) markets[i].line_type = 7;//Handicap (incl. extra innings) Baseball
@@ -5902,6 +5919,15 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 		if (markets[k].id == 303) markets[k].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
 		if (markets[k].id == 203) markets[k].line_type = 7;//{!setnr} set - game handicap Tennis
+
+		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap  Bowls
+		if (markets[k].id == 314) markets[k].line_type = 4;//Total sets - Bowls Darts
+		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[k].id == 188) markets[k].line_type = 3;//Set handicap Bowls
+		if (markets[k].id == 493) markets[k].line_type = 3;//Frame handicap Snooker
+		if (markets[k].id == 494) markets[k].line_type = 4;//Total handicap Snooker
+		if (markets[k].id == 499) markets[k].line_type = 6;//{!framenr} frame - winner Snooker
+
 		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
 		if (markets[k].id == 746) markets[k].line_type = 7;//{!inningnr} inning - handicap Baseball
 		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
@@ -5941,6 +5967,7 @@ void loadMarketsFromFiles() {
 		//if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
 		//if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
+		if (markets[k].id == 247) markets[k].line_type = 6;// {!gamenr} game - total points Badminton,Squash,Table Tennis
 		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
 		if (markets[k].id == 256) markets[k].line_type = 7;//Handicap (incl. extra innings) Baseball
@@ -6524,11 +6551,10 @@ char* CreateStep_2(int& len) {
 	len = 0;
 	size_t offset = 0;
 	size_t retry_offset = 0;
+	
 	offset += 2;
 	
-
-
-
+	
 	 for (i = 0; i < events_l; i++) {
 	 if (events[i].show == 0|| events[i].status == 4 || events[i].status == 3) continue;
 	 events_show_l++;
@@ -6692,7 +6718,6 @@ char* CreateStep_2(int& len) {
 	  k = k + event_lines_l;
 
 }
-
 retry_offset = 0;
 
 
@@ -7176,10 +7201,10 @@ uint64_t now_microseconds(void)
 	return (((uint64_t)ft.dwHighDateTime << 32) | (uint64_t)ft.dwLowDateTime)
 		/ 10;
 }
-void microsleep(int usec)
+/*void microsleep(int usec)
 {
 	Sleep(usec / 1000);
-}
+}*/
 void die(const char *fmt, ...)
 {
 	va_list ap;
@@ -7352,6 +7377,7 @@ static void run(amqp_connection_state_t conn)
 	int z = 0;
 	int u = 0;
 	bool print = false;
+	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
@@ -7378,15 +7404,14 @@ static void run(amqp_connection_state_t conn)
 	int encode_message_len=0;
 	char* socket_message_little = new char[4096];
 	int outcomeNameError=0;
-
-	
+		
 
 
 	for (;;) {
 		amqp_rpc_reply_t ret;
 		amqp_envelope_t envelope;
-
-
+	
+		if (recovery_state == 0) GenerateBigStepThread();
 
 		status = 0;
 		now = now_microseconds();
@@ -7402,6 +7427,7 @@ static void run(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
+		
 		//envelope.message.body.bytes
 
 
@@ -7414,6 +7440,9 @@ static void run(amqp_connection_state_t conn)
 		
 
 		if (doc.first_node() == NULL) continue;
+
+		
+
 
 
 		
@@ -7487,7 +7516,7 @@ static void run(amqp_connection_state_t conn)
 				continue;
 				}
 
-
+				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
 				
 				if (type_radar == 2) {
 					
@@ -7700,7 +7729,7 @@ static void run(amqp_connection_state_t conn)
 								
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 									if (outcomeNameError == 1||u == max_markets_in[_line->market_id]) {
-										std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+										std::printf("Variant market1 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 										for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 									}
 									_line->market = markets_id[_line->market_id][u];
@@ -8057,7 +8086,7 @@ static void run(amqp_connection_state_t conn)
 
 
 
-
+								if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 								auto it = compound2line_index.find(_line[0].getCompoundKey());
 								if (it == compound2line_index.end()) {
@@ -8074,10 +8103,11 @@ static void run(amqp_connection_state_t conn)
 									//printf("Line Update\r\n");
 								}
  
+								if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 								if (recovery_state == 0) {
 									
-
+									if (debug_output == true) printf("write buffer data\r\n");
 
 									//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 									//if (_line->status == 0 || _line->status == -3) continue;
@@ -8100,7 +8130,7 @@ static void run(amqp_connection_state_t conn)
 									for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
 
-
+									if (debug_output == true) printf("end write buffer data\r\n");
 								}
 
 
@@ -8332,7 +8362,7 @@ static void run(amqp_connection_state_t conn)
 									z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 									if (outcomeNameError==1 || u == max_markets_in[_line->market_id]) {
-										std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+										std::printf("Variant market2 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 										for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 									}
 									_line->market = markets_id[_line->market_id][u];
@@ -8690,6 +8720,9 @@ static void run(amqp_connection_state_t conn)
 									if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
 								}
 
+
+								if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+
 								auto it = compound2line_index.find(_line[0].getCompoundKey());
 								if (it == compound2line_index.end()) {
 									_line[0].id = lines_l;
@@ -8704,11 +8737,11 @@ static void run(amqp_connection_state_t conn)
 
 									//printf("Line Update\r\n");
 								}
-
+								if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 								if (recovery_state == 0) {
 
-
+									if (debug_output == true) printf("write buffer data\r\n");
 
 									//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 									//if (_line->status == 0 || _line->status == -3) continue;
@@ -8730,7 +8763,7 @@ static void run(amqp_connection_state_t conn)
 									writeInteger(buffer, offset, _line->specifier_number, 1);
 									for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
-
+									if (debug_output == true) printf("end write buffer data\r\n");
 
 								}
 
@@ -9293,7 +9326,7 @@ static void run(amqp_connection_state_t conn)
 								z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 								if (outcomeNameError==1 || u == max_markets_in[_line->market_id]) {
-									std::printf("Variant market not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+									std::printf("Variant market3 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 								}
 								_line->market = markets_id[_line->market_id][u];
@@ -9718,6 +9751,8 @@ static void run(amqp_connection_state_t conn)
 								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 							}
 							
+							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+
 							auto it = compound2line_index.find(_line[0].getCompoundKey());
 							if (it == compound2line_index.end()) {
 								_line[0].id = lines_l;
@@ -9733,9 +9768,11 @@ static void run(amqp_connection_state_t conn)
 								//printf("Line Update\r\n");
 							}
 
+							if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+
 							if (recovery_state == 0) {
 
-
+								if (debug_output == true) printf("write buffer data\r\n");
 
 								//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 								//if (_line->status == 0 || _line->status == -3) continue;
@@ -9757,7 +9794,7 @@ static void run(amqp_connection_state_t conn)
 								writeInteger(buffer, offset, _line->specifier_number, 1);
 								for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
-
+								if (debug_output == true) printf("end write buffer data\r\n");
 
 							}
 							
@@ -9768,9 +9805,11 @@ static void run(amqp_connection_state_t conn)
 
 }
 
-
+            if (debug_output == true) printf("end parse type_radar=%d\r\n", type_radar);
 
 				if (recovery_state == 0) {
+			  if (debug_output == true) printf("radarmessagehandler\r\n");
+
 					zip_len = gzip(buffer, offset, zip_message, 2);
 					//delete[] buffer;
 					if (zip_len > 1)
@@ -9784,6 +9823,7 @@ static void run(amqp_connection_state_t conn)
 					}
 					delete[] zip_message;
 					zip_message = nullptr;
+					if (debug_output == true) printf("end radarmessagehandler\r\n");
 				}
 //delete[] zip_message;
 
@@ -9801,6 +9841,9 @@ static void run(amqp_connection_state_t conn)
 			if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
 			printf(doc.first_node()->name());std::printf("\r\n");
 		}
+
+		
+
 
 		doc.clear();
 
