@@ -2700,6 +2700,8 @@ int matchstatus_l = 0;
 int i = 0;
 
 Event** events_id = new Event*[MAX_EVENTS];
+Event** events_show = new Event*[MAX_EVENTS];
+int events_show_l = 0;
 Line** lines_id = new Line*[MAX_LINES];
 Tournament** tournaments_id = new Tournament*[MAX_TOURNAMENTS];
 Tournament** seasons_id = new Tournament*[MAX_TOURNAMENTS];
@@ -3011,6 +3013,7 @@ void delete_line(Line &line) {
 	return;
 }
 
+int reload_step_1 = 1;
 int booking = 0;
 //std::mutex _mutex;
 
@@ -3041,6 +3044,7 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	//int recvbuflen = DEFAULT_BUFLEN;
 	//recvbuf = new char[DEFAULT_BUFLEN];
 	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = NULL;
+	for (int i = 0; i < MAX_EVENTS; i++) events_show[i] = NULL;
 	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = NULL;
 	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
 	for (int i = 0; i < MAX_TOURNAMENTS; i++) seasons_id[i] = NULL;
@@ -3162,9 +3166,12 @@ if (recovery_state != 0)  return;
 	}
 
 	//printf("CreateStep_1--------------------------------------------\r\n");
-	array_data_step_1[current_data_step_temp_1] = CreateStep_1(data_step_len_1[current_data_step_temp_1]);
-	//printf("CreateStep_1-------------------------------------------- end\r\n");
-	current_data_step_1 = current_data_step_temp_1;
+	if (reload_step_1 == 1) {
+		array_data_step_1[current_data_step_temp_1] = CreateStep_1(data_step_len_1[current_data_step_temp_1]);
+		//printf("CreateStep_1-------------------------------------------- end\r\n");
+		current_data_step_1 = current_data_step_temp_1;
+		reload_step_1 = 0;
+	}
 	//printf("CreateStep_2--------------------------------------------\r\n");
 	array_data_step_2[current_data_step_temp_2] = CreateStep_2(data_step_len_2[current_data_step_temp_2]);
 	//printf("CreateStep_2 --------------------------------------------end\r\n");
@@ -3297,6 +3304,7 @@ void startRecovery() {
 
 }
 void getCategoriesTournaments() {
+	reload_step_1 = 1;
 	char* recvbuf = new char[DEFAULT_BUFLEN];
 	char buf[MAX_PATH];
 	while (httpsRequest("api.betradar.com", "/v1/sports/en/tournaments.xml", recvbuf, 0) == -1) Sleep(1000);
@@ -3447,6 +3455,7 @@ void getCategoriesTournaments() {
 
 }
 void getSports() {
+	reload_step_1 = 1;
 	char* recvbuf = new char[DEFAULT_BUFLEN];
 	while(httpsRequest("api.betradar.com", "/v1/sports/en/sports.xml", recvbuf, 0)==-1) Sleep(1000);
 	using namespace rapidxml;
@@ -5057,6 +5066,7 @@ int getMatchstatus() {
 
 }
 int getTournament(Tournament* tournament, bool extended) {
+	reload_step_1 = 1;
 	char buf[MAX_PATH];
 	char buffer[1024];
 	char* recvbuf = new char[DEFAULT_BUFLEN];
@@ -6005,6 +6015,7 @@ void loadMarketsFromFiles() {
 	std::printf("Markets loaded from data files succes. Number of loaded markets is %d\r\n", markets_l);
 }
 void saveTournamentToFile(Tournament* tournament) {
+	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -6041,6 +6052,7 @@ void saveTournamentToFile(Tournament* tournament) {
 
 };
 void loadTournamentsFromFiles() {
+	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -6129,6 +6141,7 @@ void loadTournamentsFromFiles() {
 	
 };;
 void saveCategoryToFile(Category* category) {
+	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -6151,6 +6164,7 @@ void saveCategoryToFile(Category* category) {
 
 };
 void loadCategoriesFromFiles() {
+	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -6544,7 +6558,7 @@ return encode_message;
 };
 char* CreateStep_2(int& len) {
 	int i, j, l, k = 0;
-	int events_show_l = 0;
+	int events_send_l = 0;
 	int event_lines_l = 0;
 
 	char* buffer = new char[SEND_BUFLEN];
@@ -6555,173 +6569,173 @@ char* CreateStep_2(int& len) {
 	offset += 2;
 	
 	
-	 for (i = 0; i < events_l; i++) {
-	 if (events[i].show == 0|| events[i].status == 4 || events[i].status == 3) continue;
-	 events_show_l++;
-	 writeInteger(buffer, offset, 0, 1);
-	 writeInteger(buffer, offset, events[i].id, 4);
-	 writeInteger(buffer, offset, events[i].home_id, 4);
-	 writeInteger(buffer, offset, events[i].away_id, 4);
-	 writeInteger(buffer, offset, events[i].type_radar, 1);
-	 writeInteger(buffer, offset, events[i].status, 1);
-	 writeInteger(buffer, offset, events[i].sport_id, 2);
-	 writeInteger(buffer, offset, events[i].category_id, 2);
-	 if(events[i].type_radar<2) writeInteger(buffer, offset, events[i].tournament_id, 4);
-	 else writeInteger(buffer, offset, events[i].simple_id, 4);
-	 writeInteger(buffer, offset, events[i].start_time, 4);
-	 writeInteger(buffer, offset, events[i].period_length, 1);
-	 writeInteger(buffer, offset, events[i].overtime_length, 1);
-	 if(events[i].sport_id == 5) writeInteger(buffer, offset, events[i].bo, 1);
-	 writeString(buffer, offset, events[i].home_name);
-	 writeString(buffer, offset, events[i].away_name);
-	 writeString(buffer, offset, events[i].tv_channels);
-	 if (events[i].status == 0)  writeInteger(buffer, offset, events[i].booked, 1);
-	 if (events[i].status > 0) {
-		 
-		 writeInteger(buffer, offset, (int)(events[i].home_score*100),2);
-		 writeInteger(buffer, offset, (int)(events[i].away_score*100),2);
-		 writeString(buffer, offset, events[i].set_scores);
-		 writeString(buffer, offset, events[i].match_time);
-		 writeString(buffer, offset, events[i].remaining_time);
-		 writeString(buffer, offset, events[i].remaining_time_in_period);
-		 writeString(buffer, offset, matchstatus_id[events[i].match_status]->description);
-		 writeInteger(buffer, offset, events[i].stopped, 1);
-		 //writeInteger(buffer, offset, events[i].stopped, 1); 
-		 if (events[i].sport_id == 1) {
-			 writeInteger(buffer, offset, events[i].home_redcards, 1);
-			 writeInteger(buffer, offset, events[i].home_yellowcards, 1);
-			 writeInteger(buffer, offset, events[i].away_redcards, 1);
-			 writeInteger(buffer, offset, events[i].away_yellowcards, 1);
-			 writeString(buffer, offset, events[i].stoppage_time);
-			 writeString(buffer, offset, events[i].stoppage_time_announced);
-			 writeInteger(buffer, offset, events[i].home_corners, 1);
-			 writeInteger(buffer, offset, events[i].away_corners, 1);
-			 writeInteger(buffer, offset, events[i].home_yellow_red_cards, 1);
-			 writeInteger(buffer, offset, events[i].away_yellow_red_cards, 1);
-			  }
+	for (i = 0; i < events_show_l; i++) {
+		if (events_show[i]->status == 4 || events_show[i]->status == 3) continue;
+		events_send_l++;
+		writeInteger(buffer, offset, 0, 1);
+		writeInteger(buffer, offset, events_show[i]->id, 4);
+		writeInteger(buffer, offset, events_show[i]->home_id, 4);
+		writeInteger(buffer, offset, events_show[i]->away_id, 4);
+		writeInteger(buffer, offset, events_show[i]->type_radar, 1);
+		writeInteger(buffer, offset, events_show[i]->status, 1);
+		writeInteger(buffer, offset, events_show[i]->sport_id, 2);
+		writeInteger(buffer, offset, events_show[i]->category_id, 2);
+		if (events_show[i]->type_radar<2) writeInteger(buffer, offset, events_show[i]->tournament_id, 4);
+		else writeInteger(buffer, offset, events_show[i]->simple_id, 4);
+		writeInteger(buffer, offset, events_show[i]->start_time, 4);
+		writeInteger(buffer, offset, events_show[i]->period_length, 1);
+		writeInteger(buffer, offset, events_show[i]->overtime_length, 1);
+		if (events_show[i]->sport_id == 5) writeInteger(buffer, offset, events_show[i]->bo, 1);
+		writeString(buffer, offset, events_show[i]->home_name);
+		writeString(buffer, offset, events_show[i]->away_name);
+		writeString(buffer, offset, events_show[i]->tv_channels);
+		if (events_show[i]->status == 0)  writeInteger(buffer, offset, events_show[i]->booked, 1);
+		if (events_show[i]->status > 0) {
 
-		 if (events[i].sport_id == 5) {
-			 writeInteger(buffer, offset, events[i].home_gamescore, 1);
-			 writeInteger(buffer, offset, events[i].away_gamescore, 1);
-			 writeInteger(buffer, offset, events[i].tiebreak, 1);
-		 }
+			writeInteger(buffer, offset, (int)(events_show[i]->home_score * 100), 2);
+			writeInteger(buffer, offset, (int)(events_show[i]->away_score * 100), 2);
+			writeString(buffer, offset, events_show[i]->set_scores);
+			writeString(buffer, offset, events_show[i]->match_time);
+			writeString(buffer, offset, events_show[i]->remaining_time);
+			writeString(buffer, offset, events_show[i]->remaining_time_in_period);
+			writeString(buffer, offset, matchstatus_id[events_show[i]->match_status]->description);
+			writeInteger(buffer, offset, events_show[i]->stopped, 1);
+			//writeInteger(buffer, offset, events_show[i]->stopped, 1); 
+			if (events_show[i]->sport_id == 1) {
+				writeInteger(buffer, offset, events_show[i]->home_redcards, 1);
+				writeInteger(buffer, offset, events_show[i]->home_yellowcards, 1);
+				writeInteger(buffer, offset, events_show[i]->away_redcards, 1);
+				writeInteger(buffer, offset, events_show[i]->away_yellowcards, 1);
+				writeString(buffer, offset, events_show[i]->stoppage_time);
+				writeString(buffer, offset, events_show[i]->stoppage_time_announced);
+				writeInteger(buffer, offset, events_show[i]->home_corners, 1);
+				writeInteger(buffer, offset, events_show[i]->away_corners, 1);
+				writeInteger(buffer, offset, events_show[i]->home_yellow_red_cards, 1);
+				writeInteger(buffer, offset, events_show[i]->away_yellow_red_cards, 1);
+			}
 
-		 if (events[i].sport_id == 20) writeInteger(buffer, offset, events[i].expedite_mode, 1);
+			if (events_show[i]->sport_id == 5) {
+				writeInteger(buffer, offset, events_show[i]->home_gamescore, 1);
+				writeInteger(buffer, offset, events_show[i]->away_gamescore, 1);
+				writeInteger(buffer, offset, events_show[i]->tiebreak, 1);
+			}
 
-
-		 if (events[i].sport_id == 4 || events[i].sport_id == 6 || events[i].sport_id == 29) {
-			 writeInteger(buffer, offset, events[i].home_suspend, 1); writeInteger(buffer, offset, events[i].away_suspend, 1);
-		 }
-
-		 
-    	 if (events[i].sport_id == 5|| events[i].sport_id == 20 || events[i].sport_id == 34 || events[i].sport_id == 19 || events[i].sport_id == 23 || events[i].sport_id == 22 || events[i].sport_id == 31) 
-			 writeInteger(buffer, offset, events[i].current_server, 1);
-		
-		 
-		 if (events[i].sport_id == 3) {
-			 writeInteger(buffer, offset, events[i].home_batter,1);
-			 writeInteger(buffer, offset, events[i].away_batter, 1);
-			 writeInteger(buffer, offset, events[i].outs, 1);
-			 writeInteger(buffer, offset, events[i].balls,1);
-			 writeInteger(buffer, offset, events[i].strikes, 1);
-			 writeString(buffer, offset, events[i].bases);
-		 }
-	
-		 if (events[i].sport_id == 16) {
-			 writeInteger(buffer, offset, events[i].possession, 1);
-			 writeInteger(buffer, offset, events[i].try_num, 1);
-			 writeInteger(buffer, offset, events[i].yards, 1);
-}
-			
+			if (events_show[i]->sport_id == 20) writeInteger(buffer, offset, events_show[i]->expedite_mode, 1);
 
 
+			if (events_show[i]->sport_id == 4 || events_show[i]->sport_id == 6 || events_show[i]->sport_id == 29) {
+				writeInteger(buffer, offset, events_show[i]->home_suspend, 1); writeInteger(buffer, offset, events_show[i]->away_suspend, 1);
+			}
 
-		 if (events[i].sport_id == 19) {
-			 writeInteger(buffer, offset, events[i].visit, 1);
-			 writeInteger(buffer, offset, events[i].remaining_reds, 1);
+
+			if (events_show[i]->sport_id == 5 || events_show[i]->sport_id == 20 || events_show[i]->sport_id == 34 || events_show[i]->sport_id == 19 || events_show[i]->sport_id == 23 || events_show[i]->sport_id == 22 || events_show[i]->sport_id == 31)
+				writeInteger(buffer, offset, events_show[i]->current_server, 1);
+
+
+			if (events_show[i]->sport_id == 3) {
+				writeInteger(buffer, offset, events_show[i]->home_batter, 1);
+				writeInteger(buffer, offset, events_show[i]->away_batter, 1);
+				writeInteger(buffer, offset, events_show[i]->outs, 1);
+				writeInteger(buffer, offset, events_show[i]->balls, 1);
+				writeInteger(buffer, offset, events_show[i]->strikes, 1);
+				writeString(buffer, offset, events_show[i]->bases);
+			}
+
+			if (events_show[i]->sport_id == 16) {
+				writeInteger(buffer, offset, events_show[i]->possession, 1);
+				writeInteger(buffer, offset, events_show[i]->try_num, 1);
+				writeInteger(buffer, offset, events_show[i]->yards, 1);
+			}
+
+
+
+
+			if (events_show[i]->sport_id == 19) {
+				writeInteger(buffer, offset, events_show[i]->visit, 1);
+				writeInteger(buffer, offset, events_show[i]->remaining_reds, 1);
+			}
+
+
+			if (events_show[i]->sport_id == 22) {
+				writeInteger(buffer, offset, events_show[i]->home_legscore, 1);
+				writeInteger(buffer, offset, events_show[i]->away_legscore, 1);
+				writeInteger(buffer, offset, events_show[i]->throw_num, 1);
+				writeInteger(buffer, offset, events_show[i]->visit, 1);
+			}
+
+			if (events_show[i]->sport_id == 32) {
+				writeInteger(buffer, offset, events_show[i]->delivery, 1);
+				writeInteger(buffer, offset, events_show[i]->home_remaining_bowls, 1);
+				writeInteger(buffer, offset, events_show[i]->away_remaining_bowls, 1);
+				writeInteger(buffer, offset, events_show[i]->current_end, 1);
+			}
+
+			if (events_show[i]->sport_id == 21) {
+				writeInteger(buffer, offset, events_show[i]->home_dismissals, 1);
+				writeInteger(buffer, offset, events_show[i]->away_dismissals, 1);
+				writeInteger(buffer, offset, events_show[i]->home_penalty_runs, 1);
+				writeInteger(buffer, offset, events_show[i]->away_penalty_runs, 1);
+				writeInteger(buffer, offset, events_show[i]->innings, 1);
+				writeInteger(buffer, offset, events_show[i]->over, 1);
+				writeInteger(buffer, offset, events_show[i]->delivery, 1);
+
+			}
+
+			if (events_show[i]->sport_id == 0) writeInteger(buffer, offset, events_show[i]->current_ct_team, 1);
+
+			writeInteger(buffer, offset, events_show[i]->position, 1);
+
 		}
 
 
-		 if (events[i].sport_id == 22) {
-			 writeInteger(buffer, offset, events[i].home_legscore, 1);
-			 writeInteger(buffer, offset, events[i].away_legscore, 1);
-			 writeInteger(buffer, offset, events[i].throw_num, 1);
-			 writeInteger(buffer, offset, events[i].visit, 1);
+
+		if (event2lines.find(events_show[i]->id) == event2lines.end()) { writeInteger(buffer, offset, 0, 2); writeInteger(buffer, offset, 0, 2); continue; }
+
+		writeInteger(buffer, offset, event2lines[events_show[i]->id]->size(), 2);
+
+		event_lines_l = 0;
+		retry_offset = offset;
+		offset += 2;
+
+
+
+		for (unordered_set<int>::iterator it = event2lines[events_show[i]->id]->begin(); it != event2lines[events_show[i]->id]->end(); ++it)
+		{
+			if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events_show[i]->status == 0) continue;
+			if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
+			event_lines_l++;
+			writeInteger(buffer, offset, lines[*(it)].id, 4);
+			writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
+			writeInteger(buffer, offset, lines[*(it)].market_id, 2);
+			writeInteger(buffer, offset, lines[*(it)].favourite, 1);
+			writeInteger(buffer, offset, lines[*(it)].status, 1);
+			//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
+			writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
+			for (j = 0; j < lines[*(it)].outcome_number; j++) {
+				writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 2);
+				writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
+				writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+				writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j] * 100), 4);
+			}
+
+			writeInteger(buffer, offset, lines[*(it)].specifier_number, 1);
+			for (j = 0; j < lines[*(it)].specifier_number; j++)
+				writeString(buffer, offset, lines[*(it)].specifier_value[j]);
+
+
+
+
 		}
 
-		 if (events[i].sport_id == 32) {
-			 writeInteger(buffer, offset, events[i].delivery, 1);
-			 writeInteger(buffer, offset, events[i].home_remaining_bowls, 1);
-			 writeInteger(buffer, offset, events[i].away_remaining_bowls, 1);
-			 writeInteger(buffer, offset, events[i].current_end, 1);
-	   }
+		writeInteger(buffer, retry_offset, event_lines_l, 2);
 
-		 if (events[i].sport_id == 21) {
-			 writeInteger(buffer, offset, events[i].home_dismissals, 1);
-			 writeInteger(buffer, offset, events[i].away_dismissals, 1);
-			 writeInteger(buffer, offset, events[i].home_penalty_runs, 1);
-			 writeInteger(buffer, offset, events[i].away_penalty_runs, 1);
-			 writeInteger(buffer, offset, events[i].innings, 1);
-			 writeInteger(buffer, offset, events[i].over, 1);
-			 writeInteger(buffer, offset, events[i].delivery, 1);
+		k = k + event_lines_l;
 
-		 }
-
-		 if (events[i].sport_id == 0) writeInteger(buffer, offset,events[i].current_ct_team, 1);
-	 
-		 writeInteger(buffer, offset, events[i].position, 1);
-	 
-	 } 
-	 
-
-	     
-	 if (event2lines.find(events[i].id) == event2lines.end()) { writeInteger(buffer, offset, 0, 2); writeInteger(buffer, offset, 0, 2); continue; }
-	  
-	 writeInteger(buffer, offset, event2lines[events[i].id]->size(), 2);
-
-	 event_lines_l = 0;
-	  retry_offset = offset;
-	  offset += 2;
-
-
-	 
-	  for (unordered_set<int>::iterator it = event2lines[events[i].id]->begin(); it != event2lines[events[i].id]->end(); ++it)
-	  {   	  
-		  if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events[i].status == 0) continue;
-		  if (lines[*(it)].status == 0|| lines[*(it)].status == -3) continue;
-	      event_lines_l++;
-		  writeInteger(buffer, offset, lines[*(it)].id, 4);
-		  writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
-		  writeInteger(buffer, offset, lines[*(it)].market_id, 2);
-		  writeInteger(buffer, offset, lines[*(it)].favourite, 1);
-		  writeInteger(buffer, offset, lines[*(it)].status, 1);
-		  //if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
-		  writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
-		  for (j = 0; j < lines[*(it)].outcome_number; j++) {
-			  writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 2);
-			  writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
-			  writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
-			  writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j]*100), 4);
-		  }
-
-		  writeInteger(buffer, offset, lines[*(it)].specifier_number, 1);
-		  for (j = 0; j < lines[*(it)].specifier_number; j++) 
-		  writeString(buffer, offset, lines[*(it)].specifier_value[j]);
-		  
-
-	  
-	  
-	  }
-
-	  writeInteger(buffer, retry_offset, event_lines_l, 2);
-	 
-	  k = k + event_lines_l;
-
-}
+	}
 retry_offset = 0;
 
 
-writeInteger(buffer, retry_offset, events_show_l, 2);
+writeInteger(buffer, retry_offset, events_send_l, 2);
 
 	char* zip_message = nullptr;
 	int zip_len = gzip(buffer, offset, zip_message, 2);
@@ -8781,12 +8795,14 @@ static void run(amqp_connection_state_t conn)
 					if (events_id[event_id] == NULL) {
 						std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
 						events[events_l].id = event_id;
-						events[events_l].type_radar = type_radar; 
+						events[events_l].type_radar = type_radar;
 						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture1 error return in run %d .\r\n", event_id); continue; }
 						events_l++;
 
 					}
 					_event = events_id[event_id];
+					if (_event->show == 0) {events_show[events_show_l] = _event; events_show_l++;
+				}
 					_event->show = 1;
 
 
