@@ -6582,7 +6582,7 @@ char* CreateStep_2(int& len) {
 		writeInteger(buffer, offset, events_show[i]->category_id, 2);
 		if (events_show[i]->type_radar<2) writeInteger(buffer, offset, events_show[i]->tournament_id, 4);
 		else writeInteger(buffer, offset, events_show[i]->simple_id, 4);
-		writeInteger(buffer, offset, events_show[i]->start_time, 4);
+		writeInteger(buffer, offset, events_show[i]->start_time + 4 * 3600, 4);
 		writeInteger(buffer, offset, events_show[i]->period_length, 1);
 		writeInteger(buffer, offset, events_show[i]->overtime_length, 1);
 		if (events_show[i]->sport_id == 5) writeInteger(buffer, offset, events_show[i]->bo, 1);
@@ -7424,8 +7424,11 @@ static void run(amqp_connection_state_t conn)
 	for (;;) {
 		amqp_rpc_reply_t ret;
 		amqp_envelope_t envelope;
-	
+		//int p1 = timestamp();
 		if (recovery_state == 0) GenerateBigStep();
+		//int p2 = timestamp();
+		//p2 = p2 - p1;
+		//printf("GenerateBigStep=%dms\r\n",p2);
 
 		status = 0;
 		now = now_microseconds();
@@ -9094,7 +9097,7 @@ static void run(amqp_connection_state_t conn)
 						writeInteger(buffer, offset, _event->category_id, 2);
 						if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
 						else writeInteger(buffer, offset, _event->simple_id, 4);
-						writeInteger(buffer, offset, _event->start_time, 4);
+						writeInteger(buffer, offset, _event->start_time + 4 * 3600, 4);
 						writeInteger(buffer, offset, _event->period_length, 1);
 						writeInteger(buffer, offset, _event->overtime_length, 1);
 						if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
