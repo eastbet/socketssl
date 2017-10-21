@@ -41,6 +41,7 @@
 #include <amqp_framing.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <atomic>
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -135,7 +136,8 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MATCHSTATUS 1000
 #define QUEUE_LENGTH 2000
 #define STEP_QUEUE 100
-
+#pragma pack(push, 8)
+//#pragma pack(pop)
 
 HANDLE hThread1;
 DWORD dwThreadID1;
@@ -160,10 +162,10 @@ int* data_step_len_1 = new int[STEP_QUEUE];
 int* data_step_len_2 = new int[STEP_QUEUE];
 char** array_data_step_1 = new char*[STEP_QUEUE];
 char** array_data_step_2 = new char*[STEP_QUEUE];
-int current_data_step_1 = -1;
-int current_data_step_2 = -1;
-int current_data_step_temp_1 = -1;
-int current_data_step_temp_2 = -1;
+atomic_int64_t current_data_step_1 = -1;
+atomic_int64_t current_data_step_2 = -1;
+int64_t current_data_step_temp_1 = -1;
+int64_t current_data_step_temp_2 = -1;
 
 
 
@@ -227,8 +229,8 @@ public:
 	size_t message_buffer_length;            // the payload data length of message_buffer
 	int* message_queue_length;
 	char** message_queue;
-	int last_message_queue;
-	int last_message_queue_socket;
+	atomic_int64_t last_message_queue;
+	atomic_int64_t last_message_queue_socket;
 	char* message_ping;
 	char* message_pong;
 	char* message_close;
