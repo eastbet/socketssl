@@ -4198,15 +4198,18 @@ void getMarkets() {
 		if (markets[i].id == 226) markets[i].line_type = 4;//US total (incl. overtime) Basketball,American Football
 		if (markets[i].id == 315) markets[i].line_type = 5;//{!setnr} set - 1x2 Bowls
 		if (markets[i].id == 287) markets[i].line_type = 5;//{!inningnr} inning - 1x2 Baseball
-		//if (markets[i].id == 245) markets[i].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+
+		if (markets[i].id == 245) markets[i].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
 		if (markets[i].id == 235) markets[i].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
 		//if (markets[i].id == 445) markets[i].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
 		//if (markets[i].id == 446) markets[i].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[i].id == 246) markets[i].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
-		if (markets[i].id == 247) markets[i].line_type = 6;// {!gamenr} game - total points Badminton,Squash,Table Tennis
+		if (markets[i].id == 247) markets[i].line_type = 8;// {!gamenr} game - total points Badminton,Squash,Table Tennis
 		if (markets[i].id == 460) markets[i].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 		//if (markets[i].id == 254) markets[i].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
-		if (markets[i].id == 256) markets[i].line_type = 7;//Handicap (incl. extra innings) Baseball
+		if (markets[i].id == 256) markets[i].line_type = 3;//Handicap (incl. extra innings) Baseball
+		if (markets[i].id == 258) markets[i].line_type = 4;//Total (incl. extra innings) Baseball
+
 		if (markets[i].id == 605) markets[i].line_type = 8;//{!inningnr} innings - total Cricket
 		if (markets[i].id == 189) markets[i].line_type = 4;//Total games Tennis
 		if (markets[i].id == 237) markets[i].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
@@ -5974,15 +5977,17 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
 		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
 		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
-		//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
 		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
 		//if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
 		//if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
 		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
-		if (markets[k].id == 247) markets[k].line_type = 6;// {!gamenr} game - total points Badminton,Squash,Table Tennis
+		if (markets[k].id == 247) markets[k].line_type = 8;// {!gamenr} game - total points Badminton,Squash,Table Tennis
 		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
 														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
-		if (markets[k].id == 256) markets[k].line_type = 7;//Handicap (incl. extra innings) Baseball
+		if (markets[k].id == 256) markets[k].line_type = 3;//Handicap (incl. extra innings) Baseball
+		if (markets[k].id == 258) markets[k].line_type = 4;//Total (incl. extra innings) Baseball
+
 		if (markets[k].id == 605) markets[k].line_type = 8;//{!inningnr} innings - total Cricket
 		
 		if (markets[k].id == 189) markets[k].line_type = 4;//Total games Tennis
@@ -6709,6 +6714,7 @@ char* CreateStep_2(int& len) {
 			writeInteger(buffer, offset, lines[*(it)].id, 4);
 			writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
 			writeInteger(buffer, offset, lines[*(it)].market_id, 2);
+			writeInteger(buffer, offset, lines[*(it)].type, 1);
 			writeInteger(buffer, offset, lines[*(it)].favourite, 1);
 			writeInteger(buffer, offset, lines[*(it)].status, 1);
 			//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
@@ -6716,8 +6722,11 @@ char* CreateStep_2(int& len) {
 			for (j = 0; j < lines[*(it)].outcome_number; j++) {
 				writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 2);
 				writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
-				writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+				if (lines[*(it)].type == 1 || lines[*(it)].type == 2) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+				if((lines[*(it)].type==1|| lines[*(it)].type == 2) && lines[*(it)].outcome_team[j]!=3)
+					writeString(buffer, offset, lines[*(it)].outcome_name[j]);
 				writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j] * 100), 4);
+
 			}
 
 			writeInteger(buffer, offset, lines[*(it)].specifier_number, 1);
@@ -8134,6 +8143,7 @@ static void run(amqp_connection_state_t conn)
 									writeInteger(buffer, offset, _line->id, 4);
 									writeInteger(buffer, offset, _line->betstop_reason, 1);
 									writeInteger(buffer, offset, _line->market_id, 2);
+									writeInteger(buffer, offset, _line->type, 1);
 									writeInteger(buffer, offset, _line->favourite, 1);
 									writeInteger(buffer, offset, _line->status, 1);
 									//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
@@ -8141,7 +8151,9 @@ static void run(amqp_connection_state_t conn)
 									for (int j = 0; j < _line->outcome_number; j++) {
 										writeInteger(buffer, offset, _line->outcome_id[j], 2);
 										writeInteger(buffer, offset, _line->outcome_active[j], 1);
-										writeInteger(buffer, offset, _line->outcome_team[j], 1);
+										if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+										if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+											writeString(buffer, offset, _line->outcome_name[j]);
 										writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
 									}
 
@@ -8768,6 +8780,7 @@ static void run(amqp_connection_state_t conn)
 									writeInteger(buffer, offset, _line->id, 4);
 									writeInteger(buffer, offset, _line->betstop_reason, 1);
 									writeInteger(buffer, offset, _line->market_id, 2);
+									writeInteger(buffer, offset, _line->type, 1);
 									writeInteger(buffer, offset, _line->favourite, 1);
 									writeInteger(buffer, offset, _line->status, 1);
 									//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
@@ -8775,7 +8788,10 @@ static void run(amqp_connection_state_t conn)
 									for (int j = 0; j < _line->outcome_number; j++) {
 										writeInteger(buffer, offset, _line->outcome_id[j], 2);
 										writeInteger(buffer, offset, _line->outcome_active[j], 1);
-										writeInteger(buffer, offset, _line->outcome_team[j], 1);
+										if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+										if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+											writeString(buffer, offset, _line->outcome_name[j]);
+
 										writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
 									}
 
@@ -9801,6 +9817,7 @@ static void run(amqp_connection_state_t conn)
 								writeInteger(buffer, offset, _line->id, 4);
 								writeInteger(buffer, offset, _line->betstop_reason, 1);
 								writeInteger(buffer, offset, _line->market_id, 2);
+								writeInteger(buffer, offset, _line->type, 1);
 								writeInteger(buffer, offset, _line->favourite, 1);
 								writeInteger(buffer, offset, _line->status, 1);
 								//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
@@ -9808,7 +9825,9 @@ static void run(amqp_connection_state_t conn)
 								for (int j = 0; j < _line->outcome_number; j++) {
 									writeInteger(buffer, offset, _line->outcome_id[j], 2);
 									writeInteger(buffer, offset, _line->outcome_active[j], 1);
-									writeInteger(buffer, offset, _line->outcome_team[j], 1);
+									if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+									if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+										writeString(buffer, offset, _line->outcome_name[j]);
 									writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
 								}
 
