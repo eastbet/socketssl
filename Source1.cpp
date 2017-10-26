@@ -1,766 +1,322 @@
-#ifdef __linux__
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/types.h>
-#include <unistd.h>
-#include <ifaddrs.h>
-#elif _WIN32
-#include <WinSock2.h>
-#include <ws2tcpip.h>
-#include <iphlpapi.h>
-#pragma comment(lib, "ws2_32.lib")
-#pragma comment(lib, "iphlpapi.lib")
-#define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
-#define FREE(x) HeapFree(GetProcessHeap(), 0, (x))
-#endif
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <math.h>
 #include <iostream>
+#include <cassert>
 #include <string>
 #include <vector>
+#include <list>
+#include <memory>
+#include <sstream>
+#include <mutex>
+#include <thread>
 #include <map>
-#include "websocket.h"
-#include "base64.h"
-#include "sha1.h"
+#include <unordered_map>
+#include <chrono>
+#include <array>
+#include <atomic>
+//#include <shared_mutex>
 
-using namespace std;
+template<typename T, typename mutex_t = std::recursive_mutex, typename x_lock_t = std::unique_lock<mutex_t>,
+	typename s_lock_t = std::unique_lock<mutex_t >>
+	// std::shared_lock<std::shared_timed_mutex>, when mutex_t = std::shared_timed_mutex
+	class safe_ptr {
+	typedef mutex_t mtx_t;
+	const std::shared_ptr<T> ptr;
+	std::shared_ptr<mutex_t> mtx_ptr;
 
-void showAvailableIP() {
+	template<typename req_lock>
+	class auto_lock_t {
+		T * const ptr;
+		req_lock lock;
+	public:
+		auto_lock_t(auto_lock_t&& o) : ptr(std::move(o.ptr)), lock(std::move(o.lock)) { }
+		auto_lock_t(T * const _ptr, mutex_t& _mtx) : ptr(_ptr), lock(_mtx) {}
+		T* operator -> () { return ptr; }
+		const T* operator -> () const { return ptr; }
+	};
 
-#ifdef __linux__
+	template<typename req_lock>
+	class auto_lock_obj_t {
+		T * const ptr;
+		req_lock lock;
+	public:
+		auto_lock_obj_t(auto_lock_obj_t&& o) : ptr(std::move(o.ptr)), lock(std::move(o.lock)) { }
+		auto_lock_obj_t(T * const _ptr, mutex_t& _mtx) : ptr(_ptr), lock(_mtx) {}
+		template<typename arg_t>
+		auto operator [] (arg_t arg) -> decltype((*ptr)[arg]) { return (*ptr)[arg]; }
+	};
 
-	char name[INET_ADDRSTRLEN];
-	struct ifaddrs *iflist;
-	if (getifaddrs(&iflist) < 0) {
-		cout << "Error on getting available IP!" << endl;
-	}
+	void lock() { mtx_ptr->lock(); }
+	void unlock() { mtx_ptr->unlock(); }
+	friend struct link_safe_ptrs;
+	template<typename, typename, size_t, size_t> friend class lock_timed_transaction;
+	template<typename mutex_type> friend class std::lock_guard;   // MSVC 2013
+																  //template<class... mutex_types> friend class std::lock_guard;    // C++17, MSVC 2015
+	public:
+		template<typename... Args>
+		safe_ptr(Args... args) : ptr(std::make_shared<T>(args...)), mtx_ptr(std::make_shared<mutex_t>()) {}
 
-	cout << "Available IP:" << endl;
+		auto_lock_t<x_lock_t> operator -> () { return auto_lock_t<x_lock_t>(ptr.get(), *mtx_ptr); }
+		auto_lock_obj_t<x_lock_t> operator * () { return auto_lock_obj_t<x_lock_t>(ptr.get(), *mtx_ptr); }
+		const auto_lock_t<s_lock_t> operator -> () const { return auto_lock_t<s_lock_t>(ptr.get(), *mtx_ptr); }
+		const auto_lock_obj_t<s_lock_t> operator * () const { return auto_lock_obj_t<s_lock_t>(ptr.get(), *mtx_ptr); }
+};
+// ---------------------------------------------------------------
 
-	struct in_addr addr;
-	for (struct ifaddrs *p = iflist; p; p = p->ifa_next) {
-		if (p->ifa_addr->sa_family == AF_INET) {
-			addr = ((struct sockaddr_in*)p->ifa_addr)->sin_addr;
-			if (inet_ntop(AF_INET, &addr, name, sizeof(name)) == NULL)
-				continue;
+// contention free shared mutex (same-lock-type is recursive for X->X, X->S or S->S locks), but (S->X - is UB)
+template<unsigned contention_free_count = 36, bool shared_flag = false>
+class contention_free_shared_mutex {
+	std::atomic<bool> want_x_lock;
+	//struct cont_free_flag_t { alignas(std::hardware_destructive_interference_size) std::atomic<int> value; cont_free_flag_t() { value = 0; } }; // C++17
+	struct cont_free_flag_t { char tmp[60]; std::atomic<int> value; cont_free_flag_t() { value = 0; } };   // tmp[] to avoid false sharing
+	typedef std::array<cont_free_flag_t, contention_free_count> array_slock_t;
 
-			cout << "    " << p->ifa_name << " " << name << endl;
+	const std::shared_ptr<array_slock_t> shared_locks_array_ptr;  // 0 - unregistred, 1 registred & free, 2... - busy
+	char avoid_falsesharing_1[64];
+
+	array_slock_t &shared_locks_array;
+	char avoid_falsesharing_2[64];
+
+	int recursive_xlock_count;
+
+
+	enum index_op_t { unregister_thread_op, get_index_op, register_thread_op };
+
+#if (_WIN32 && _MSC_VER < 1900) // only for MSVS 2013
+	typedef int64_t thread_id_t;
+	std::atomic<thread_id_t> owner_thread_id;
+	std::array<int64_t, contention_free_count> register_thread_array;
+	int64_t get_fast_this_thread_id() {
+		static __declspec(thread) int64_t fast_this_thread_id = 0;  // MSVS 2013 thread_local partially supported - only POD
+		if (fast_this_thread_id == 0) {
+			std::stringstream ss;
+			ss << std::this_thread::get_id();   // https://connect.microsoft.com/VisualStudio/feedback/details/1558211
+			fast_this_thread_id = std::stoll(ss.str());
 		}
+		return fast_this_thread_id;
 	}
 
-#elif _WIN32
+	int get_or_set_index(index_op_t index_op = get_index_op, int set_index = -1) {
+		if (index_op == get_index_op) {  // get index
+			auto const thread_id = get_fast_this_thread_id();
 
-	/* Variables used by GetIpAddrTable */
-	PMIB_IPADDRTABLE pIPAddrTable;
-	DWORD dwSize = 0;
-	DWORD dwRetVal = 0;
-	IN_ADDR IPAddr;
-
-	/* Variables used to return error message */
-	LPVOID lpMsgBuf;
-
-	// Before calling AddIPAddress we use GetIpAddrTable to get
-	// an adapter to which we can add the IP.
-	pIPAddrTable = (MIB_IPADDRTABLE *)MALLOC(sizeof(MIB_IPADDRTABLE));
-
-	if (pIPAddrTable) {
-		// Make an initial call to GetIpAddrTable to get the
-		// necessary size into the dwSize variable
-		if (GetIpAddrTable(pIPAddrTable, &dwSize, 0) ==
-			ERROR_INSUFFICIENT_BUFFER) {
-			FREE(pIPAddrTable);
-			pIPAddrTable = (MIB_IPADDRTABLE *)MALLOC(dwSize);
-
-		}
-		if (pIPAddrTable == NULL) {
-			printf("Memory allocation failed for GetIpAddrTable\n");
-			return;
-		}
-	}
-	// Make a second call to GetIpAddrTable to get the
-	// actual data we want
-	if ((dwRetVal = GetIpAddrTable(pIPAddrTable, &dwSize, 0)) != NO_ERROR) {
-		printf("GetIpAddrTable failed with error %d\n", dwRetVal);
-		if (FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, dwRetVal, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),       // Default language
-			(LPTSTR)& lpMsgBuf, 0, NULL)) {
-			printf("\tError: %s", lpMsgBuf);
-			LocalFree(lpMsgBuf);
-		}
-		return;
-	}
-
-	cout << "Available IP:" << endl;
-
-	for (int i = 0; i < (int)pIPAddrTable->dwNumEntries; i++) {
-		IPAddr.S_un.S_addr = (u_long)pIPAddrTable->table[i].dwAddr;
-		cout << "    " << i << ": " << inet_ntoa(IPAddr) << endl;
-	}
-
-	if (pIPAddrTable) {
-		FREE(pIPAddrTable);
-		pIPAddrTable = NULL;
-	}
-
-#endif
-}
-
-vector<int> webSocket::getClientIDs() {
-	vector<int> clientIDs;
-	for (int i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] != NULL)
-			clientIDs.push_back(i);
-	}
-
-	return clientIDs;
-}
-
-string webSocket::getClientIP(int clientID) {
-	return string(inet_ntoa(wsClients[clientID]->addr));
-}
-
-void webSocket::wsCheckIdleClients() {
-	time_t current = time(NULL);
-	for (int i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] != NULL && wsClients[i]->ReadyState != WS_READY_STATE_CLOSED) {
-			if (wsClients[i]->PingSentTime != 0) {
-				if (difftime(current, wsClients[i]->PingSentTime) >= WS_TIMEOUT_PONG) {
-					wsSendClientClose(i, WS_STATUS_TIMEOUT);
-					wsRemoveClient(i);
+			for (size_t i = 0; i < register_thread_array.size(); ++i) {
+				if (register_thread_array[i] == thread_id) {
+					set_index = i;   // thread already registred                
+					break;
 				}
 			}
-			else if (difftime(current, wsClients[i]->LastRecvTime) != WS_TIMEOUT_RECV) {
-				if (wsClients[i]->ReadyState != WS_READY_STATE_CONNECTING) {
-					wsClients[i]->PingSentTime = time(NULL);
-					wsSendClientMessage(i, WS_OPCODE_PING, "");
-				}
+		}
+		else if (index_op == register_thread_op) {  // register thread
+			register_thread_array[set_index] = get_fast_this_thread_id();
+		}
+		return set_index;
+	}
+
+#else
+	typedef std::thread::id thread_id_t;
+	std::atomic<std::thread::id> owner_thread_id;
+	std::thread::id get_fast_this_thread_id() { return std::this_thread::get_id(); }
+
+	struct unregister_t {
+		int thread_index;
+		std::shared_ptr<array_slock_t> array_slock_ptr;
+		unregister_t(int index, std::shared_ptr<array_slock_t> const& ptr) : thread_index(index), array_slock_ptr(ptr) {}
+		unregister_t(unregister_t &&src) : thread_index(src.thread_index), array_slock_ptr(std::move(src.array_slock_ptr)) {}
+		~unregister_t() { if (array_slock_ptr.use_count() > 0) (*array_slock_ptr)[thread_index].value--; }
+	};
+
+	int get_or_set_index(index_op_t index_op = get_index_op, int set_index = -1) {
+		thread_local static std::unordered_map<void *, unregister_t> thread_local_index_hashmap;
+		// get thread index - in any cases
+		auto it = thread_local_index_hashmap.find(this);
+		if (it != thread_local_index_hashmap.cend())
+			set_index = it->second.thread_index;
+
+		if (index_op == unregister_thread_op) {  // unregister thread
+			if (shared_locks_array[set_index].value == 1) // if isn't shared_lock now
+				thread_local_index_hashmap.erase(this);
+			else
+				return -1;
+		}
+		else if (index_op == register_thread_op) {  // register thread
+			thread_local_index_hashmap.emplace(this, unregister_t(set_index, shared_locks_array_ptr));
+
+			// remove info about deleted contfree-mutexes
+			for (auto it = thread_local_index_hashmap.begin(), ite = thread_local_index_hashmap.end(); it != ite;) {
+				if (it->second.array_slock_ptr->at(it->second.thread_index).value < 0)    // if contfree-mtx was deleted
+					it = thread_local_index_hashmap.erase(it);
 				else
-					wsRemoveClient(i);
+					++it;
 			}
 		}
-	}
-}
-
-bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, string message) {
-	// check if client ready state is already closing or closed
-	if (clientID >= wsClients.size())
-		return false;
-
-	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
-		return true;
-
-	// fetch message length
-	int messageLength = message.size();
-
-	// set max payload length per frame
-	int bufferSize = 4096;
-
-	// work out amount of frames to send, based on $bufferSize
-	int frameCount = ceil((float)messageLength / bufferSize);
-	if (frameCount == 0)
-		frameCount = 1;
-
-	// set last frame variables
-	int maxFrame = frameCount - 1;
-	int lastFrameBufferLength = (messageLength % bufferSize) != 0 ? (messageLength % bufferSize) : (messageLength != 0 ? bufferSize : 0);
-
-	// loop around all frames to send
-	for (int i = 0; i < frameCount; i++) {
-		// fetch fin, opcode and buffer length for frame
-		unsigned char fin = i != maxFrame ? 0 : WS_FIN;
-		opcode = i != 0 ? WS_OPCODE_CONTINUATION : opcode;
-
-		size_t bufferLength = i != maxFrame ? bufferSize : lastFrameBufferLength;
-		char *buf;
-		size_t totalLength;
-
-		// set payload length variables for frame
-		if (bufferLength <= 125) {
-			// int payloadLength = bufferLength;
-			totalLength = bufferLength + 2;
-			buf = new char[totalLength];
-			buf[0] = fin | opcode;
-			buf[1] = bufferLength;
-			memcpy(buf + 2, message.c_str(), message.size());
-		}
-		else if (bufferLength <= 65535) {
-			// int payloadLength = WS_PAYLOAD_LENGTH_16;
-			totalLength = bufferLength + 4;
-			buf = new char[totalLength];
-			buf[0] = fin | opcode;
-			buf[1] = WS_PAYLOAD_LENGTH_16;
-			buf[2] = bufferLength >> 8;
-			buf[3] = bufferLength;
-			memcpy(buf + 4, message.c_str(), message.size());
-		}
-		else {
-			// int payloadLength = WS_PAYLOAD_LENGTH_63;
-			totalLength = bufferLength + 10;
-			buf = new char[totalLength];
-			buf[0] = fin | opcode;
-			buf[1] = WS_PAYLOAD_LENGTH_63;
-			buf[2] = 0;
-			buf[3] = 0;
-			buf[4] = 0;
-			buf[5] = 0;
-			buf[6] = bufferLength >> 24;
-			buf[7] = bufferLength >> 16;
-			buf[8] = bufferLength >> 8;
-			buf[9] = bufferLength;
-			memcpy(buf + 10, message.c_str(), message.size());
-		}
-
-		// send frame
-		int left = totalLength;
-		char *buf2 = buf;
-		do {
-			int sent = send(wsClients[clientID]->socket, buf2, left, 0);
-			if (sent == -1)
-				return false;
-
-			left -= sent;
-			if (sent > 0)
-				buf2 += sent;
-		} while (left > 0);
-
-		delete buf;
+		return set_index;
 	}
 
-	return true;
-}
-
-bool webSocket::wsSend(int clientID, string message, bool binary) {
-	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message);
-}
-
-void webSocket::wsSendClientClose(int clientID, unsigned short status) {
-	// check if client ready state is already closing or closed
-	if (wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSING || wsClients[clientID]->ReadyState == WS_READY_STATE_CLOSED)
-		return;
-
-	// store close status
-	wsClients[clientID]->ReadyState = status;
-
-	// send close frame to client
-	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "");
-
-	// set client ready state to closing
-	wsClients[clientID]->ReadyState = WS_READY_STATE_CLOSING;
-}
-
-void webSocket::wsClose(int clientID) {
-	wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
-}
-
-bool webSocket::wsCheckSizeClientFrame(int clientID) {
-	wsClient *client = wsClients[clientID];
-	// check if at least 2 bytes have been stored in the frame buffer
-	if (client->FrameBytesRead > 1) {
-		// fetch payload length in byte 2, max will be 127
-		size_t payloadLength = (unsigned char)client->FrameBuffer.at(1) & 127;
-
-		if (payloadLength <= 125) {
-			// actual payload length is <= 125
-			client->FramePayloadDataLength = payloadLength;
-		}
-		else if (payloadLength == 126) {
-			// actual payload length is <= 65,535
-			if (client->FrameBuffer.size() >= 4) {
-				std::vector<unsigned char> length_bytes;
-				length_bytes.resize(2);
-				memcpy((char*)&length_bytes[0], client->FrameBuffer.substr(2, 2).c_str(), 2);
-
-				size_t length = 0;
-				int num_bytes = 2;
-				for (int c = 0; c < num_bytes; c++)
-					length += length_bytes[c] << (8 * (num_bytes - 1 - c));
-				client->FramePayloadDataLength = length;
-			}
-		}
-		else {
-			if (client->FrameBuffer.size() >= 10) {
-				std::vector<unsigned char> length_bytes;
-				length_bytes.resize(8);
-				memcpy((char*)&length_bytes[0], client->FrameBuffer.substr(2, 8).c_str(), 8);
-
-				size_t length = 0;
-				int num_bytes = 8;
-				for (int c = 0; c < num_bytes; c++)
-					length += length_bytes[c] << (8 * (num_bytes - 1 - c));
-				client->FramePayloadDataLength = length;
-			}
-		}
-
-		return true;
-	}
-
-	return false;
-}
-
-void webSocket::wsRemoveClient(int clientID) {
-	if (callOnClose != NULL)
-		callOnClose(clientID);
-
-	wsClient *client = wsClients[clientID];
-
-	// fetch close status (which could be false), and call wsOnClose
-	int closeStatus = wsClients[clientID]->CloseStatus;
-
-	// close socket
-#ifdef __linux__
-	close(client->socket);
-#elif _WIN32
-	closesocket(client->socket);
-#endif
-	FD_CLR(client->socket, &fds);
-
-	socketIDmap.erase(wsClients[clientID]->socket);
-	wsClients[clientID] = NULL;
-	delete client;
-}
-
-bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
-	wsClient *client = wsClients[clientID];
-	// check opcodes
-	if (opcode == WS_OPCODE_PING) {
-		// received ping message
-		return wsSendClientMessage(clientID, WS_OPCODE_PONG, data);
-	}
-	else if (opcode == WS_OPCODE_PONG) {
-		// received pong message (it's valid if the server did not send a ping request for this pong message)
-		if (client->PingSentTime != 0) {
-			client->PingSentTime = 0;
-		}
-	}
-	else if (opcode == WS_OPCODE_CLOSE) {
-		// received close message
-		if (client->ReadyState == WS_READY_STATE_CLOSING) {
-			// the server already sent a close frame to the client, this is the client's close frame reply
-			// (no need to send another close frame to the client)
-			client->ReadyState = WS_READY_STATE_CLOSED;
-		}
-		else {
-			// the server has not already sent a close frame to the client, send one now
-			wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
-		}
-
-		wsRemoveClient(clientID);
-	}
-	else if (opcode == WS_OPCODE_TEXT || opcode == WS_OPCODE_BINARY) {
-		if (callOnMessage != NULL)
-			callOnMessage(clientID, data.substr(0, dataLength));
-	}
-	else {
-		// unknown opcode
-		return false;
-	}
-
-	return true;
-}
-
-bool webSocket::wsProcessClientFrame(int clientID) {
-	wsClient *client = wsClients[clientID];
-	// store the time that data was last received from the client
-	client->LastRecvTime = time(NULL);
-
-	// check at least 6 bytes are set (first 2 bytes and 4 bytes for the mask key)
-	if (client->FrameBuffer.size() < 6)
-		return false;
-
-	// fetch first 2 bytes of header
-	unsigned char octet0 = client->FrameBuffer.at(0);
-	unsigned char octet1 = client->FrameBuffer.at(1);
-
-	unsigned char fin = octet0 & WS_FIN;
-	unsigned char opcode = octet0 & 0x0f;
-
-	//unsigned char mask = octet1 & WS_MASK;
-	if (octet1 < 128)
-		return false; // close socket, as no mask bit was sent from the client
-
-					  // fetch byte position where the mask key starts
-	int seek = client->FrameBytesRead <= 125 ? 2 : (client->FrameBytesRead <= 65535 ? 4 : 10);
-
-	// read mask key
-	char maskKey[4];
-	memcpy(maskKey, client->FrameBuffer.substr(seek, 4).c_str(), 4);
-
-	seek += 4;
-
-	// decode payload data
-	string data;
-	for (int i = seek; i < client->FrameBuffer.size(); i++) {
-		//data.append((char)(((int)client->FrameBuffer.at(i)) ^ maskKey[(i - seek) % 4]));
-		char c = client->FrameBuffer.at(i);
-		c = c ^ maskKey[(i - seek) % 4];
-		data += c;
-	}
-
-	// check if this is not a continuation frame and if there is already data in the message buffer
-	if (opcode != WS_OPCODE_CONTINUATION && client->MessageBufferLength > 0) {
-		// clear the message buffer
-		client->MessageBufferLength = 0;
-		client->MessageBuffer.clear();
-	}
-
-	// check if the frame is marked as the final frame in the message
-	if (fin == WS_FIN) {
-		// check if this is the first frame in the message
-		if (opcode != WS_OPCODE_CONTINUATION) {
-			// process the message
-			return wsProcessClientMessage(clientID, opcode, data, client->FramePayloadDataLength);
-		}
-		else {
-			// increase message payload data length
-			client->MessageBufferLength += client->FramePayloadDataLength;
-
-			// push frame payload data onto message buffer
-			client->MessageBuffer.append(data);
-
-			// process the message
-			bool result = wsProcessClientMessage(clientID, client->MessageOpcode, client->MessageBuffer, client->MessageBufferLength);
-
-			// check if the client wasn't removed, then reset message buffer and message opcode
-			if (wsClients[clientID] != NULL) {
-				client->MessageBuffer.clear();
-				client->MessageOpcode = 0;
-				client->MessageBufferLength = 0;
-			}
-
-			return result;
-		}
-	}
-	else {
-		// check if the frame is a control frame, control frames cannot be fragmented
-		if (opcode & 8)
-			return false;
-
-		// increase message payload data length
-		client->MessageBufferLength += client->FramePayloadDataLength;
-
-		// push frame payload data onto message buffer
-		client->MessageBuffer.append(data);
-
-		// if this is the first frame in the message, store the opcode
-		if (opcode != WS_OPCODE_CONTINUATION) {
-			client->MessageOpcode = opcode;
-		}
-	}
-
-	return true;
-}
-
-bool webSocket::wsBuildClientFrame(int clientID, char *buffer, int bufferLength) {
-	wsClient *client = wsClients[clientID];
-	// increase number of bytes read for the frame, and join buffer onto end of the frame buffer
-	client->FrameBytesRead += bufferLength;
-	client->FrameBuffer.append(buffer, bufferLength);
-
-	// check if the length of the frame's payload data has been fetched, if not then attempt to fetch it from the frame buffer
-	if (wsCheckSizeClientFrame(clientID) == true) {
-		// work out the header length of the frame
-		int headerLength = (client->FramePayloadDataLength <= 125 ? 0 : (client->FramePayloadDataLength <= 65535 ? 2 : 8)) + 6;
-
-		// check if all bytes have been received for the frame
-		int frameLength = client->FramePayloadDataLength + headerLength;
-		if (client->FrameBytesRead >= frameLength) {
-			char *nextFrameBytes;
-			// check if too many bytes have been read for the frame (they are part of the next frame)
-			int nextFrameBytesLength = client->FrameBytesRead - frameLength;
-			if (nextFrameBytesLength > 0) {
-				client->FrameBytesRead -= nextFrameBytesLength;
-				nextFrameBytes = buffer + frameLength;
-				client->FrameBuffer = client->FrameBuffer.substr(0, frameLength);
-			}
-
-			// process the frame
-			bool result = wsProcessClientFrame(clientID);
-
-			// check if the client wasn't removed, then reset frame data
-			if (wsClients[clientID] != NULL) {
-				client->FramePayloadDataLength = -1;
-				client->FrameBytesRead = 0;
-				client->FrameBuffer.clear();
-			}
-
-			// if there's no extra bytes for the next frame, or processing the frame failed, return the result of processing the frame
-			if (nextFrameBytesLength <= 0 || !result)
-				return result;
-
-			// build the next frame with the extra bytes
-			return wsBuildClientFrame(clientID, nextFrameBytes, nextFrameBytesLength);
-		}
-	}
-
-	return true;
-}
-
-bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
-	// fetch headers and request line
-	string buf(buffer);
-	size_t sep = buf.find("\r\n\r\n");
-	if (sep == string::npos)
-		return false;
-
-	string headers = buf.substr(0, sep);
-
-	string request = headers.substr(0, headers.find("\r\n"));
-	if (request.size() == 0)
-		return false;
-
-	string part;
-	part = request.substr(0, request.find(" "));
-	if (part.compare("GET") != 0 && part.compare("get") != 0 && part.compare("Get") != 0)
-		return false;
-
-	part = request.substr(request.rfind("/") + 1);
-	if (atof(part.c_str()) < 1.1)
-		return false;
-
-	string host;
-	string ws_key;
-	string ws_version;
-	headers = headers.substr(headers.find("\r\n") + 2);
-	while (headers.size() > 0) {
-		request = headers.substr(0, headers.find("\r\n"));
-		if (request.find(":") != string::npos) {
-			string key = request.substr(0, request.find(":"));
-			if (key.find_first_not_of(" ") != string::npos)
-				key = key.substr(key.find_first_not_of(" "));
-			if (key.find_last_not_of(" ") != string::npos)
-				key = key.substr(0, key.find_last_not_of(" ") + 1);
-
-			string value = request.substr(request.find(":") + 1);
-			if (value.find_first_not_of(" ") != string::npos)
-				value = value.substr(value.find_first_not_of(" "));
-			if (value.find_last_not_of(" ") != string::npos)
-				value = value.substr(0, value.find_last_not_of(" ") + 1);
-
-			if (key.compare("Host") == 0) {
-				host = value;
-			}
-			else if (key.compare("Sec-WebSocket-Key") == 0) {
-				ws_key = value;
-			}
-			else if (key.compare("Sec-WebSocket-Version") == 0) {
-				ws_version = value;
-			}
-		}
-		if (headers.find("\r\n") == string::npos)
-			break;
-		headers = headers.substr(headers.find("\r\n") + 2);
-	}
-
-	if (host.size() == 0)
-		return false;
-
-	if (ws_key.size() == 0 || base64_decode(ws_key).size() != 16)
-		return false;
-
-	if (ws_version.size() == 0 || atoi(ws_version.c_str()) < 7)
-		return false;
-
-	unsigned char hash[20];
-	ws_key.append("258EAFA5-E914-47DA-95CA-C5AB0DC85B11");
-	SHA1((unsigned char *)ws_key.c_str(), ws_key.size(), hash);
-	string encoded_hash = base64_encode(hash, 20);
-
-	string message = "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ";
-	message.append(encoded_hash);
-	message.append("\r\n\r\n");
-
-	int socket = wsClients[clientID]->socket;
-
-	int left = message.size();
-	do {
-		int sent = send(socket, message.c_str(), message.size(), 0);
-		if (sent == false) return false;
-
-		left -= sent;
-		if (sent > 0)
-			message = message.substr(sent);
-	} while (left > 0);
-
-	return true;
-}
-
-bool webSocket::wsProcessClient(int clientID, char *buffer, int bufferLength) {
-	bool result;
-
-	if (clientID >= wsClients.size() || wsClients[clientID] == NULL)
-		return false;
-
-	if (wsClients[clientID]->ReadyState == WS_READY_STATE_OPEN) {
-		// handshake completed
-		result = wsBuildClientFrame(clientID, buffer, bufferLength);
-	}
-	else if (wsClients[clientID]->ReadyState == WS_READY_STATE_CONNECTING) {
-		// handshake not completed
-		result = wsProcessClientHandshake(clientID, buffer);
-		if (result) {
-			if (callOnOpen != NULL)
-				callOnOpen(clientID);
-
-			wsClients[clientID]->ReadyState = WS_READY_STATE_OPEN;
-		}
-	}
-	else {
-		// ready state is set to closed
-		result = false;
-	}
-
-	return result;
-}
-
-int webSocket::wsGetNextClientID() {
-	int i;
-	for (i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] == NULL)
-			break;
-	}
-	return i;
-}
-
-void webSocket::wsAddClient(int socket, in_addr ip) {
-	FD_SET(socket, &fds);
-	if (socket > fdmax)
-		fdmax = socket;
-
-	int clientID = wsGetNextClientID();
-	wsClient *newClient = new wsClient(socket, ip);
-	if (clientID >= wsClients.size()) {
-		wsClients.push_back(newClient);
-	}
-	else {
-		wsClients[clientID] = newClient;
-	}
-	socketIDmap[socket] = clientID;
-}
-
-void webSocket::setOpenHandler(defaultCallback callback) {
-	callOnOpen = callback;
-}
-
-void webSocket::setCloseHandler(defaultCallback callback) {
-	callOnClose = callback;
-}
-
-void webSocket::setMessageHandler(messageCallback callback) {
-	callOnMessage = callback;
-}
-
-void webSocket::setPeriodicHandler(nullCallback callback) {
-	callPeriodic = callback;
-}
-
-void webSocket::startServer(int port) {
-	showAvailableIP();
-
-	int yes = 1;
-	char buf[4096];
-	struct sockaddr_in serv_addr, cli_addr;
-
-	memset(&serv_addr, '0', sizeof(serv_addr));
-	memset(&cli_addr, '0', sizeof(cli_addr));
-	serv_addr.sin_family = AF_INET;
-	//serv_addr.sin_addr.s_addr = inet_addr(ip);
-	serv_addr.sin_addr.s_addr = INADDR_ANY;
-	serv_addr.sin_port = htons(port);
-
-#if _WIN32
-	WSADATA wsaData;
-	WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
 
-	ListenSocket = socket(AF_INET, SOCK_STREAM, 0);
-	if (setsockopt(ListenSocket, SOL_SOCKET, SO_REUSEADDR, (const char *)&yes, sizeof(int)) == -1) {
-		perror("setsockopt() error!");
-		exit(1);
-	}
-	if (bind(ListenSocket, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) == -1) {
-		perror("bind() error!");
-		exit(1);
-	}
-	if (listen(ListenSocket, 10) == -1) {
-		perror("listen() error!");
-		exit(1);
+public:
+	contention_free_shared_mutex() :
+		shared_locks_array_ptr(std::make_shared<array_slock_t>()), shared_locks_array(*shared_locks_array_ptr), want_x_lock(false), recursive_xlock_count(0),
+		owner_thread_id(thread_id_t()) {}
+
+	~contention_free_shared_mutex() {
+		for (auto &i : shared_locks_array) i.value = -1;
 	}
 
 
+	bool unregister_thread() { return get_or_set_index(unregister_thread_op) >= 0; }
 
-	fdmax = ListenSocket;
-	fd_set read_fds;
-	FD_ZERO(&fds);
-	FD_SET(ListenSocket, &fds);
-	FD_ZERO(&read_fds);
+	int register_thread() {
+		int cur_index = get_or_set_index();
 
-	struct timeval timeout;
-	time_t nextPingTime = time(NULL) + 1;
-	while (FD_ISSET(ListenSocket, &fds)) {
-		read_fds = fds;
-		timeout.tv_sec = 0;
-		timeout.tv_usec = 10000;
-		if (select(fdmax + 1, &read_fds, NULL, NULL, &timeout) > 0) {
-			for (int i = 0; i <= fdmax; i++) {
-				if (FD_ISSET(i, &read_fds)) {
-					if (i == ListenSocket) {
-						socklen_t addrlen = sizeof(cli_addr);
-						int ClientSocket = accept(ListenSocket, (struct sockaddr*)&cli_addr, &addrlen);
-						if (ClientSocket != -1) {
-							/* add new client */
-							wsAddClient(ClientSocket, cli_addr.sin_addr);
-							printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
+		if (cur_index == -1) {
+			if (shared_locks_array_ptr.use_count() <= (int)shared_locks_array.size())  // try once to register thread
+			{
+				for (size_t i = 0; i < shared_locks_array.size(); ++i) {
+					int unregistred_value = 0;
+					if (shared_locks_array[i].value == 0)
+						if (shared_locks_array[i].value.compare_exchange_strong(unregistred_value, 1)) {
+							cur_index = i;
+							get_or_set_index(register_thread_op, cur_index);   // thread registred success
+							break;
 						}
-					}
-					else {
-						int nbytes = recv(i, buf, sizeof(buf), 0);
-						if (socketIDmap.find(i) != socketIDmap.end()) {
-							if (nbytes < 0)
-								wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-							else if (nbytes == 0)
-								wsRemoveClient(socketIDmap[i]);
-							else {
-								if (!wsProcessClient(socketIDmap[i], buf, nbytes))
-									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-							}
-						}
-					}
+				}
+				//std::cout << "\n thread_id = " << std::this_thread::get_id() << ", register_thread_index = " << cur_index <<
+				//    ", shared_locks_array[cur_index].value = " << shared_locks_array[cur_index].value << std::endl;
+			}
+		}
+		return cur_index;
+	}
+
+	void lock_shared() {
+		int const register_index = register_thread();
+
+		if (register_index >= 0) {
+			int recursion_depth = shared_locks_array[register_index].value.load(std::memory_order_acquire);
+			assert(recursion_depth >= 1);
+
+			if (recursion_depth > 1)
+				shared_locks_array[register_index].value.store(recursion_depth + 1, std::memory_order_release); // if recursive -> release
+			else {
+				shared_locks_array[register_index].value.store(recursion_depth + 1, std::memory_order_seq_cst); // if first -> sequential
+				while (want_x_lock.load(std::memory_order_seq_cst)) {
+					shared_locks_array[register_index].value.store(recursion_depth, std::memory_order_seq_cst);
+					for (volatile size_t i = 0; want_x_lock.load(std::memory_order_seq_cst); ++i) if (i % 100000 == 0) std::this_thread::yield();
+					shared_locks_array[register_index].value.store(recursion_depth + 1, std::memory_order_seq_cst);
 				}
 			}
+			// (shared_locks_array[register_index] == 2 && want_x_lock == false) ||     // first shared lock
+			// (shared_locks_array[register_index] > 2)                                 // recursive shared lock
+		}
+		else {
+			if (owner_thread_id.load(std::memory_order_acquire) != get_fast_this_thread_id()) {
+				size_t i = 0;
+				for (bool flag = false; !want_x_lock.compare_exchange_weak(flag, true, std::memory_order_seq_cst); flag = false)
+					if (++i % 100000 == 0) std::this_thread::yield();
+				owner_thread_id.store(get_fast_this_thread_id(), std::memory_order_release);
+			}
+			++recursive_xlock_count;
+		}
+	}
+
+	void unlock_shared() {
+		int const register_index = get_or_set_index();
+
+		if (register_index >= 0) {
+			int const recursion_depth = shared_locks_array[register_index].value.load(std::memory_order_acquire);
+			assert(recursion_depth > 1);
+
+			shared_locks_array[register_index].value.store(recursion_depth - 1, std::memory_order_release);
+		}
+		else {
+			if (--recursive_xlock_count == 0) {
+				owner_thread_id.store(decltype(owner_thread_id)(), std::memory_order_release);
+				want_x_lock.store(false, std::memory_order_release);
+			}
+		}
+	}
+
+	void lock() {
+		// forbidden upgrade S-lock to X-lock - this is an excellent opportunity to get deadlock
+		int const register_index = get_or_set_index();
+		if (register_index >= 0)
+			assert(shared_locks_array[register_index].value.load(std::memory_order_acquire) == 1);
+
+		if (owner_thread_id.load(std::memory_order_acquire) != get_fast_this_thread_id()) {
+			size_t i = 0;
+			for (bool flag = false; !want_x_lock.compare_exchange_weak(flag, true, std::memory_order_seq_cst); flag = false)
+				if (++i % 1000000 == 0) std::this_thread::yield();
+
+			owner_thread_id.store(get_fast_this_thread_id(), std::memory_order_release);
+
+			for (auto &i : shared_locks_array)
+				while (i.value.load(std::memory_order_seq_cst) > 1);
 		}
 
-		if (time(NULL) >= nextPingTime) {
-			wsCheckIdleClients();
-			nextPingTime = time(NULL) + 1;
-		}
+		++recursive_xlock_count;
+	}
 
-		if (callPeriodic != NULL)
-			callPeriodic();
+	void unlock() {
+		assert(recursive_xlock_count > 0);
+		if (--recursive_xlock_count == 0) {
+			owner_thread_id.store(decltype(owner_thread_id)(), std::memory_order_release);
+			want_x_lock.store(false, std::memory_order_release);
+		}
+	}
+};
+
+template<typename mutex_t>
+struct shared_lock_guard {
+	mutex_t &ref_mtx;
+	shared_lock_guard(mutex_t &mtx) : ref_mtx(mtx) { ref_mtx.lock_shared(); }
+	~shared_lock_guard() { ref_mtx.unlock_shared(); }
+};
+
+using default_contention_free_shared_mutex = contention_free_shared_mutex<>;
+
+template<typename T> using contfree_safe_ptr = safe_ptr<T, contention_free_shared_mutex<>,
+	std::unique_lock<contention_free_shared_mutex<>>, shared_lock_guard<contention_free_shared_mutex<>> >;
+// ---------------------------------------------------------------
+
+
+
+contfree_safe_ptr< std::map<std::string, int> > safe_map_strings_global;   // cont-free shared-mutex
+
+
+																		   //safe_ptr<std::map<std::string, std::pair<std::string, int> >> safe_map_strings_global;    // std::mutex
+
+
+
+template<typename T>
+void func(contfree_safe_ptr<T> safe_map_strings)
+{
+	contfree_safe_ptr<T> const &readonly_safe_map_string = safe_map_strings;    // read-only (shared lock during access)
+
+	for (size_t i = 0; i < 100000; ++i)
+	{
+		assert(readonly_safe_map_string->at("apple") == readonly_safe_map_string->at("potato"));    // two Shared locks (recursive)
+
+		std::lock_guard<decltype(safe_map_strings)> lock(safe_map_strings); // 1-st eXclusive lock
+		safe_map_strings->at("apple") += 1;                                 // 2-nd recursive eXclusive lock
+		safe_map_strings->find("potato")->second += 1;                      // 3-rd recursive eXclusive lock
 	}
 }
 
-void webSocket::stopServer() {
-	for (int i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] != NULL) {
-			if (wsClients[i]->ReadyState != WS_READY_STATE_CONNECTING)
-				wsSendClientClose(i, WS_STATUS_GONE_AWAY);
-#ifdef __linux__
-			close(wsClients[i]->socket);
-#elif _WIN32
-			closesocket(wsClients[i]->socket);
-#endif
-		}
-	}
-#ifdef __linux__
-	close(ListenSocket);
-#elif _WIN32
-	closesocket(ListenSocket);
-#endif
+int main() {
 
-	wsClients.clear();
-	socketIDmap.clear();
-	FD_ZERO(&fds);
-	fdmax = 0;
+	(*safe_map_strings_global)["apple"] = 0;
+	(*safe_map_strings_global)["potato"] = 0;
+
+	// 20 threads
+	std::vector<std::thread> vec_thread(20);
+	for (auto &i : vec_thread) i = std::move(std::thread([&]() { func(safe_map_strings_global); }));
+	for (auto &i : vec_thread) i.join();
+
+	// 20 threads
+	for (auto &i : vec_thread) i = std::move(std::thread([&]() { func(safe_map_strings_global); }));
+	for (auto &i : vec_thread) i.join();
+
+	std::cout << "END: potato is " << safe_map_strings_global->at("potato") <<
+		", apple is " << safe_map_strings_global->at("apple") << std::endl;
+
+	return 0;
 }

@@ -136,19 +136,19 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MATCHSTATUS 1000
 #define QUEUE_LENGTH 2000
 #define STEP_QUEUE 100
+#define AMQP_BUFLEN 1048576
 #pragma pack(push, 8)
 //#pragma pack(pop)
 
 HANDLE hThread1;
 DWORD dwThreadID1;
 DWORD ExitCode1;
-void GenerateBigStep();
-
+DWORD WINAPI BetradarGetThread(LPVOID);
 
 HANDLE hThread2;
 DWORD dwThreadID2;
 DWORD ExitCode2;
-DWORD WINAPI BetradarThread(LPVOID);
+DWORD WINAPI BetradarProcessThread(LPVOID);
 
 HANDLE hThread3;
 DWORD dwThreadID3;
@@ -157,15 +157,19 @@ DWORD WINAPI startRecoveryThread(LPVOID);
 
 
 int recovery_state = -1;
-
+void GenerateBigStep();
 int* data_step_len_1 = new int[STEP_QUEUE];
 int* data_step_len_2 = new int[STEP_QUEUE];
 char** array_data_step_1 = new char*[STEP_QUEUE];
 char** array_data_step_2 = new char*[STEP_QUEUE];
+char* AMQP_message = new char[AMQP_BUFLEN];
+int AMQP_message_len = 0;
+atomic_flag amqp_lock_flag = ATOMIC_FLAG_INIT;
+volatile bool amqp_empty_flag = true;
 atomic_int64_t current_data_step_1 = -1;
 atomic_int64_t current_data_step_2 = -1;
-int64_t current_data_step_temp_1 = -1;
-int64_t current_data_step_temp_2 = -1;
+volatile int64_t current_data_step_temp_1 = -1;
+volatile int64_t current_data_step_temp_2 = -1;
 
 
 
@@ -196,7 +200,10 @@ public:
 		message_ping_length = 0;
 		message_pong_length = 0;
 		message_close_length = 0;
+		plus_message_length = 0;
+		plus = 0;
 		handshake_message = nullptr;
+		plus_message = nullptr;
 		last_message_queue = 0;
 		last_message_queue_socket = 0;
 		step_buffer_1=nullptr;
@@ -205,14 +212,20 @@ public:
 		current2 = -1;
 		step_buffer_len_2 = -1;
 		step_buffer_len_1 = -1;
-        //flag = 0;
+		//flag = 0;
 
 	}
 	~wsClient() {
 	for (int i = 0; i < QUEUE_LENGTH; i++)  if(message_queue[i] != nullptr) delete[] message_queue[i]; 
 	delete[] message_queue; delete[] message_queue_length;
 	if (message_ping != nullptr) delete[] message_ping;  if (message_pong != nullptr) delete[] message_pong; 
-	if (message_close != nullptr) delete[] message_close;}
+	if (message_close != nullptr) delete[] message_close;
+	if (handshake_message != nullptr) delete[] handshake_message;
+	if (plus_message != nullptr) delete[] plus_message;
+	if (step_buffer_1 != nullptr) delete[] step_buffer_1;
+	if (step_buffer_2 != nullptr) delete[] step_buffer_2;
+	
+	}
 
 	int socket;                            // client socket
 	SSL* ssl;                              //client ssl 
@@ -231,19 +244,23 @@ public:
 	char** message_queue;
 	atomic_int64_t last_message_queue;
 	atomic_int64_t last_message_queue_socket;
+	int plus;
 	char* message_ping;
 	char* message_pong;
 	char* message_close;
 	int message_ping_length;
 	int message_pong_length;
 	int message_close_length;
+	int plus_message_length;
 	char* handshake_message;
+	char* plus_message;
 	char* step_buffer_1;
 	char* step_buffer_2;
 	int step_buffer_len_1;
 	int step_buffer_len_2;
 	int current1;
 	int current2;
+
 	//int flag;
 	//std::mutex mutex;
 
@@ -272,7 +289,10 @@ public:
 	vector<int> getClientIDs();
 	string getClientIP(int clientID);
 	vector<wsClient *> wsClients;
+	//vector<atomic_flag*> wsFlags;
+	atomic_flag ws_clients_flag = ATOMIC_FLAG_INIT;
 	map<int, int> socketIDmap;
+
 private:
 	
 	fd_set r_fds;
@@ -668,22 +688,23 @@ void webSocket::wsRemoveClient(int clientID) {
 
 	wsClient *client = wsClients[clientID];
 	// fetch close status (which could be false), and call wsOnClose
-	int closeStatus = wsClients[clientID]->close_status;
+	//int64_t closeStatus = wsClients[clientID]->close_status;
+	//int64_t flag = 0;
 	//
-	//printf("wsRemoveClient3");
 	//SSL_shutdown(client->ssl);
 	//SSL_CTX_free(client->ssl);
+	while (ws_clients_flag.test_and_set(std::memory_order_acquire));
 	
-	//WSACleanup();
+
 	FD_CLR(client->socket, &r_fds);
 	FD_CLR(client->socket, &w_fds);
 	closesocket(client->socket);
 	SSL_set_shutdown(client->ssl, SSL_RECEIVED_SHUTDOWN);
 	SSL_free(client->ssl);
-	socketIDmap.erase(wsClients[clientID]->socket);
+	socketIDmap.erase(client->socket);
 	wsClients[clientID] = NULL;
 	delete client;
-	//printf("remove clientID=%d\r\n", clientID);
+	ws_clients_flag.clear(std::memory_order_release);
 }
 bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
 	wsClient *client = wsClients[clientID];
@@ -716,9 +737,13 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		
 	}
 	else if (opcode == WS_OPCODE_TEXT || opcode == WS_OPCODE_BINARY) {
-		if(data.substr(0, dataLength)=="recovery" ) hThread3 = CreateThread(NULL, 0, &startRecoveryThread, 0, THREAD_TERMINATE, &dwThreadID3);
-		if (callOnMessage != NULL)
-			callOnMessage(clientID, data.substr(0, dataLength));
+		//if(data.substr(0, dataLength)=="recovery" ) hThread3 = CreateThread(NULL, 0, &startRecoveryThread, 0, THREAD_TERMINATE, &dwThreadID3);
+		//if (callOnMessage != NULL)	callOnMessage(clientID, data.substr(0, dataLength));
+		if (data.substr(0, 7) == "rospis@") {
+		int event_id =atoi(data.substr(7, dataLength).c_str());
+		if (event_id != 0 && client->plus == 0) client->plus = event_id; printf("client=%d\r\n", client);
+		}
+
 	}
 	else {
 		// unknown opcode
@@ -1086,6 +1111,7 @@ int webSocket::wsGetNextClientID() {
 	return i;
 }
 void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
+
 	FD_SET(socket, &r_fds);
 	FD_SET(socket, &w_fds);
 	if (socket > fdmax)
@@ -1093,13 +1119,18 @@ void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
 
 	int clientID = wsGetNextClientID();
 	wsClient *newClient = new wsClient(socket, ssl, ip);
+	while (ws_clients_flag.test_and_set(std::memory_order_acquire));
+
 	if (clientID >= wsClients.size()) {
+		
 		wsClients.push_back(newClient);
+		
 	}
 	else {
 		wsClients[clientID] = newClient;
 	}
 	socketIDmap[socket] = clientID;
+	ws_clients_flag.clear(std::memory_order_release);
 }
 void webSocket::setOpenHandler(defaultCallback callback) {
 	callOnOpen = callback;
@@ -1290,7 +1321,7 @@ void webSocket::startServer(int port) {
 			for (int i = 0; i <= fdmax; i++) {
 
 				//|| (socketIDmap.find(i) != socketIDmap.end() &&SSL_pending(wsClients[socketIDmap[i]]->ssl))
-				if (FD_ISSET(i, &read_fds)) {
+				if (FD_ISSET(i, &read_fds) && recovery_state == 0) {
 
 
 					if (i == ListenSocket) {
@@ -1397,6 +1428,8 @@ void webSocket::startServer(int port) {
 								long error = ERR_get_error();
 								const char* error_str = ERR_error_string(error, NULL);
 								std::printf("could not SSL_read (returned -1) %s\n", error_str);
+								
+
 							}
 
 
@@ -1484,8 +1517,10 @@ void webSocket::startServer(int port) {
 								writeopcode = 7;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_2, wsClients[socketIDmap[i]]->step_buffer_len_2);
 							}
-            				
-							
+							else if (wsClients[socketIDmap[i]]->plus_message_length > 0 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
+								writeopcode = 8;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->plus_message, wsClients[socketIDmap[i]]->plus_message_length);
+							}
 							else if (wsClients[socketIDmap[i]]->last_message_queue > wsClients[socketIDmap[i]]->last_message_queue_socket && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 								writeopcode = 5;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->message_queue[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH], wsClients[socketIDmap[i]]->message_queue_length[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH]);}
@@ -1550,12 +1585,12 @@ void webSocket::startServer(int port) {
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									//std::printf("SSL_write syscall error (returned -1)\r\n");
-									if (writeopcode == 5|| writeopcode == 6 || writeopcode == 7 || writeopcode == 1) continue;
+									if (writeopcode == 5|| writeopcode == 6 || writeopcode == 7 || writeopcode == 8 || writeopcode == 1) continue;
 										 
 									
 								}
 								
-								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7) {
+								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 								}
@@ -1638,6 +1673,14 @@ void webSocket::startServer(int port) {
 								if (writeopcode == 7) {
 									wsClients[socketIDmap[i]]->step_buffer_2 = nullptr;
 									wsClients[socketIDmap[i]]->step_buffer_len_2 = 0;
+								}
+
+								if (writeopcode == 8) {
+									if (wsClients[socketIDmap[i]]->plus_message != nullptr) delete[] wsClients[socketIDmap[i]]->plus_message;
+									wsClients[socketIDmap[i]]->plus_message = nullptr;
+									wsClients[socketIDmap[i]]->plus_message_length = 0;
+									wsClients[socketIDmap[i]]->plus = 0;
+									
 								}
 								
 
@@ -2724,6 +2767,7 @@ void writeFloat(char*, size_t &, float);
 
 char* CreateStep_1(int&);
 char* CreateStep_2(int&);
+void CreatePlus_2(wsClient*);
 void getSports();
 void getEvents(time_t,int);
 void getCategoriesTournaments();
@@ -3019,11 +3063,16 @@ int reload_step_1 = 1;
 int booking = 0;
 //std::mutex _mutex;
 
+
+
+
+
 int main(){
 using namespace std;
 timestamp();
-hThread2 = CreateThread(NULL, 0, &BetradarThread, 0, THREAD_TERMINATE, &dwThreadID2);
-//hThread1 = CreateThread(NULL, 0, &GenerateBigStepThread, 0, THREAD_TERMINATE, &dwThreadID1);
+hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
+hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+
 
 int port = 1443;
 
@@ -3039,8 +3088,7 @@ return 0;
 
 	
 }
-
-DWORD WINAPI BetradarThread(LPVOID lparam) {
+DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 
 	bool full_data = false;
 	//int recvbuflen = DEFAULT_BUFLEN;
@@ -3071,14 +3119,14 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
-	
+
 
 	if (booking > 0) {
 		getEvents(0, 10);
 		return 0;
 	}
 
-	
+
 	if (full_data == false) {
 		//getMarkets();
 		//getEvents(0, 10);
@@ -3105,13 +3153,2605 @@ DWORD WINAPI BetradarThread(LPVOID lparam) {
 	}
 
 	//CreateStep_1();
-	
+
 	startRecovery();
 	rabbitmqssl();
 	//sdkSocket();
 	//httpsServer();
 	return 0;
 
+}
+DWORD WINAPI BetradarProcessThread(LPVOID lparam)
+{
+	using namespace rapidxml;
+	using namespace std;
+	xml_document<> doc;
+	HANDLE File;
+	DWORD l = 0;
+	amqp_frame_t frame;
+	uint64_t now;
+	char* name = new char[MAX_PATH];
+	char* buf = new char[MAX_PATH];
+	char set_scores[1024];
+	char* maxbuf = new char[AMQP_BUFLEN];
+	Event* _event = nullptr;
+	Tournament* _tournament = nullptr;
+	int i = 0;
+	int k = 0;
+	int j = 0;
+	int m = 0;
+	int n = 0;
+	int q = 0;
+	int z = 0;
+	int u = 0;
+	bool print = false;
+	bool debug_output = false;
+	int event_id = 0;
+	int type_radar = 0;
+	int status = 0;
+	int betstop_reason = 0;
+	int index_separator[100];
+	int index_equally[100];
+	int outcome_number;
+	char** outcome_name = new char*[500];
+	int* outcome_id = new int[500];
+	int* outcome_active = new int[500];
+	int* outcome_team = new int[500];
+	float* outcome_probabilities = new float[500];
+	float* outcome_odds = new float[500];
+	for (int i = 0; i < 500; i++) outcome_name[i] = NULL;
+	Line* _line = new Line();
+	char* socket_message_big = new char[145000];
+	char* buffer = new char[145000];
+	size_t offset = 0;
+	size_t retry_offset = 0;
+	int event_lines_l = 0;
+	char* zip_message = nullptr;
+	int zip_len = 0;
+	char* encode_message;// = SendframeEncode(zip_message, zip_len, len);
+	int encode_message_len = 0;
+	char* socket_message_little = new char[4096];
+	int outcomeNameError = 0;
+	bool new_message_arrived = false;
+	vector<int> clientIDs;
+	
+	for (;;) {
+		
+		if (recovery_state == 0) {
+			
+			if (new_message_arrived == true)  GenerateBigStep(); 
+			if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
+				clientIDs.clear();
+				clientIDs = server.getClientIDs();
+				for (i = 0; i < clientIDs.size(); i++) {
+					if (server.wsClients[clientIDs[i]] == NULL)  continue; 
+					if (server.wsClients[clientIDs[i]]->plus != 0 && server.wsClients[clientIDs[i]]->plus_message_length == 0)
+						CreatePlus_2(server.wsClients[clientIDs[i]]);
+				}
+			
+				server.ws_clients_flag.clear(std::memory_order_release);
+			}
+
+
+		}
+		//int p2 = timestamp();
+		//p2 = p2 - p1;
+		//printf("GenerateBigStep=%dms\r\n",p2);
+
+		status = 0;
+		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
+		if (amqp_empty_flag == true) { amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; continue; }
+		std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
+		amqp_empty_flag = true;
+		amqp_lock_flag.clear(std::memory_order_release); 
+		new_message_arrived = true;
+
+		maxbuf[AMQP_message_len] = 0;
+		socket_message_big[0] = 0;
+		offset = 0;
+		doc.parse<0>(maxbuf);
+
+
+
+		if (doc.first_node() == NULL) continue;
+
+
+
+
+
+
+		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
+
+			type_radar = 0;
+			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
+			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
+			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+
+			if (type_radar == 2) {
+				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
+				if (simples_id[event_id] == NULL) {
+					std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
+					tournaments[tournaments_l].id = 0;
+					tournaments[tournaments_l].simple_id = event_id;
+					tournaments[tournaments_l].type_radar = 2;
+					if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture change simple %d\r\n", event_id); continue; }
+					tournaments_l++;
+
+				}
+				else if (getTournament(simples_id[event_id], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture %d\r\n", event_id); continue; }
+				std::printf("fixture_change succes for tournamnet simple id=%d\r\n", event_id);
+
+
+			}
+			if (type_radar == 3) {
+				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run fixture change %d\r\n", event_id); continue; }
+				if (seasons_id[event_id] == NULL) {
+					std::printf("Tournament not found in run fixture change. Run getTournament(). season_id=%d\r\n", event_id);
+					tournaments[tournaments_l].id = 0;
+					tournaments[tournaments_l].season_id = event_id;
+					tournaments[tournaments_l].type_radar = 0;
+					if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournament season id not found in run %d\r\n", event_id); continue; }
+					else {
+						if (seasons_id[event_id] == NULL) {
+							std::printf("ERROR!\r\nTournament season id not found after succes in getTournament run %d\r\n", event_id);
+
+							continue;
+						}
+						tournaments_l++; std::printf("fixture_change succes for tournamnet season id=%d\r\n", event_id);
+					}
+				}
+				else if (getTournament(seasons_id[event_id], false) == -1) { std::printf("ERROR!\r\n getTournament in fixture_change season id =%d\r\n", event_id); continue; }
+
+				std::printf("fixture_change succes for tournamnet season id=%d\r\n", event_id);
+
+			}
+			if (type_radar < 2) {
+				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
+				if (events_id[event_id] == NULL) {
+					std::printf("Event not found in fixture_change. %d\r\n", event_id);
+					k = events_l; events_l++;
+					events[k].id = event_id; events[k].type_radar = type_radar;
+					events_id[event_id] = &events[k];
+				}
+				if (getEventFixture(events_id[event_id]) == -1) { std::printf("fixtur_change error. %d\r\n", event_id); continue; }
+				std::printf("fixture_change success. event_id=%d \r\n", event_id);
+
+			}
+
+		}
+		else
+
+			if (std::strcmp("odds_change", doc.first_node()->name()) == 0) {
+				type_radar = 0;
+				event_id = 0;
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				//if (event_id == 11830190) printf("ERRRRRRRRRRRRRRRRRRRRRR");
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
+				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+				if (event_id == 0) {
+					std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value());
+					continue;
+				}
+
+				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
+
+				if (type_radar == 2) {
+
+					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run odds_change %d\r\n", event_id); continue; }
+					if (simples_id[event_id] == NULL) {
+						std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
+						tournaments[tournaments_l].id = 0;
+						tournaments[tournaments_l].simple_id = event_id;
+						tournaments[tournaments_l].type_radar = 2;
+						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run simple %d\r\n", event_id); continue; }
+						tournaments_l++;
+
+					}
+
+					if (simples_id[event_id] == NULL) { std::printf("ERROR!\r\nTournaments simple id not found after succes in getTournament run simple %d\r\n", event_id); continue; }
+					_tournament = simples_id[event_id];
+
+
+					if (_tournament->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nstournament sport_id out of MAX_SPORTS in run simple%d\r\n", _tournament->sport_id); continue; }
+
+					if (sports_id[_tournament->sport_id] == NULL) { std::printf("Sport not found in run simple. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
+
+					if (recovery_state == 0) {
+						writeInteger(buffer, offset, 1, 2);
+						writeInteger(buffer, offset, type_radar, 1);
+						writeInteger(buffer, offset, event_id, 4);
+						retry_offset = offset;
+						offset += 2;
+						event_lines_l = 0;
+					}
+
+					if (print == true) {
+						std::printf("\r\n***************************************************\r\n");
+						std::printf("Simple id: %d\r\n", event_id);
+						std::printf("NAME:"); std::printf(_tournament->name);
+						std::printf("\r\n");
+					}
+					std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+					std::strcat(socket_message_big, socket_message_little);
+					std::sprintf(socket_message_little, "Simple id: %d\r\n", event_id);
+					std::strcat(socket_message_big, socket_message_little);
+					std::sprintf(socket_message_little, "NAME:");
+					std::strcat(socket_message_big, socket_message_little);
+					std::sprintf(socket_message_little, "\r\n");
+
+
+
+
+
+					if (print == true) {
+						std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
+					}
+					std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
+					std::strcat(socket_message_big, "\r\n");
+
+
+
+					if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run simple %d\r\n", _tournament->category_id); continue; }
+					if (categories_id[_tournament->category_id] == NULL) {
+						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _tournament->category_id);
+						if (getTournament(simples_id[_tournament->simple_id], false) == -1);  continue;;
+					}
+					if (print == true) {
+						std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
+						std::printf("\r\n***************************************************\r\n");
+					}
+					//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+					std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
+					std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
+
+
+
+
+					xml_node<> * odds = doc.first_node()->first_node("odds");
+
+					if (odds != NULL) {
+						betstop_reason = 0;
+						if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
+						_line->tournament_id = 0;
+						_line->event_id = 0;
+						_line->simple_id = _tournament->simple_id;
+						_line->betstop_reason = betstop_reason;
+
+						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
+						{
+							outcomeNameError = 0;
+							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
+							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
+							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
+							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
+							if (_line->market_id >= MAX_MARKETS) {
+								std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
+							}
+							if (markets_id[_line->market_id] == NULL) {
+								std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
+							};
+							if (markets_id[_line->market_id][0] == NULL) {
+								std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
+							};
+							_line->variant = markets_id[_line->market_id][0]->variant;
+							_line->type = markets_id[_line->market_id][0]->type;
+							if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
+								if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;
+								if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
+							}
+							if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
+							if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
+							_line->specifier_number = 0;
+							if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
+								if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
+								if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
+							}
+							if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
+							if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
+							_line->extended_specifier_number = 0;
+							if (market_node->first_attribute("specifiers")) {
+								n = 0;
+								m = market_node->first_attribute("specifiers")->value_size();
+								for (q = 0; q < m; q++) {
+									if (market_node->first_attribute("specifiers")->value()[q] == '=')
+										index_equally[n] = q;
+
+									if (market_node->first_attribute("specifiers")->value()[q] == '|') {
+										index_separator[n] = q; n++;
+									}
+
+								}
+								index_separator[n] = q; n++;
+
+
+
+
+								_line->specifier_number = n;
+								if (_line->specifier_number > 0) {
+									_line->specifier_value = new char*[_line->specifier_number];
+									_line->specifier = new char*[_line->specifier_number];
+
+
+									for (q = 0; q < _line->specifier_number; q++) {
+										if (q > 0) {
+											_line->specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
+											strncpy(_line->specifier[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
+											_line->specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
+										}
+										else {
+											_line->specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->specifier[q], market_node->first_attribute("specifiers")->value(), index_equally[q]); _line->specifier[q][index_equally[q]] = 0;
+
+
+										}
+
+										_line->specifier_value[q] = new char[index_separator[q] - index_equally[q]];
+										strncpy(_line->specifier_value[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
+										_line->specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
+
+
+
+									}
+								}
+							}
+							if (market_node->first_attribute("extended_specifiers")) {
+								n = 0;
+								m = market_node->first_attribute("extended_specifiers")->value_size();
+								for (q = 0; q < m; q++) {
+									if (market_node->first_attribute("extended_specifiers")->value()[q] == '=')
+										index_equally[n] = q;
+
+									if (market_node->first_attribute("extended_specifiers")->value()[q] == '|') {
+										index_separator[n] = q; n++;
+									}
+
+								}
+								index_separator[n] = q; n++;
+
+
+
+								_line->extended_specifier_number = n;
+								if (_line->extended_specifier_number > 0) {
+									_line->extended_specifier_value = new char*[_line->extended_specifier_number];
+									_line->extended_specifier = new char*[_line->extended_specifier_number];
+
+
+									for (q = 0; q < _line->extended_specifier_number; q++) {
+										if (q > 0) {
+											_line->extended_specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
+											strncpy(_line->extended_specifier[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
+											_line->extended_specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
+										}
+										else {
+											_line->extended_specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->extended_specifier[q], market_node->first_attribute("extended_specifiers")->value(), index_equally[q]); _line->extended_specifier[q][index_equally[q]] = 0;
+
+
+										}
+
+										_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
+										strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
+										_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
+										//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
+
+
+									}
+								}
+							}
+						outcomeNameError1:
+
+
+
+							if (_line->variant > -1) {
+								z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
+
+
+								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
+								if (outcomeNameError == 1 || u == max_markets_in[_line->market_id]) {
+									std::printf("Variant market1 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
+								}
+								_line->market = markets_id[_line->market_id][u];
+								if (outcomeNameError == 1)outcomeNameError = 2;
+
+								if (_line->type == 3) z = 16;
+							}
+							else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+							outcome_number = 0;
+
+							for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
+
+
+								if (outcome_node->first_attribute("active")) outcome_active[outcome_number] = atoi(outcome_node->first_attribute("active")->value());
+								else outcome_active[outcome_number] = 0;
+								if (outcome_node->first_attribute("team")) outcome_team[outcome_number] = atoi(outcome_node->first_attribute("team")->value());
+								else outcome_team[outcome_number] = 0;
+								if (outcome_node->first_attribute("id")) {
+									outcome_id[outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + z));
+									if (outcome_id[outcome_number] == 0 && z > 0) {
+										outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
+										if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
+										else {
+											std::printf("_line->type=%d line->market_id=%d  _tournament->type_radar=%d  _line->simple_id =%d \r\n", _line->type, _line->market_id, _tournament->type_radar, _line->simple_id); std::printf(outcome_node->first_attribute("id")->value());
+
+										}
+									}
+
+								}
+								else outcome_id[outcome_number] = 0;
+
+
+								if (outcome_node->first_attribute("odds")) outcome_odds[outcome_number] = atof(outcome_node->first_attribute("odds")->value());
+								else outcome_odds[outcome_number] = 0;
+								if (outcome_node->first_attribute("probabilities")) outcome_probabilities[outcome_number] = atof(outcome_node->first_attribute("probabilities")->value());
+								else outcome_probabilities[outcome_number] = 0;
+								if (outcome_name[outcome_number] != NULL) delete[] outcome_name[outcome_number]; outcome_name[outcome_number] = NULL;
+								if (outcome_node->first_attribute("name")) {
+									outcome_name[outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
+									std::strcpy(outcome_name[outcome_number], outcome_node->first_attribute("name")->value());
+
+								}
+
+								outcome_number++;
+
+							}
+
+
+
+
+							if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != NULL) delete[] _line->outcome_name[i]; };
+
+
+							if (_line->outcome_id != NULL) delete[] _line->outcome_id; if (_line->outcome_active != NULL) delete[] _line->outcome_active; if (_line->outcome_team != NULL) delete[] _line->outcome_team; if (_line->outcome_odds != NULL) delete[] _line->outcome_odds;
+							if (_line->outcome_probabilities != NULL) delete[] _line->outcome_probabilities; if (_line->outcome_name != NULL) delete[] _line->outcome_name;
+							_line->outcome_probabilities = NULL; _line->outcome_name = NULL; _line->outcome_id = NULL; _line->outcome_odds = NULL; _line->outcome_active = NULL;
+							_line->outcome_team = NULL;
+
+
+
+							_line->outcome_number = outcome_number;
+							if (_line->outcome_number > 0) {
+								_line->outcome_name = new char*[_line->outcome_number];
+								_line->outcome_id = new int[_line->outcome_number];
+								_line->outcome_team = new int[_line->outcome_number];
+								_line->outcome_active = new int[_line->outcome_number];
+								_line->outcome_probabilities = new float[_line->outcome_number];
+								_line->outcome_odds = new float[_line->outcome_number];
+
+
+								if (_line->name != NULL) delete[] _line->name;
+
+
+								_line->name = new char[strlen(_line->market->name) + 1];
+								std::strcpy(_line->name, _line->market->name);
+								for (int i = 0; i < _line->specifier_number; i++) {
+									if (i == _line->variant) continue;
+
+									replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
+								}
+								if (simples_id[_line->simple_id]->name != NULL) replace(_line->name, "$event", simples_id[_line->simple_id]->name);
+
+
+								if (print == true) {
+
+									std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
+								}
+
+								//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+								std::strcat(socket_message_big, "\r\n");
+								std::strcat(socket_message_big, _line->name);
+								std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+
+
+
+
+
+
+								for (int i = 0; i < _line->outcome_number; i++) {
+									_line->outcome_name[i] = NULL;
+									_line->outcome_id[i] = outcome_id[i];
+									_line->outcome_active[i] = outcome_active[i];
+									_line->outcome_odds[i] = outcome_odds[i];
+									_line->outcome_team[i] = outcome_team[i];
+									_line->outcome_probabilities[i] = outcome_probabilities[i];
+
+
+									if (_line->type == 0) {
+										if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+										else
+											for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+
+										if (u < _line->market->outcome_number) {
+											_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+											std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+										}
+										else {
+											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d GoTo GetVarianMarket \r\n", _line->market_id, _line->outcome_id[i]);
+											_line->outcome_name[i] = new char[2];
+											std::strcpy(_line->outcome_name[i], " ");
+											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+											if (outcomeNameError == 0) outcomeNameError = 1;
+
+
+										}
+
+										for (int j = 0; j < _line->specifier_number; j++) {
+											if (j == _line->variant) continue;
+
+											replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+										}
+
+										if (simples_id[_line->simple_id]->name != NULL) replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
+
+
+
+										if (print == true) {
+
+											std::printf(_line->outcome_name[i]); std::printf("\t");
+											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+											std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										}
+										//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+										std::strcat(socket_message_big, _line->outcome_name[i]);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+									}
+
+									if (_line->type == 1) {
+										if (_line->outcome_id[i] >= MAX_PLAYERS) {
+											std::printf("ERROR in run. player_id out of MAX_PLAYERS. _line->outcome_id[i]=%d  _line->market_id=%d simple_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->simple_id);
+											continue;
+
+										}
+										if (_line->outcome_team[i] != 3) {
+											if (players_id[_line->outcome_id[i]] == NULL) {
+												std::printf("Player2 id=%d not found in market id=%d in simple_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->simple_id);
+												players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
+												{
+													std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+													_line->outcome_name[i] = new char[2];
+													std::strcpy(_line->outcome_name[i], " ");
+												}
+												else players_l++;
+											}
+
+											if (_line->outcome_name[i] == NULL) {
+												_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+												std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+											}
+
+										}
+
+										if (_line->outcome_team[i] == 3) {
+
+											for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+											if (u < _line->market->outcome_number) {
+												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+												for (int j = 0; j < _line->specifier_number; j++) {
+													if (j == _line->variant) continue;
+													replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+												}
+
+												if (simples_id[_line->simple_id]->name != NULL)	replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
+
+
+
+
+											}
+											else {
+												_line->outcome_name[i] = new char[2];
+												std::strcpy(_line->outcome_name[i], " ");
+											}
+
+
+
+										}
+
+
+
+
+
+										if (print == true) {
+
+
+
+											std::printf(_line->outcome_name[i]); std::printf("\t");
+											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										}
+
+										std::strcat(socket_message_big, _line->outcome_name[i]);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+
+
+									}
+
+									if (_line->type == 2) {
+										if (_line->outcome_team[i] != 3) {
+											if (_line->outcome_id[i] >= MAX_COMPETITORS) {
+												std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d simple_id=%d\r\n", _line->outcome_id[i], _line->market_id, _tournament->simple_id);
+												continue;
+											}
+											if (competitors_id[_line->outcome_id[i]] == NULL) {
+												std::printf("Competitor id=%d not found in market id=%d in tournament_simple_id=%d  in run simple. getTournament\r\n", _line->outcome_id[i], _line->market_id, _tournament->simple_id);
+												if (getTournament(simples_id[_tournament->simple_id], false) == -1)
+													std::printf("ERROR!\r\nTournaments not found in run simple %d \r\n", _tournament->simple_id);
+											}
+
+											if (competitors_id[_line->outcome_id[i]] == NULL) {
+												std::printf("\r\nCompetitors id=%d not found in tournament simple_id=%d after getTournament . Run getCompetitor\r\n", _line->outcome_id[i], _tournament->simple_id);
+												competitors[competitors_l].id = _line->outcome_id[i];
+												if (getCompetitor(&competitors[competitors_l]) == -1) {
+													std::printf(" Error getCompetitor in run season. line type= 2 id competitor=%d \r\n", _line->outcome_id[i]);
+													_line->outcome_name[i] = new char[2];
+													std::strcpy(_line->outcome_name[i], " ");
+												}
+												else competitors_l++;
+											}
+
+											if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name); }
+
+										}
+										else
+										{
+											for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+											if (u < _line->market->outcome_number) {
+												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+												for (int j = 0; j < _line->specifier_number; j++) {
+													if (j == _line->variant) continue;
+													replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+												}
+
+												if (_tournament->name != NULL) replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
+											}
+											else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
+										}
+										if (print == true) {
+											std::printf(_line->outcome_name[i]); std::printf("\t");
+											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										}
+
+										std::strcat(socket_message_big, _line->outcome_name[i]);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+									}
+
+									if (_line->type == 3) {
+
+										if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+										else
+											for (u = 0; u < _line->market->outcome_number; u++) {
+
+
+												if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+											}
+
+										if (u < _line->market->outcome_number) {
+
+											_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+											std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+										}
+										else {
+											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
+
+											_line->outcome_name[i] = new char[2];
+											std::strcpy(_line->outcome_name[i], " ");
+											if (outcomeNameError == 0) outcomeNameError = 1;
+											if (_line->market->variant > -1)
+												printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+
+										}
+
+										for (int j = 0; j < _line->specifier_number; j++) {
+											if (j == _line->variant) continue;
+
+											replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+										}
+
+										if (_tournament->name) replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
+
+
+										//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
+
+										if (print == true) {
+
+											std::printf(_line->outcome_name[i]); std::printf("\t");
+											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										}
+										std::strcat(socket_message_big, _line->outcome_name[i]);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, "\t");
+										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										std::strcat(socket_message_big, socket_message_little);
+									}
+								}
+
+
+								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError1;
+							}
+
+
+
+							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+
+							auto it = compound2line_index.find(_line[0].getCompoundKey());
+							if (it == compound2line_index.end()) {
+								_line[0].id = lines_l;
+								lines[lines_l] = _line[0];
+								insert_line(_line[0], lines_l);
+								lines_l++;
+
+							}
+							else {
+								_line[0].id = it->second;
+								lines[it->second] = _line[0];
+
+								//printf("Line Update\r\n");
+							}
+
+							if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+
+							if (recovery_state == 0) {
+
+								if (debug_output == true) printf("write buffer data\r\n");
+
+								//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
+								//if (_line->status == 0 || _line->status == -3) continue;
+								event_lines_l++;
+								writeInteger(buffer, offset, _line->id, 4);
+								writeInteger(buffer, offset, _line->betstop_reason, 1);
+								writeInteger(buffer, offset, _line->market_id, 2);
+								writeInteger(buffer, offset, _line->type, 1);
+								writeInteger(buffer, offset, _line->favourite, 1);
+								writeInteger(buffer, offset, _line->status, 1);
+								//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+								writeInteger(buffer, offset, _line->outcome_number, 2);
+								for (int j = 0; j < _line->outcome_number; j++) {
+									writeInteger(buffer, offset, _line->outcome_id[j], 2);
+									writeInteger(buffer, offset, _line->outcome_active[j], 1);
+									if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+									if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+										writeString(buffer, offset, _line->outcome_name[j]);
+									writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
+								}
+
+								writeInteger(buffer, offset, _line->specifier_number, 1);
+								for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
+
+
+								if (debug_output == true) printf("end write buffer data\r\n");
+							}
+
+
+
+
+
+
+
+
+
+
+
+
+
+						}
+					}
+					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
+
+				}
+				if (type_radar == 3) {
+					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
+					if (seasons_id[event_id] == NULL) {
+						std::printf("Tournament not found. Run getTournament(). season_id=%d\r\n", event_id);
+						tournaments[tournaments_l].id = 0;
+						tournaments[tournaments_l].season_id = event_id;
+						tournaments[tournaments_l].type_radar = 0;
+						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments season id not found in run season %d\r\n", event_id); continue; }
+						else tournaments_l++;
+					}
+					if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournaments season id not found after succes in getTournament run season %d\r\n", event_id); continue; }
+					_tournament = seasons_id[event_id];
+
+					if (_tournament->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nstournament sport_id out of MAX_SPORTS in run season%d\r\n", _tournament->sport_id); continue; }
+
+					if (sports_id[_tournament->sport_id] == NULL) { std::printf("Sport not found in run season. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
+
+
+					if (recovery_state == 0) {
+						writeInteger(buffer, offset, 1, 2);
+						writeInteger(buffer, offset, type_radar, 1);
+						writeInteger(buffer, offset, _tournament->id, 4);
+						retry_offset = offset;
+						offset += 2;
+						event_lines_l = 0;
+					}
+
+
+
+					if (print == true) {
+						std::printf("\r\n***************************************************\r\n");
+						std::printf("Season id: %d\r\n", event_id);
+						std::printf("Tournament id:%d\r\n", _tournament->id);
+						std::printf("NAME:"); std::printf(_tournament->name);
+						std::printf("\r\nSEASON:"); if (_tournament->season_name != NULL) std::printf(_tournament->season_name); else std::printf(_tournament->name);
+						std::printf("\r\n");
+					}
+
+					std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+					std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+					std::strcat(socket_message_big, socket_message_little);
+					std::sprintf(socket_message_little, "Tournament id:%d\r\n", _tournament->id);
+					std::strcat(socket_message_big, socket_message_little);
+					std::strcat(socket_message_big, "NAME:");
+					std::strcat(socket_message_big, _tournament->name);
+					std::strcat(socket_message_big, "\r\nSEASON:");
+					if (_tournament->season_name != NULL) std::strcat(socket_message_big, _tournament->season_name);
+					else std::strcat(socket_message_big, _tournament->name);
+					std::strcat(socket_message_big, "\r\n");
+
+
+
+					if (print == true) {
+						std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
+					}
+					std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
+					std::strcat(socket_message_big, "\r\n");
+
+
+
+					if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run season %d\r\n", _tournament->category_id); continue; }
+					if (categories_id[_tournament->category_id] == NULL) {
+						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _tournament->category_id);
+						if (getTournament(tournaments_id[_tournament->id], false) == -1);  continue;;
+					}
+					if (print == true) {
+						std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
+						std::printf("\r\n***************************************************\r\n");
+					}
+
+					//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+					std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
+					std::strcat(socket_message_big, "\r\n");
+
+
+
+
+
+					xml_node<> * odds = doc.first_node()->first_node("odds");
+
+					if (odds != NULL) {
+						betstop_reason = 0;
+
+						if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
+						_line->tournament_id = _tournament->id;
+						_line->event_id = 0;
+						_line->simple_id = 0;
+						_line->betstop_reason = betstop_reason;
+
+						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
+						{
+							outcomeNameError = 0;
+							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
+							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
+							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
+							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
+							if (_line->market_id >= MAX_MARKETS) {
+								std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
+							}
+							if (markets_id[_line->market_id] == NULL) {
+								std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
+							};
+							if (markets_id[_line->market_id][0] == NULL) {
+								std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
+							};
+							_line->variant = markets_id[_line->market_id][0]->variant;
+							_line->type = markets_id[_line->market_id][0]->type;
+							if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
+								if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;;
+								if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
+							}
+							if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
+							if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
+							_line->specifier_number = 0;
+							if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
+								if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
+								if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
+							}
+							if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
+							if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
+							_line->extended_specifier_number = 0;
+							if (market_node->first_attribute("specifiers")) {
+								n = 0;
+								m = market_node->first_attribute("specifiers")->value_size();
+								for (q = 0; q < m; q++) {
+									if (market_node->first_attribute("specifiers")->value()[q] == '=')
+										index_equally[n] = q;
+
+									if (market_node->first_attribute("specifiers")->value()[q] == '|') {
+										index_separator[n] = q; n++;
+									}
+
+								}
+								index_separator[n] = q; n++;
+
+
+
+
+								_line->specifier_number = n;
+								if (_line->specifier_number > 0) {
+									_line->specifier_value = new char*[_line->specifier_number];
+									_line->specifier = new char*[_line->specifier_number];
+
+
+									for (q = 0; q < _line->specifier_number; q++) {
+										if (q > 0) {
+											_line->specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
+											strncpy(_line->specifier[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
+											_line->specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
+										}
+										else {
+											_line->specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->specifier[q], market_node->first_attribute("specifiers")->value(), index_equally[q]); _line->specifier[q][index_equally[q]] = 0;
+
+
+										}
+
+										_line->specifier_value[q] = new char[index_separator[q] - index_equally[q]];
+										strncpy(_line->specifier_value[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
+										_line->specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
+
+
+
+									}
+								}
+							}
+							if (market_node->first_attribute("extended_specifiers")) {
+								n = 0;
+								m = market_node->first_attribute("extended_specifiers")->value_size();
+								for (q = 0; q < m; q++) {
+									if (market_node->first_attribute("extended_specifiers")->value()[q] == '=')
+										index_equally[n] = q;
+
+									if (market_node->first_attribute("extended_specifiers")->value()[q] == '|') {
+										index_separator[n] = q; n++;
+									}
+
+								}
+								index_separator[n] = q; n++;
+
+
+
+								_line->extended_specifier_number = n;
+								if (_line->extended_specifier_number > 0) {
+									_line->extended_specifier_value = new char*[_line->extended_specifier_number];
+									_line->extended_specifier = new char*[_line->extended_specifier_number];
+
+
+									for (q = 0; q < _line->extended_specifier_number; q++) {
+										if (q > 0) {
+											_line->extended_specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
+											strncpy(_line->extended_specifier[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
+											_line->extended_specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
+										}
+										else {
+											_line->extended_specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->extended_specifier[q], market_node->first_attribute("extended_specifiers")->value(), index_equally[q]); _line->extended_specifier[q][index_equally[q]] = 0;
+
+
+										}
+
+										_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
+										strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
+										_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
+										//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
+
+
+									}
+								}
+							}
+						outcomeNameError2:	if (_line->variant > -1) {
+							z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
+							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
+							if (outcomeNameError == 1 || u == max_markets_in[_line->market_id]) {
+								std::printf("Variant market2 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
+							}
+							_line->market = markets_id[_line->market_id][u];
+							if (outcomeNameError == 1) outcomeNameError = 2;
+							if (_line->type == 3) z = 16;
+						}
+											else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+											outcome_number = 0;
+
+											for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
+
+
+												if (outcome_node->first_attribute("active")) outcome_active[outcome_number] = atoi(outcome_node->first_attribute("active")->value());
+												else outcome_active[outcome_number] = 0;
+												if (outcome_node->first_attribute("team")) outcome_team[outcome_number] = atoi(outcome_node->first_attribute("team")->value());
+												else outcome_team[outcome_number] = 0;
+												if (outcome_node->first_attribute("id")) {
+													outcome_id[outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + z));
+													if (outcome_id[outcome_number] == 0 && z > 0) {
+														outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
+														if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
+														else {
+															std::printf("_line->type=%d line->market_id=%d  _tournament->type_radar=%d  _line->tournament_id =%d \r\n", _line->type, _line->market_id, _tournament->type_radar, _line->tournament_id); std::printf(outcome_node->first_attribute("id")->value());
+
+														}
+													}
+
+												}
+												else outcome_id[outcome_number] = 0;
+
+
+												if (outcome_node->first_attribute("odds")) outcome_odds[outcome_number] = atof(outcome_node->first_attribute("odds")->value());
+												else outcome_odds[outcome_number] = 0;
+												if (outcome_node->first_attribute("probabilities")) outcome_probabilities[outcome_number] = atof(outcome_node->first_attribute("probabilities")->value());
+												else outcome_probabilities[outcome_number] = 0;
+												if (outcome_name[outcome_number] != NULL) delete[] outcome_name[outcome_number]; outcome_name[outcome_number] = NULL;
+												if (outcome_node->first_attribute("name")) {
+													outcome_name[outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
+													std::strcpy(outcome_name[outcome_number], outcome_node->first_attribute("name")->value());
+
+												}
+
+												outcome_number++;
+
+											}
+
+
+
+
+											if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != NULL) delete[] _line->outcome_name[i]; };
+
+
+											if (_line->outcome_id != NULL) delete[] _line->outcome_id; if (_line->outcome_active != NULL) delete[] _line->outcome_active; if (_line->outcome_team != NULL) delete[] _line->outcome_team; if (_line->outcome_odds != NULL) delete[] _line->outcome_odds;
+											if (_line->outcome_probabilities != NULL) delete[] _line->outcome_probabilities; if (_line->outcome_name != NULL) delete[] _line->outcome_name;
+											_line->outcome_probabilities = NULL; _line->outcome_name = NULL; _line->outcome_id = NULL; _line->outcome_odds = NULL; _line->outcome_active = NULL;
+											_line->outcome_team = NULL;
+
+
+
+											_line->outcome_number = outcome_number;
+											if (_line->outcome_number > 0) {
+												_line->outcome_name = new char*[_line->outcome_number];
+												_line->outcome_id = new int[_line->outcome_number];
+												_line->outcome_team = new int[_line->outcome_number];
+												_line->outcome_active = new int[_line->outcome_number];
+												_line->outcome_probabilities = new float[_line->outcome_number];
+												_line->outcome_odds = new float[_line->outcome_number];
+
+
+												if (_line->name != NULL) delete[] _line->name;
+
+
+												_line->name = new char[strlen(_line->market->name) + 1];
+												std::strcpy(_line->name, _line->market->name);
+												for (int i = 0; i < _line->specifier_number; i++) {
+													if (i == _line->variant) continue;
+
+													replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
+												}
+												if (tournaments_id[_line->tournament_id]->season_name != NULL) replace(_line->name, "$event", tournaments_id[_line->tournament_id]->season_name);
+
+
+												if (print == true) {
+
+													std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
+												}
+
+
+												//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+												std::strcat(socket_message_big, "\r\n");
+												std::strcat(socket_message_big, _line->name);
+												std::strcat(socket_message_big, "\r\n");
+												std::strcat(socket_message_big, "------------------------------------------------------------------------------\r\n");
+
+
+
+
+
+
+
+												for (int i = 0; i < _line->outcome_number; i++) {
+													_line->outcome_name[i] = NULL;
+													_line->outcome_id[i] = outcome_id[i];
+													_line->outcome_active[i] = outcome_active[i];
+													_line->outcome_odds[i] = outcome_odds[i];
+													_line->outcome_team[i] = outcome_team[i];
+													_line->outcome_probabilities[i] = outcome_probabilities[i];
+
+
+													if (_line->type == 0) {
+														if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+														else
+															for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+
+														if (u < _line->market->outcome_number) {
+															_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+															std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+														}
+														else {
+															std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
+															_line->outcome_name[i] = new char[2];
+															std::strcpy(_line->outcome_name[i], " ");
+
+															if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+															if (outcomeNameError == 0) outcomeNameError = 1;
+
+														}
+
+														for (int j = 0; j < _line->specifier_number; j++) {
+															if (j == _line->variant) continue;
+
+															replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+														}
+														if (tournaments_id[_line->tournament_id]->season_name != NULL) replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
+
+
+
+														if (print == true) {
+
+															std::printf(_line->outcome_name[i]); std::printf("\t");
+															std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+															std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														}
+
+														std::strcat(socket_message_big, _line->outcome_name[i]);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+														std::strcat(socket_message_big, socket_message_little);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+
+
+													}
+
+													if (_line->type == 1) {
+														if (_line->outcome_id[i] >= MAX_PLAYERS) {
+															std::printf("ERROR in run. player_id out of MAX_PLAYERS. _line->outcome_id[i]=%d  _line->market_id=%d tournament_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->tournament_id);
+															continue;
+
+														}
+														if (_line->outcome_team[i] != 3) {
+															if (players_id[_line->outcome_id[i]] == NULL) {
+																std::printf("Player3 id=%d not found in market id=%d in tournament_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->tournament_id);
+																players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
+																{
+																	std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+																	_line->outcome_name[i] = new char[2];
+																	std::strcpy(_line->outcome_name[i], " ");
+																}
+																else players_l++;
+															}
+
+															if (_line->outcome_name[i] == NULL) {
+																_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+																std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															}
+
+														}
+
+														if (_line->outcome_team[i] == 3) {
+
+															for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+															if (u < _line->market->outcome_number) {
+																_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+																std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+																for (int j = 0; j < _line->specifier_number; j++) {
+																	if (j == _line->variant) continue;
+																	replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+																}
+
+																if (tournaments_id[_line->tournament_id]->season_name != NULL)	replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
+
+															}
+															else {
+																_line->outcome_name[i] = new char[2];
+																std::strcpy(_line->outcome_name[i], " ");
+															}
+
+
+
+														}
+
+
+
+
+
+														if (print == true) {
+
+
+
+															std::printf(_line->outcome_name[i]); std::printf("\t");
+															std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+															printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														}
+
+														std::strcat(socket_message_big, _line->outcome_name[i]);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+														std::strcat(socket_message_big, socket_message_little);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+
+
+													}
+
+													if (_line->type == 2) {
+														if (_line->outcome_team[i] != 3) {
+															if (_line->outcome_id[i] >= MAX_COMPETITORS) {
+																std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d tournament_id=%d\r\n", _line->outcome_id[i], _line->market_id, _tournament->id);
+																continue;
+															}
+															if (competitors_id[_line->outcome_id[i]] == NULL) {
+																std::printf("Competitor id=%d not found in market id=%d in tournament_id=%d  in run season. getTournament\r\n", _line->outcome_id[i], _line->market_id, _tournament->id);
+																if (getTournament(tournaments_id[_tournament->id], false) == -1)
+																	std::printf("ERROR!\r\nTournaments not found in run season %d \r\n", _tournament->id);
+															}
+
+															if (competitors_id[_line->outcome_id[i]] == NULL) {
+																std::printf("\r\nCompetitors id=%d not found in tournament id=%d after getTournament . Run getCompetitor\r\n", _line->outcome_id[i], _tournament->id);
+																competitors[competitors_l].id = _line->outcome_id[i];
+																if (getCompetitor(&competitors[competitors_l]) == -1) {
+																	std::printf(" Error getCompetitor in run season. line type= 2 id competitor=%d \r\n", _line->outcome_id[i]);
+																	_line->outcome_name[i] = new char[2];
+																	std::strcpy(_line->outcome_name[i], " ");
+																}
+																else competitors_l++;
+															}
+
+															if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name); }
+
+														}
+														else
+														{
+															for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+															if (u < _line->market->outcome_number) {
+																_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+																std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+																for (int j = 0; j < _line->specifier_number; j++) {
+																	if (j == _line->variant) continue;
+																	replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+																}
+
+																if (_tournament->season_name != NULL) replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
+															}
+															else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
+														}
+														if (print == true) {
+															std::printf(_line->outcome_name[i]); std::printf("\t");
+															std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+															printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														}
+
+														std::strcat(socket_message_big, _line->outcome_name[i]);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+														std::strcat(socket_message_big, socket_message_little);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														std::strcat(socket_message_big, socket_message_little);
+
+
+													}
+
+													if (_line->type == 3) {
+
+														if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+														else
+															for (u = 0; u < _line->market->outcome_number; u++) {
+
+
+																if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+															}
+
+														if (u < _line->market->outcome_number) {
+
+															_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+															std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+														}
+														else {
+															std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
+															_line->outcome_name[i] = new char[2];
+															std::strcpy(_line->outcome_name[i], " ");
+
+															if (_line->market->variant > -1)
+																printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+															if (outcomeNameError == 0) outcomeNameError = 1;
+
+														}
+
+														for (int j = 0; j < _line->specifier_number; j++) {
+															if (j == _line->variant) continue;
+
+															replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+														}
+
+														if (_tournament->season_name) replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
+
+
+														//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
+
+														if (print == true) {
+
+															std::printf(_line->outcome_name[i]); std::printf("\t");
+															std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+															printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														}
+														std::strcat(socket_message_big, _line->outcome_name[i]);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+														std::strcat(socket_message_big, socket_message_little);
+														std::strcat(socket_message_big, "\t");
+														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+														std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+													}
+
+
+												}
+
+												if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
+											}
+
+
+											if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+
+											auto it = compound2line_index.find(_line[0].getCompoundKey());
+											if (it == compound2line_index.end()) {
+												_line[0].id = lines_l;
+												lines[lines_l] = _line[0];
+												insert_line(_line[0], lines_l);
+												lines_l++;
+
+											}
+											else {
+												_line[0].id = it->second;
+												lines[it->second] = _line[0];
+
+												//printf("Line Update\r\n");
+											}
+											if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+
+											if (recovery_state == 0) {
+
+												if (debug_output == true) printf("write buffer data\r\n");
+
+												//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
+												//if (_line->status == 0 || _line->status == -3) continue;
+												event_lines_l++;
+												writeInteger(buffer, offset, _line->id, 4);
+												writeInteger(buffer, offset, _line->betstop_reason, 1);
+												writeInteger(buffer, offset, _line->market_id, 2);
+												writeInteger(buffer, offset, _line->type, 1);
+												writeInteger(buffer, offset, _line->favourite, 1);
+												writeInteger(buffer, offset, _line->status, 1);
+												//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+												writeInteger(buffer, offset, _line->outcome_number, 2);
+												for (int j = 0; j < _line->outcome_number; j++) {
+													writeInteger(buffer, offset, _line->outcome_id[j], 2);
+													writeInteger(buffer, offset, _line->outcome_active[j], 1);
+													if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+													if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+														writeString(buffer, offset, _line->outcome_name[j]);
+
+													writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
+												}
+
+												writeInteger(buffer, offset, _line->specifier_number, 1);
+												for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
+
+												if (debug_output == true) printf("end write buffer data\r\n");
+
+											}
+
+
+
+
+
+
+						}
+					}
+					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
+				}
+				if (type_radar < 2) {
+					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
+					if (events_id[event_id] == NULL) {
+						std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
+						events[events_l].id = event_id;
+						events[events_l].type_radar = type_radar;
+						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture1 error return in run %d .\r\n", event_id); continue; }
+						events_l++;
+
+					}
+					_event = events_id[event_id];
+					if (_event->show == 0) {
+						events_show[events_show_l] = _event; events_show_l++;
+					}
+					_event->show = 1;
+
+
+					if (print == true) {
+						std::printf("\r\n***************************************************\r\n");
+						std::printf("%d\r\n", _event->id);
+						std::printf(_event->home_name); if (_event->away_name != NULL) { std::printf(" - ");  std::printf(_event->away_name); }
+						std::printf("\r\n");
+					}
+
+					std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+					std::sprintf(socket_message_little, "%d\r\n", _event->id);
+					std::strcat(socket_message_big, socket_message_little);
+					std::strcat(socket_message_big, _event->home_name);
+					if (_event->away_name != NULL) {
+						std::strcat(socket_message_big, " - ");  std::strcat(socket_message_big, _event->away_name);
+
+
+
+					}
+					if (_event->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nsevent sport_id out of MAX_SPORTS in run %d\r\n", _event->sport_id); continue; }
+					if (sports_id[_event->sport_id] == NULL) { std::printf("Sport not found. Run getSports. sport_id=%d\r\n", _event->sport_id); getSports(); }
+					if (print == true) {
+						std::printf(sports_id[_event->sport_id]->name); std::printf("\r\n");
+					}
+					std::strcat(socket_message_big, sports_id[_event->sport_id]->name);
+					std::strcat(socket_message_big, "\r\n");
+
+					if (_event->type_radar < 2 && _event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->tournament_id); continue; }
+					if (_event->type_radar == 2 && _event->simple_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->simple_id); continue; }
+					if (_event->type_radar == 0 && tournaments_id[_event->tournament_id] == NULL) {
+						std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
+						tournaments[tournaments_l].id = _event->tournament_id;
+						tournaments[tournaments_l].type_radar = _event->type_radar;
+						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nTournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture2 error return in run %d .\r\n", _event->id); continue; } }
+						else tournaments_l++;
+
+
+					}
+					if (_event->type_radar == 2 && simples_id[_event->simple_id] == NULL) {
+						std::printf("Simple Tournament not found. Run getTournament(). simples_id=%d _event_id=%d\r\n ", _event->simple_id, _event->id);
+						tournaments[tournaments_l].simple_id = _event->simple_id;
+						tournaments[tournaments_l].id = 0;
+						tournaments[tournaments_l].type_radar = _event->type_radar;
+						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nSimple Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture3 error return in run %d .\r\n", _event->id); continue; } }
+						else tournaments_l++;
+
+
+					}
+
+
+					if (print == true) {
+						if (_event->type_radar == 0) std::printf(tournaments_id[_event->tournament_id]->name);
+						if (_event->type_radar == 2) std::printf(simples_id[_event->simple_id]->name);
+						std::printf("\r\n");
+					}
+
+					if (_event->type_radar == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
+					if (_event->type_radar == 2) std::strcat(socket_message_big, simples_id[_event->simple_id]->name);
+					std::strcat(socket_message_big, "\r\n");
+
+
+
+
+
+
+
+					if (_event->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\nsevent category_id out of MAX_CATEGORIES in run %d\r\n", _event->category_id); continue; }
+					if (categories_id[_event->category_id] == NULL) {
+						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _event->category_id);
+						if (_event->type_radar == 0) {
+							if (getTournament(tournaments_id[_event->tournament_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
+						}
+						if (_event->type_radar == 2) {
+							if (getTournament(simples_id[_event->simple_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
+						}
+
+
+					}
+					if (print == true) {
+						std::printf(categories_id[_event->category_id]->name); std::printf("\r\n");
+						std::printf("\r\n***************************************************\r\n");
+					}
+					std::strcat(socket_message_big, categories_id[_event->category_id]->name);
+					std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
+
+
+
+
+					if (doc.first_node()->first_attribute("timestamp")) _event->timestamp = atoi(doc.first_node()->first_attribute("timestamp")->value());
+
+					xml_node<> * sport_event_status = doc.first_node()->first_node("sport_event_status");
+					if (sport_event_status != NULL) {
+
+						xml_node<> * statistics = sport_event_status->first_node("statistics");
+
+						if (statistics != NULL) {
+
+							if (statistics->first_node("yellow_cards")) {
+								_event->home_yellowcards = atoi(statistics->first_node("yellow_cards")->first_attribute("home")->value());
+								_event->away_yellowcards = atoi(statistics->first_node("yellow_cards")->first_attribute("away")->value());
+							}
+
+							if (statistics->first_node("red_cards")) {
+								_event->home_redcards = atoi(statistics->first_node("red_cards")->first_attribute("home")->value());
+								_event->away_redcards = atoi(statistics->first_node("red_cards")->first_attribute("away")->value());
+							}
+							if (statistics->first_node("yellow_red_cards")) {
+								_event->home_yellow_red_cards = atoi(statistics->first_node("yellow_red_cards")->first_attribute("home")->value());
+								_event->away_yellow_red_cards = atoi(statistics->first_node("yellow_red_cards")->first_attribute("away")->value());
+							}
+
+							if (statistics->first_node("corners")) {
+								_event->home_corners = atoi(statistics->first_node("corners")->first_attribute("home")->value());
+								_event->away_corners = atoi(statistics->first_node("corners")->first_attribute("away")->value());
+							}
+
+						}
+
+
+						if (sport_event_status->first_attribute("status")) _event->status = atoi(sport_event_status->first_attribute("status")->value());
+						if (sport_event_status->first_attribute("possession")) _event->possession = atoi(sport_event_status->first_attribute("possession")->value());
+						if (sport_event_status->first_attribute("try")) _event->try_num = atoi(sport_event_status->first_attribute("try")->value());
+						if (sport_event_status->first_attribute("throw")) _event->throw_num = atoi(sport_event_status->first_attribute("throw")->value());
+						if (sport_event_status->first_attribute("delivery")) _event->delivery = atoi(sport_event_status->first_attribute("delivery")->value());
+						if (sport_event_status->first_attribute("current_ct_team")) _event->delivery = atoi(sport_event_status->first_attribute("current_ct_team")->value());
+						if (sport_event_status->first_attribute("yards")) _event->yards = atoi(sport_event_status->first_attribute("yards")->value());
+						if (sport_event_status->first_attribute("innings")) _event->innings = atoi(sport_event_status->first_attribute("innings")->value());
+						if (sport_event_status->first_attribute("over")) _event->over = atoi(sport_event_status->first_attribute("over")->value());
+						if (sport_event_status->first_attribute("current_end")) _event->current_end = atoi(sport_event_status->first_attribute("current_end")->value());
+						if (sport_event_status->first_attribute("position")) _event->position = atoi(sport_event_status->first_attribute("position")->value());
+						if (sport_event_status->first_attribute("away_yellowcards"))
+							_event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellowcards")->value());
+						if (sport_event_status->first_attribute("home_yellowcards")) _event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellowcards")->value());
+						if (sport_event_status->first_attribute("away_yellow_cards"))
+							_event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellow_cards")->value());
+						if (sport_event_status->first_attribute("home_yellow_cards"))
+							_event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellow_cards")->value());
+						if (sport_event_status->first_attribute("away_redcards")) _event->away_redcards = atoi(sport_event_status->first_attribute("away_redcards")->value());
+						if (sport_event_status->first_attribute("home_redcards")) _event->home_redcards = atoi(sport_event_status->first_attribute("home_redcards")->value());
+						if (sport_event_status->first_attribute("away_dismissals")) _event->away_dismissals = atoi(sport_event_status->first_attribute("away_dismissals")->value());
+						if (sport_event_status->first_attribute("home_dismissals")) _event->home_dismissals = atoi(sport_event_status->first_attribute("home_dismissals")->value());
+						if (sport_event_status->first_attribute("away_penalty_runs")) _event->away_penalty_runs = atoi(sport_event_status->first_attribute("away_penalty_runs")->value());
+						if (sport_event_status->first_attribute("home_penalty_runs")) _event->home_penalty_runs = atoi(sport_event_status->first_attribute("home_penalty_runs")->value());
+						if (sport_event_status->first_attribute("away_score")) _event->away_score = atof(sport_event_status->first_attribute("away_score")->value());
+						if (sport_event_status->first_attribute("home_score")) _event->home_score = atof(sport_event_status->first_attribute("home_score")->value());
+						if (sport_event_status->first_attribute("away_gamescore")) _event->away_gamescore = atoi(sport_event_status->first_attribute("away_gamescore")->value());
+						if (sport_event_status->first_attribute("home_gamescore")) _event->home_gamescore = atoi(sport_event_status->first_attribute("home_gamescore")->value());
+						if (sport_event_status->first_attribute("away_legscore")) _event->away_legscore = atoi(sport_event_status->first_attribute("away_legscore")->value());
+						if (sport_event_status->first_attribute("home_legscore")) _event->home_legscore = atoi(sport_event_status->first_attribute("home_legscore")->value());
+						if (sport_event_status->first_attribute("visit")) _event->visit = atoi(sport_event_status->first_attribute("visit")->value());
+						if (sport_event_status->first_attribute("reporting")) _event->reporting = atoi(sport_event_status->first_attribute("reporting")->value());
+						if (sport_event_status->first_attribute("remaining_reds")) _event->remaining_reds = atoi(sport_event_status->first_attribute("remaining_reds")->value());
+						if (sport_event_status->first_attribute("match_status")) _event->match_status = atoi(sport_event_status->first_attribute("match_status")->value());
+						if (sport_event_status->first_attribute("home_suspend")) _event->home_suspend = atoi(sport_event_status->first_attribute("home_suspend")->value());
+						if (sport_event_status->first_attribute("away_suspend")) _event->away_suspend = atoi(sport_event_status->first_attribute("away_suspend")->value());
+						if (sport_event_status->first_attribute("current_server")) _event->current_server = atoi(sport_event_status->first_attribute("current_server")->value());
+						if (sport_event_status->first_attribute("winner_id")) _event->winner_id = atoi(sport_event_status->first_attribute("winner_id")->value());
+						if (sport_event_status->first_attribute("home_batter")) _event->home_batter = atoi(sport_event_status->first_attribute("home_batter")->value());
+						if (sport_event_status->first_attribute("away_batter")) _event->away_batter = atoi(sport_event_status->first_attribute("away_batter")->value());
+						if (sport_event_status->first_attribute("away_remaining_bowls")) _event->away_remaining_bowls = atoi(sport_event_status->first_attribute("away_remaining_bowls")->value());
+						if (sport_event_status->first_attribute("home_remaining_bowls")) _event->home_remaining_bowls = atoi(sport_event_status->first_attribute("home_remaining_bowls")->value());
+						if (sport_event_status->first_attribute("outs")) _event->outs = atoi(sport_event_status->first_attribute("outs")->value());
+						if (sport_event_status->first_attribute("strikes")) _event->strikes = atoi(sport_event_status->first_attribute("strikes")->value());
+						if (sport_event_status->first_attribute("balls")) _event->balls = atoi(sport_event_status->first_attribute("balls")->value());
+						if (sport_event_status->first_attribute("bases")) {
+							if (_event->bases != NULL) { delete[] _event->bases; _event->bases = NULL; }
+							_event->bases = new char[strlen(sport_event_status->first_attribute("bases")->value()) + 1];
+							std::strcpy(_event->bases, sport_event_status->first_attribute("bases")->value());
+
+						}
+
+
+
+
+						if (sport_event_status->first_attribute("tiebreak") && sport_event_status->first_attribute("tiebreak")->value()[0] == 't' && sport_event_status->first_attribute("tiebreak")->value()[1] == 'r')  _event->tiebreak = 1;
+						if (sport_event_status->first_attribute("tiebreak") && sport_event_status->first_attribute("tiebreak")->value()[0] == 'f' && sport_event_status->first_attribute("tiebreak")->value()[1] == 'a')  _event->tiebreak = 0;
+
+						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 't' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'r')  _event->expedite_mode = 1;
+						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 'f' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'a')  _event->expedite_mode = 0;
+
+
+
+
+						xml_node<> * period_scores = sport_event_status->first_node("period_scores");
+
+						j = 0;
+						if (period_scores != NULL) {
+
+
+							for (xml_node<> * period_score = period_scores->first_node("period_score"); period_score; period_score = period_score->next_sibling())
+							{
+								if (j == 0) strcpy(set_scores, period_score->first_attribute("home_score")->value());
+								if (j > 0) {
+									std::strcat(set_scores, "-");
+									std::strcat(set_scores, period_score->first_attribute("home_score")->value());
+								}
+								std::strcat(set_scores, ":");
+								std::strcat(set_scores, period_score->first_attribute("away_score")->value());
+								j++;
+							}
+
+							//printf(set_scores);
+							//printf("\r\n");
+							if (_event->set_scores != NULL) { delete[] _event->set_scores; _event->set_scores = NULL; }
+							_event->set_scores = new char[strlen(set_scores) + 1]; strcpy(_event->set_scores, set_scores);
+						}
+
+
+
+
+						xml_node<> * clock = sport_event_status->first_node("clock");
+						if (clock != NULL) {
+
+							if (clock->first_attribute("stopped") && clock->first_attribute("stopped")->value()[0] == 't' && clock->first_attribute("stopped")->value()[1] == 'r')  _event->stopped = 1;
+
+							if (clock->first_attribute("stopped") && clock->first_attribute("stopped")->value()[0] == 'f' && clock->first_attribute("stopped")->value()[1] == 'a')  _event->stopped = 0;
+
+							if (clock->first_attribute("remaining_time_in_period")) {
+								if (_event->remaining_time_in_period != NULL) delete[] _event->remaining_time_in_period;
+								_event->remaining_time_in_period = new char[strlen(clock->first_attribute("remaining_time_in_period")->value()) + 1];
+								std::strcpy(_event->remaining_time_in_period, clock->first_attribute("remaining_time_in_period")->value());
+							}
+
+							if (clock->first_attribute("stoppage_time")) {
+								if (_event->stoppage_time != NULL) delete[] _event->stoppage_time;
+								_event->stoppage_time = new char[strlen(clock->first_attribute("stoppage_time")->value()) + 1];
+								std::strcpy(_event->stoppage_time, clock->first_attribute("stoppage_time")->value());
+							}
+							if (clock->first_attribute("stoppage_time_announced")) {
+								if (_event->stoppage_time_announced != NULL) delete[] _event->stoppage_time_announced;
+								_event->stoppage_time_announced = new char[strlen(clock->first_attribute("stoppage_time_announced")->value()) + 1];
+								std::strcpy(_event->stoppage_time_announced, clock->first_attribute("stoppage_time_announced")->value());
+							}
+
+
+							if (clock->first_attribute("remaining_time")) {
+								if (_event->remaining_time != NULL) delete[] _event->remaining_time;
+								_event->remaining_time = new char[strlen(clock->first_attribute("remaining_time")->value()) + 1];
+								std::strcpy(_event->remaining_time, clock->first_attribute("remaining_time")->value());
+							}
+
+							if (clock->first_attribute("match_time")) {
+								if (_event->match_time != NULL) delete[] _event->match_time;
+								_event->match_time = new char[strlen(clock->first_attribute("match_time")->value()) + 1];
+								std::strcpy(_event->match_time, clock->first_attribute("match_time")->value());
+							}
+
+
+						}
+
+
+					}
+
+					//	if (_event->status > 0) print = true; else print = false;
+
+					if (print == true) {
+						if (_event->set_scores != NULL) { std::printf("set_scores="); std::printf(_event->set_scores); }
+						if (_event->match_time != NULL) { std::printf("match_time="); std::printf(_event->match_time); std::printf(" "); }
+						if (_event->remaining_time != NULL) { std::printf("remaining_time="); std::printf(_event->remaining_time); std::printf(" "); }
+						if (_event->remaining_time_in_period != NULL) { std::printf("remaining_time_in_period="); std::printf(_event->remaining_time_in_period); std::printf(" "); }
+						if (_event->bases != NULL) { std::printf("bases="); std::printf(_event->bases); std::printf(" "); }
+
+
+						std::printf("stopped=%d ", _event->stopped);
+						std::printf("period_length=%d ", _event->period_length);
+						std::printf("numbers of set=%d ", _event->bo);
+						std::printf("status=%d ", _event->status); std::printf("possession=%d ", _event->possession); std::printf("home_score=%g ", _event->away_score);
+						std::printf("away_score=%g ", _event->away_score); std::printf("home_yellowcards=%d ", _event->home_yellowcards); std::printf("away_yellowcards=%d ", _event->away_yellowcards); std::printf("home_redcards=%d ", _event->home_redcards); std::printf("away_redcards=%d ", _event->away_redcards); std::printf("expedite_mode=%d ", _event->expedite_mode); std::printf("tiebreak=%d ", _event->tiebreak); std::printf("outs=%d ", _event->outs); std::printf("strikes=%d ", _event->strikes); std::printf("balls=%d ", _event->balls);  std::printf("home_remaining_bowls=%d ", _event->home_remaining_bowls);
+						std::printf("away_remaining_bowls=%d ", _event->away_remaining_bowls); std::printf("home_batter=%d ", _event->home_batter); std::printf("away_batter=%d ", _event->away_batter); std::printf("winner_id=%d ", _event->winner_id); std::printf("home_suspend=%d ", _event->home_suspend); std::printf("away_suspend=%d ", _event->away_suspend); std::printf("match_status=%d ", _event->match_status); std::printf("remaining_reds=%d ", _event->remaining_reds); std::printf("reporting=%d ", _event->reporting); std::printf("position=%d ", _event->position); std::printf("home_gamescore=%d ", _event->home_gamescore); std::printf("away_gamescore=%d ", _event->away_gamescore); std::printf("visit=%d ", _event->visit); std::printf("home_dismissals=%d ", _event->home_dismissals); std::printf("away_dismissals=%d ", _event->away_dismissals); std::printf("home_penalty_runs=%d ", _event->home_penalty_runs);	std::printf("away_penalty_runs=%d ", _event->away_penalty_runs);
+						std::printf("over=%d ", _event->over); std::printf("try_num=%d ", _event->try_num); std::printf("trow_num=%d ", _event->throw_num);
+						std::printf("delivery=%d ", _event->delivery); std::printf("yards=%d ", _event->yards); std::printf("current_server=%d ", _event->current_server);
+						std::printf("innings=%d ", _event->innings);
+						std::printf("\r\n\r\n");
+					}
+
+					xml_node<> * odds = doc.first_node()->first_node("odds");
+
+
+					if (recovery_state == 0) {
+						writeInteger(buffer, offset, 1, 2);
+						writeInteger(buffer, offset, type_radar, 1);
+						writeInteger(buffer, offset, _event->id, 4);
+						writeInteger(buffer, offset, _event->home_id, 4);
+						writeInteger(buffer, offset, _event->away_id, 4);
+
+						writeInteger(buffer, offset, _event->type_radar, 1);
+						writeInteger(buffer, offset, _event->status, 1);
+						writeInteger(buffer, offset, _event->sport_id, 2);
+						writeInteger(buffer, offset, _event->category_id, 2);
+						if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
+						else writeInteger(buffer, offset, _event->simple_id, 4);
+						writeInteger(buffer, offset, _event->start_time + 4 * 3600, 4);
+						writeInteger(buffer, offset, _event->period_length, 1);
+						writeInteger(buffer, offset, _event->overtime_length, 1);
+						if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
+						writeString(buffer, offset, _event->home_name);
+						writeString(buffer, offset, _event->away_name);
+						writeString(buffer, offset, _event->tv_channels);
+						if (_event->status == 0)  writeInteger(buffer, offset, _event->booked, 1);
+						if (_event->status > 0) {
+
+							writeInteger(buffer, offset, (int)(_event->home_score * 100), 2);
+							writeInteger(buffer, offset, (int)(_event->away_score * 100), 2);
+							writeString(buffer, offset, _event->set_scores);
+							writeString(buffer, offset, _event->match_time);
+							writeString(buffer, offset, _event->remaining_time);
+							writeString(buffer, offset, _event->remaining_time_in_period);
+							writeString(buffer, offset, matchstatus_id[_event->match_status]->description);
+							writeInteger(buffer, offset, _event->stopped, 1);
+							//writeInteger(buffer, offset, _event->stopped, 1); 
+							if (_event->sport_id == 1) {
+								writeInteger(buffer, offset, _event->home_redcards, 1);
+								writeInteger(buffer, offset, _event->home_yellowcards, 1);
+								writeInteger(buffer, offset, _event->away_redcards, 1);
+								writeInteger(buffer, offset, _event->away_yellowcards, 1);
+								writeString(buffer, offset, _event->stoppage_time);
+								writeString(buffer, offset, _event->stoppage_time_announced);
+								writeInteger(buffer, offset, _event->home_corners, 1);
+								writeInteger(buffer, offset, _event->away_corners, 1);
+								writeInteger(buffer, offset, _event->home_yellow_red_cards, 1);
+								writeInteger(buffer, offset, _event->away_yellow_red_cards, 1);
+							}
+
+							if (_event->sport_id == 5) {
+								writeInteger(buffer, offset, _event->home_gamescore, 1);
+								writeInteger(buffer, offset, _event->away_gamescore, 1);
+								writeInteger(buffer, offset, _event->tiebreak, 1);
+							}
+
+							if (_event->sport_id == 20) writeInteger(buffer, offset, _event->expedite_mode, 1);
+
+
+							if (_event->sport_id == 4 || _event->sport_id == 6 || _event->sport_id == 29) {
+								writeInteger(buffer, offset, _event->home_suspend, 1); writeInteger(buffer, offset, _event->away_suspend, 1);
+							}
+
+
+							if (_event->sport_id == 5 || _event->sport_id == 20 || _event->sport_id == 34 || _event->sport_id == 19 || _event->sport_id == 23 || _event->sport_id == 22 || _event->sport_id == 31)
+								writeInteger(buffer, offset, _event->current_server, 1);
+
+
+							if (_event->sport_id == 3) {
+								writeInteger(buffer, offset, _event->home_batter, 1);
+								writeInteger(buffer, offset, _event->away_batter, 1);
+								writeInteger(buffer, offset, _event->outs, 1);
+								writeInteger(buffer, offset, _event->balls, 1);
+								writeInteger(buffer, offset, _event->strikes, 1);
+								writeString(buffer, offset, _event->bases);
+							}
+
+							if (_event->sport_id == 16) {
+								writeInteger(buffer, offset, _event->possession, 1);
+								writeInteger(buffer, offset, _event->try_num, 1);
+								writeInteger(buffer, offset, _event->yards, 1);
+							}
+
+
+
+
+							if (_event->sport_id == 19) {
+								writeInteger(buffer, offset, _event->visit, 1);
+								writeInteger(buffer, offset, _event->remaining_reds, 1);
+							}
+
+
+							if (_event->sport_id == 22) {
+								writeInteger(buffer, offset, _event->home_legscore, 1);
+								writeInteger(buffer, offset, _event->away_legscore, 1);
+								writeInteger(buffer, offset, _event->throw_num, 1);
+								writeInteger(buffer, offset, _event->visit, 1);
+							}
+
+							if (_event->sport_id == 32) {
+								writeInteger(buffer, offset, _event->delivery, 1);
+								writeInteger(buffer, offset, _event->home_remaining_bowls, 1);
+								writeInteger(buffer, offset, _event->away_remaining_bowls, 1);
+								writeInteger(buffer, offset, _event->current_end, 1);
+							}
+
+							if (_event->sport_id == 21) {
+								writeInteger(buffer, offset, _event->home_dismissals, 1);
+								writeInteger(buffer, offset, _event->away_dismissals, 1);
+								writeInteger(buffer, offset, _event->home_penalty_runs, 1);
+								writeInteger(buffer, offset, _event->away_penalty_runs, 1);
+								writeInteger(buffer, offset, _event->innings, 1);
+								writeInteger(buffer, offset, _event->over, 1);
+								writeInteger(buffer, offset, _event->delivery, 1);
+
+							}
+
+							if (_event->sport_id == 0) writeInteger(buffer, offset, _event->current_ct_team, 1);
+
+							writeInteger(buffer, offset, _event->position, 1);
+
+						}
+
+						if (event2lines.find(_event->id) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
+						else writeInteger(buffer, offset, event2lines[_event->id]->size(), 2);
+						retry_offset = offset;
+						offset += 2;
+						event_lines_l = 0;
+					}
+
+
+
+
+
+					if (odds != NULL) {
+						betstop_reason = 0;
+						if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
+						_line->betstop_reason = betstop_reason;
+						_line->event_id = event_id;
+						_line->tournament_id = 0;
+						_line->simple_id = 0;
+						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
+						{
+							outcomeNameError = 0;
+							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
+							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
+							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
+							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
+
+							//if (_line->market_id == 1) printf(" markets_id[_line->market_id][0]->line_type=%d\r\n", markets_id[_line->market_id][0]->line_type);
+							if (_line->market_id >= MAX_MARKETS) {
+								std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
+							}
+							if (markets_id[_line->market_id] == NULL) {
+								std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
+							};
+							if (markets_id[_line->market_id][0] == NULL) {
+								std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
+							};
+							_line->variant = markets_id[_line->market_id][0]->variant;
+							_line->type = markets_id[_line->market_id][0]->type;
+							if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
+								if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;
+								if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
+							}
+							if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
+							if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
+							_line->specifier_number = 0;
+							if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
+								if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
+								if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
+							}
+							if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
+							if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
+							_line->extended_specifier_number = 0;
+							if (market_node->first_attribute("specifiers")) {
+								n = 0;
+								m = market_node->first_attribute("specifiers")->value_size();
+								for (q = 0; q < m; q++) {
+									if (market_node->first_attribute("specifiers")->value()[q] == '=')
+										index_equally[n] = q;
+
+									if (market_node->first_attribute("specifiers")->value()[q] == '|') {
+										index_separator[n] = q; n++;
+									}
+
+								}
+								index_separator[n] = q; n++;
+
+
+
+
+								_line->specifier_number = n;
+								if (_line->specifier_number > 0) {
+									_line->specifier_value = new char*[_line->specifier_number];
+									_line->specifier = new char*[_line->specifier_number];
+
+
+									for (q = 0; q < _line->specifier_number; q++) {
+										if (q > 0) {
+											_line->specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
+											strncpy(_line->specifier[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
+											_line->specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
+										}
+										else {
+											_line->specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->specifier[q], market_node->first_attribute("specifiers")->value(), index_equally[q]); _line->specifier[q][index_equally[q]] = 0;
+
+
+										}
+
+										_line->specifier_value[q] = new char[index_separator[q] - index_equally[q]];
+										strncpy(_line->specifier_value[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
+										_line->specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
+
+
+
+									}
+								}
+							}
+							if (market_node->first_attribute("extended_specifiers")) {
+								n = 0;
+								m = market_node->first_attribute("extended_specifiers")->value_size();
+								for (q = 0; q < m; q++) {
+									if (market_node->first_attribute("extended_specifiers")->value()[q] == '=')
+										index_equally[n] = q;
+
+									if (market_node->first_attribute("extended_specifiers")->value()[q] == '|') {
+										index_separator[n] = q; n++;
+									}
+
+								}
+								index_separator[n] = q; n++;
+
+
+
+								_line->extended_specifier_number = n;
+								if (_line->extended_specifier_number > 0) {
+									_line->extended_specifier_value = new char*[_line->extended_specifier_number];
+									_line->extended_specifier = new char*[_line->extended_specifier_number];
+
+
+									for (q = 0; q < _line->extended_specifier_number; q++) {
+										if (q > 0) {
+											_line->extended_specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
+											strncpy(_line->extended_specifier[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
+											_line->extended_specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
+										}
+										else {
+											_line->extended_specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->extended_specifier[q], market_node->first_attribute("extended_specifiers")->value(), index_equally[q]); _line->extended_specifier[q][index_equally[q]] = 0;
+
+
+										}
+
+										_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
+										strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
+										_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
+										//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
+
+
+									}
+								}
+							}
+						outcomeNameError3: if (_line->variant > -1) {
+							z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
+							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
+							if (outcomeNameError == 1 || u == max_markets_in[_line->market_id]) {
+								std::printf("Variant market3 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
+							}
+							_line->market = markets_id[_line->market_id][u];
+							if (outcomeNameError == 1) outcomeNameError = 2;
+							if (_line->type == 3) z = 16;
+						}
+										   else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+										   outcome_number = 0;
+
+										   for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
+
+
+											   if (outcome_node->first_attribute("active")) outcome_active[outcome_number] = atoi(outcome_node->first_attribute("active")->value());
+											   else outcome_active[outcome_number] = 0;
+											   if (outcome_node->first_attribute("team")) outcome_team[outcome_number] = atoi(outcome_node->first_attribute("team")->value());
+											   else outcome_team[outcome_number] = 0;
+											   if (outcome_node->first_attribute("id")) {
+												   outcome_id[outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + z));
+												   if (outcome_id[outcome_number] == 0 && z > 0) {
+													   outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
+													   if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
+													   else {
+														   std::printf("_line->type=%d line->market_id=%d  _event->type_radar=%d  _line->event_id =%d \r\n", _line->type, _line->market_id, _event->type_radar, _line->event_id); std::printf(outcome_node->first_attribute("id")->value());
+
+													   }
+												   }
+
+											   }
+											   else outcome_id[outcome_number] = 0;
+
+
+											   if (outcome_node->first_attribute("odds")) outcome_odds[outcome_number] = atof(outcome_node->first_attribute("odds")->value());
+											   else outcome_odds[outcome_number] = 0;
+											   if (outcome_node->first_attribute("probabilities")) outcome_probabilities[outcome_number] = atof(outcome_node->first_attribute("probabilities")->value());
+											   else outcome_probabilities[outcome_number] = 0;
+											   if (outcome_name[outcome_number] != NULL) delete[] outcome_name[outcome_number]; outcome_name[outcome_number] = NULL;
+											   if (outcome_node->first_attribute("name")) {
+												   outcome_name[outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
+												   std::strcpy(outcome_name[outcome_number], outcome_node->first_attribute("name")->value());
+
+											   }
+
+											   outcome_number++;
+
+										   }
+
+
+
+
+										   if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != NULL) delete[] _line->outcome_name[i]; };
+
+
+										   if (_line->outcome_id != NULL) delete[] _line->outcome_id; if (_line->outcome_active != NULL) delete[] _line->outcome_active; if (_line->outcome_team != NULL) delete[] _line->outcome_team; if (_line->outcome_odds != NULL) delete[] _line->outcome_odds;
+										   if (_line->outcome_probabilities != NULL) delete[] _line->outcome_probabilities; if (_line->outcome_name != NULL) delete[] _line->outcome_name;
+										   _line->outcome_probabilities = NULL; _line->outcome_name = NULL; _line->outcome_id = NULL; _line->outcome_odds = NULL; _line->outcome_active = NULL;
+										   _line->outcome_team = NULL;
+
+
+
+										   _line->outcome_number = outcome_number;
+										   if (_line->outcome_number > 0) {
+											   _line->outcome_name = new char*[_line->outcome_number];
+											   _line->outcome_id = new int[_line->outcome_number];
+											   _line->outcome_team = new int[_line->outcome_number];
+											   _line->outcome_active = new int[_line->outcome_number];
+											   _line->outcome_probabilities = new float[_line->outcome_number];
+											   _line->outcome_odds = new float[_line->outcome_number];
+
+
+											   if (_line->name != NULL) delete[] _line->name;
+
+
+											   _line->name = new char[strlen(_line->market->name) + 1];
+											   std::strcpy(_line->name, _line->market->name);
+											   for (int i = 0; i < _line->specifier_number; i++) {
+												   if (i == _line->variant) continue;
+
+												   replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
+											   }
+
+											   replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
+											   if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
+											   if (_event->type_radar > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
+
+
+											   if (print == true) {
+
+												   std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
+											   }
+
+											   std::strcat(socket_message_big, "\r\n");
+											   std::strcat(socket_message_big, _line->name);
+											   std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+
+
+
+
+
+
+
+
+											   for (int i = 0; i < _line->outcome_number; i++) {
+												   _line->outcome_name[i] = NULL;
+												   _line->outcome_id[i] = outcome_id[i];
+												   _line->outcome_active[i] = outcome_active[i];
+												   _line->outcome_odds[i] = outcome_odds[i];
+												   _line->outcome_team[i] = outcome_team[i];
+												   _line->outcome_probabilities[i] = outcome_probabilities[i];
+
+
+												   if (_line->type == 0) {
+													   if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+													   else
+														   for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+
+													   if (u < _line->market->outcome_number) {
+														   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+														   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+													   }
+													   else {
+														   std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
+
+														   _line->outcome_name[i] = new char[2];
+														   std::strcpy(_line->outcome_name[i], " ");
+														   if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+														   if (outcomeNameError == 0) outcomeNameError = 1;
+
+
+													   }
+
+													   for (int j = 0; j < _line->specifier_number; j++) {
+														   if (j == _line->variant) continue;
+
+														   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+													   }
+
+													   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
+													   if (_event->away_name != NULL) replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+													   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+
+
+
+													   if (print == true) {
+
+														   std::printf(_line->outcome_name[i]); std::printf("\t");
+														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+														   std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   }
+													   std::strcat(socket_message_big, _line->outcome_name[i]);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+
+
+												   }
+
+												   if (_line->type == 1) {
+													   if (_line->outcome_id[i] >= MAX_PLAYERS) {
+														   std::printf("ERROR in run. player_id out of MAX_PLAYERS. _line->outcome_id[i]=%d  _line->market_id=%d event_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+														   continue;
+
+													   }
+
+													   if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 2) {
+														   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+														   if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
+															   std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", events_id[_line->event_id]->away_id, _line->event_id);
+															   continue;
+														   }
+
+														   if (competitors_id[events_id[_line->event_id]->away_id] == NULL) {
+															   std::printf("Competitor id %d not found in team 2 run. getCompetitor\r\n", events_id[_line->event_id]->away_id);
+															   competitors[competitors_l].id = events_id[_line->event_id]->away_id;
+															   if (getCompetitor(&competitors[competitors_l]) == -1) {
+																   std::printf(" Error get competitors id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
+															   }
+															   else competitors_l++;
+
+
+														   }
+													   }
+
+													   if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 1) {
+														   std::printf("Player5 id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+														   if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
+															   std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", events_id[_line->event_id]->home_id, _line->event_id);
+															   continue;
+														   }
+
+														   if (competitors_id[events_id[_line->event_id]->home_id] == NULL) {
+															   std::printf("Competitor id %d not found in team 1 run. getCompetitor\r\n", events_id[_line->event_id]->home_id);
+															   competitors[competitors_l].id = events_id[_line->event_id]->home_id;
+															   if (getCompetitor(&competitors[competitors_l]) == -1) {
+																   std::printf(" Error get competitors id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
+															   }
+															   else competitors_l++;
+
+
+														   }
+													   }
+
+
+													   if (_line->outcome_team[i] < 3 && players_id[_line->outcome_id[i]] == NULL) {
+														   std::printf("Player6 id=%d  not found in run after get competitor. getPlayer\r\n ", _line->outcome_id[i]);
+														   players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
+														   {
+															   std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+															   _line->outcome_name[i] = new char[2];
+															   std::strcpy(_line->outcome_name[i], " ");
+														   }
+														   else players_l++;
+													   }
+
+													   if (_line->outcome_team[i] < 3 && _line->outcome_name[i] == NULL) {
+														   if (_line->outcome_team[i] == 1) {
+															   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															   std::strcat(_line->outcome_name[i], " (");
+															   std::strcat(_line->outcome_name[i], _event->home_name);
+															   std::strcat(_line->outcome_name[i], ")");
+
+														   }
+														   if (_line->outcome_team[i] == 2) {
+															   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															   if (_event->away_name != NULL) {
+																   std::strcat(_line->outcome_name[i], " (");
+																   std::strcat(_line->outcome_name[i], _event->away_name);
+																   std::strcat(_line->outcome_name[i], ")");
+															   }
+
+														   }
+
+													   }
+
+													   if (_line->outcome_team[i] == 3) {
+
+														   for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+														   if (u < _line->market->outcome_number) {
+															   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+															   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+															   for (int j = 0; j < _line->specifier_number; j++) {
+																   if (j == _line->variant) continue;
+
+																   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+															   }
+
+															   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
+															   replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+															   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+
+
+
+														   }
+														   else {
+															   _line->outcome_name[i] = new char[2];
+															   std::strcpy(_line->outcome_name[i], " ");
+														   }
+
+
+
+													   }
+
+
+
+
+
+													   if (print == true) {
+
+
+
+														   std::printf(_line->outcome_name[i]); std::printf("\t");
+														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+														   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   }
+													   std::strcat(socket_message_big, _line->outcome_name[i]);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+												   }
+
+												   if (_line->type == 2) {
+													   if (_line->outcome_team[i] != 3) {
+														   if (_line->outcome_id[i] >= MAX_COMPETITORS) {
+															   std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d event_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+															   continue;
+														   }
+														   if (competitors_id[_line->outcome_id[i]] == NULL) {
+															   std::printf("Competitor id=%d not found in market id=%d in event_id=%d  in run function. getTournament\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+															   //tournaments[tournaments_l].id = _event->tournament_id;
+															   //tournaments[tournaments_l].type_radar = _event->type_radar;
+
+															   if (_event->type_radar == 0 && getTournament(tournaments_id[_event->tournament_id], false) == -1)
+																   std::printf("ERROR!\r\nTournaments not found in run %d \r\n", _event->tournament_id);
+
+															   if (_event->type_radar == 2 && getTournament(simples_id[_event->simple_id], false) == -1)
+																   std::printf("ERROR!\r\nSimples Tournaments not found in run %d \r\n", _event->simple_id);
+
+														   }
+
+														   if (competitors_id[_line->outcome_id[i]] == NULL) {
+															   std::printf("\r\nCompetitors id=%d not found in tournament id=%d . Run getCompetitor\r\n", _line->outcome_id[i], _event->tournament_id);
+															   competitors[competitors_l].id = _line->outcome_id[i];
+															   if (getCompetitor(&competitors[competitors_l]) == -1) {
+																   std::printf(" Error get competitors in run function line type= 2 id=%d \r\n", _line->outcome_id[i]);
+																   _line->outcome_name[i] = new char[2];
+																   std::strcpy(_line->outcome_name[i], " ");
+															   }
+															   else competitors_l++;
+														   }
+
+														   if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name); }
+
+													   }
+													   else
+													   {
+														   for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
+														   if (u < _line->market->outcome_number) {
+															   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+															   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+															   for (int j = 0; j < _line->specifier_number; j++) {
+																   if (j == _line->variant) continue;
+																   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+															   }
+															   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
+															   replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+															   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+														   }
+														   else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
+													   }
+													   if (print == true) {
+														   std::printf(_line->outcome_name[i]); std::printf("\t");
+														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+														   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   }
+													   std::strcat(socket_message_big, _line->outcome_name[i]);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+
+												   }
+
+												   if (_line->type == 3) {
+
+													   if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+													   else
+														   for (u = 0; u < _line->market->outcome_number; u++) {
+
+
+															   if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+														   }
+
+													   if (u < _line->market->outcome_number) {
+
+														   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
+														   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+
+													   }
+													   else {
+														   std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
+														   _line->outcome_name[i] = new char[2];
+														   std::strcpy(_line->outcome_name[i], " ");
+														   if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+														   if (outcomeNameError == 0) outcomeNameError = 1;
+													   }
+
+													   for (int j = 0; j < _line->specifier_number; j++) {
+														   if (j == _line->variant) continue;
+
+														   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
+													   }
+
+													   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
+													   replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
+													   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+
+
+													   //if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
+
+													   if (print == true) {
+
+														   std::printf(_line->outcome_name[i]); std::printf("\t");
+														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+														   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   }
+													   std::strcat(socket_message_big, _line->outcome_name[i]);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+													   std::strcat(socket_message_big, "\t");
+													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+													   std::strcat(socket_message_big, socket_message_little);
+
+
+
+
+												   }
+
+
+											   }
+
+
+
+											   if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
+										   }
+
+										   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+
+										   auto it = compound2line_index.find(_line[0].getCompoundKey());
+										   if (it == compound2line_index.end()) {
+											   _line[0].id = lines_l;
+											   lines[lines_l] = _line[0];
+											   insert_line(_line[0], lines_l);
+											   lines_l++;
+
+										   }
+										   else {
+											   _line[0].id = it->second;
+											   lines[it->second] = _line[0];
+
+											   //printf("Line Update\r\n");
+										   }
+
+										   if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+
+										   if (recovery_state == 0) {
+
+											   if (debug_output == true) printf("write buffer data\r\n");
+
+											   //if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
+											   //if (_line->status == 0 || _line->status == -3) continue;
+											   event_lines_l++;
+											   writeInteger(buffer, offset, _line->id, 4);
+											   writeInteger(buffer, offset, _line->betstop_reason, 1);
+											   writeInteger(buffer, offset, _line->market_id, 2);
+											   writeInteger(buffer, offset, _line->type, 1);
+											   writeInteger(buffer, offset, _line->favourite, 1);
+											   writeInteger(buffer, offset, _line->status, 1);
+											   //if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+											   writeInteger(buffer, offset, _line->outcome_number, 2);
+											   for (int j = 0; j < _line->outcome_number; j++) {
+												   writeInteger(buffer, offset, _line->outcome_id[j], 2);
+												   writeInteger(buffer, offset, _line->outcome_active[j], 1);
+												   if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+												   if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+													   writeString(buffer, offset, _line->outcome_name[j]);
+												   writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
+											   }
+
+											   writeInteger(buffer, offset, _line->specifier_number, 1);
+											   for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
+
+											   if (debug_output == true) printf("end write buffer data\r\n");
+
+										   }
+
+
+						}
+					}
+					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
+
+				}
+
+				if (debug_output == true) printf("end parse type_radar=%d\r\n", type_radar);
+
+				if (recovery_state == 0) {
+					if (debug_output == true) printf("radarmessagehandler\r\n");
+
+					zip_len = gzip(buffer, offset, zip_message, 2);
+					//delete[] buffer;
+					if (zip_len > 1)
+					{
+						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
+						radarMessageHandler(encode_message, encode_message_len);
+						//printf("encode_message_len=%d\r\n", encode_message_len);
+						delete[] encode_message;
+						encode_message = nullptr;
+
+					}
+					delete[] zip_message;
+					zip_message = nullptr;
+					if (debug_output == true) printf("end radarmessagehandler\r\n");
+				}
+				//delete[] zip_message;
+
+
+
+
+
+
+
+
+
+
+			}
+			else {
+				if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
+				printf(doc.first_node()->name()); std::printf("\r\n");
+			}
+
+
+
+
+			doc.clear();
+
+			//printf("lines_l=%d\r\n",lines_l);
+			//string String(socket_message_big);
+
+			//radarMessageHandler(socket_message_big, strlen(socket_message_big));
+
+
+			/*
+
+			root_node = doc.first_node("odds_change");
+			if (root_node && root_node->first_node("sport_event_status") && root_node->first_node("sport_event_status")->first_attribute("status")) {
+
+			//	printf(root_node->first_node("sport_event_status")->first_attribute("status")->value());
+
+			status=atoi(root_node->first_node("sport_event_status")->first_attribute("status")->value());
+
+			}
+
+			*/
+
+			//if (i < 100 && _event->sport_id == 21 && (envelope.message.body.len > 8000 || status == 1))
+
+			/*
+			if (i < 100 && status == 1 && (_event->away_yellowcards>0 || _event->away_redcards>0 || _event->home_yellowcards>0 || _event->home_redcards>0)) {
+			i++;std::strcpy(name, "C://unifeed");
+			_itoa(i, buf, 10);
+			strcat(name, buf);
+			strcat(name, ".xml");
+			DeleteFile(name);
+			File = CreateFile(name, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+			l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+			printf(name);
+			printf("\r\n");
+			printf("message length= %d\r\n", envelope.message.body.len);
+			WriteFile(File, envelope.message.body.bytes, envelope.message.body.len, &l, NULL);
+			CloseHandle(File);
+			}
+
+			*/
+			//WriteFile(File, "<endmessage></endmessage>", strlen("<endmessage></endmessage>"), &l, NULL);
+
+			//if (i > 50) return;
+
+			//if(i<4)std::printf((char*)envelope.message.body.bytes);
+			//i++;
+
+			//	if (_line != nullptr) {
+			//			delete _line; _line = nullptr;
+			//		}
+
+
+
+
+}
+
+delete[] outcome_team;
+delete[] outcome_name;
+delete[] outcome_id;
+delete[] outcome_active;
+delete[] outcome_probabilities;
+delete[] outcome_odds;
+delete[] name;
+delete[] buf;
+delete[] maxbuf;
+delete[] socket_message_big;
+delete[] socket_message_little;
+delete[] buffer;
+clientIDs.clear();
+return 0;
+	
 }
 void GenerateBigStep() {
 int i = 0;
@@ -3125,35 +5765,33 @@ vector<int> clientIDs;
 
 
 if (recovery_state != 0)  return;
-	clientIDs.clear();
+	//clientIDs.clear();
+	clientIDs = server.getClientIDs();
 	current_data_step_temp_1 = -1;
 	current_data_step_temp_2 = -1;
-
 	
-	
-	clientIDs = server.getClientIDs();
-	for (j = 0; j < STEP_QUEUE; j++) {
+	if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
+		for (j = 0; j < STEP_QUEUE; j++) {
+			if (array_data_step_1[j] != nullptr && j != current_data_step_1) {
+				for (i = 0; i < clientIDs.size(); i++) {
+					if (server.wsClients[clientIDs[i]] == NULL) continue;
+					if (server.wsClients[clientIDs[i]]->step_buffer_1 == array_data_step_1[j])  break;
+				}
 
-		if (array_data_step_1[j] != nullptr && j != current_data_step_1) {
-			for (i = 0; i < clientIDs.size(); i++) {
-				if (server.wsClients[clientIDs[i]] == NULL) continue;
-				if (server.wsClients[clientIDs[i]]->step_buffer_1 == array_data_step_1[j]) break;
+				if (i == clientIDs.size()) { delete[] array_data_step_1[j]; array_data_step_1[j] = nullptr; }
 			}
 
-			if (i == clientIDs.size()) { delete[] array_data_step_1[j]; array_data_step_1[j] = nullptr; }
-		}
+			if (array_data_step_2[j] != nullptr && j != current_data_step_2) {
+				for (i = 0; i < clientIDs.size(); i++) {
+					if (server.wsClients[clientIDs[i]] == NULL) continue;
+					if (server.wsClients[clientIDs[i]]->step_buffer_2 == array_data_step_2[j])  break;
+				}
 
-		if (array_data_step_2[j] != nullptr && j != current_data_step_2) {
-			for (i = 0; i < clientIDs.size(); i++) {
-				if (server.wsClients[clientIDs[i]] == NULL) continue;
-				if (server.wsClients[clientIDs[i]]->step_buffer_2 == array_data_step_2[j]) break;
+				if (i == clientIDs.size()) { delete[] array_data_step_2[j]; array_data_step_2[j] = nullptr; }
 			}
-
-			if (i == clientIDs.size()) { delete[] array_data_step_2[j]; array_data_step_2[j] = nullptr; }
 		}
+		server.ws_clients_flag.clear(std::memory_order_release);
 	}
-
-	
 
 
 	for (j = 0; j < STEP_QUEUE; j++) {
@@ -3181,7 +5819,7 @@ if (recovery_state != 0)  return;
 
 	//Sleep(100);
 
-
+	clientIDs.clear();
 
 
 
@@ -6575,7 +9213,8 @@ char* CreateStep_2(int& len) {
 	
 	offset += 2;
 	
-	
+	//printf("events_show_l=%d\r\n", events_show_l);
+
 	for (i = 0; i < events_show_l; i++) {
 		if (events_show[i]->status == 4 || events_show[i]->status == 3) continue;
 		events_send_l++;
@@ -6757,6 +9396,84 @@ writeInteger(buffer, retry_offset, events_send_l, 2);
 	return encode_message;
 
 };
+void CreatePlus_2(wsClient* client) {
+	//printf("CreatePlus_2\r\n");
+	//server.wsClients[clientIDs[i]]
+	int i, j, l, k = 0;
+	int events_send_l = 0;
+	int event_lines_l = 0;
+
+	char* buffer = new char[SEND_BUFLEN];
+	int len = 0;
+	size_t offset = 0;
+	size_t retry_offset = 0;
+	int event_id = client->plus;
+
+	//printf("CreatePlus_2 server.wsClients[%d]->plus=%d\r\n", clientID, server.wsClients[clientID]->plus);
+
+	if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in CreatePlus_2 %d\r\n", event_id); return; }
+	if(events_id[event_id]==nullptr) { std::printf("\r\nEvent id= %d not found in CreatePlus_2 %d\r\n", event_id); return; }
+	if (events_id[event_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); return; }
+	if (event2lines.find(event_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); return; }
+	writeInteger(buffer, offset, 1, 2);
+	writeInteger(buffer, offset, 100, 1);
+	writeInteger(buffer, offset, event_id, 4);
+	//writeInteger(buffer, offset, event2lines[event_id]->size(), 2);
+	event_lines_l = 0;
+	retry_offset = offset;
+	offset += 2;
+
+	for (unordered_set<int>::iterator it = event2lines[event_id]->begin(); it != event2lines[event_id]->end(); ++it)
+		{
+			//if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events_show[i]->status == 0) continue;
+			if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
+			event_lines_l++;
+			writeInteger(buffer, offset, lines[*(it)].id, 4);
+			writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
+			writeInteger(buffer, offset, lines[*(it)].market_id, 2);
+			writeInteger(buffer, offset, lines[*(it)].type, 1);
+			writeInteger(buffer, offset, lines[*(it)].favourite, 1);
+			writeInteger(buffer, offset, lines[*(it)].status, 1);
+			//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
+			writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
+			for (j = 0; j < lines[*(it)].outcome_number; j++) {
+				writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 2);
+				writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
+				if (lines[*(it)].type == 1 || lines[*(it)].type == 2) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+				if ((lines[*(it)].type == 1 || lines[*(it)].type == 2) && lines[*(it)].outcome_team[j] != 3)
+					writeString(buffer, offset, lines[*(it)].outcome_name[j]);
+				writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j] * 100), 4);
+
+			}
+
+			writeInteger(buffer, offset, lines[*(it)].specifier_number, 1);
+			for (j = 0; j < lines[*(it)].specifier_number; j++)
+				writeString(buffer, offset, lines[*(it)].specifier_value[j]);
+
+
+
+
+		}
+
+		writeInteger(buffer, retry_offset, event_lines_l, 2);
+
+	
+	char* zip_message = nullptr;
+	int zip_len = gzip(buffer, offset, zip_message, 2);
+	delete[] buffer;
+	if (zip_len < 1) return;
+	char* encode_message = SendframeEncode(zip_message, zip_len, len);
+	delete[] zip_message;
+	client->plus_message = encode_message;
+	client->plus_message_length = len;
+
+	//printf("CreatePlus_2 client->plus_message_length=%d\r\n",client->plus_message_length);
+
+	//printf("server.wsClients[clientID]->plus_message_length=%d\r\n", server.wsClients[clientID]->plus_message_length);
+	
+
+
+};
 char* SendframeEncode(char* message, int messageLen, int &totalLength) {
 	char *buf = nullptr;
 	unsigned char opcode = WS_OPCODE_BINARY;
@@ -6825,7 +9542,6 @@ char* SendframeEncode(char* message, int messageLen, int &totalLength) {
 
 	return buf;
 };
-
 long timestamp() {
 	time_t start;
 	SYSTEMTIME st;
@@ -7375,73 +10091,20 @@ void amqp_dump(void const *buffer, size_t len)
 }
 static void run(amqp_connection_state_t conn)
 {
-	using namespace rapidxml;
-	using namespace std;
-	xml_document<> doc;
 	uint64_t start_time = now_microseconds();
 	int received = 0;
 	int previous_received = 0;
 	uint64_t previous_report_time = start_time;
 	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
-	HANDLE File;
 	DWORD l = 0;
 	amqp_frame_t frame;
 	uint64_t now;
-	char* name = new char[MAX_PATH];
-	char* buf = new char[MAX_PATH];
-	char set_scores[1024];
-	char* maxbuf = new char[1000000];
-	Event* _event = nullptr;
-	Tournament* _tournament= nullptr;
-	int i = 0;
-	int k = 0;
-	int j = 0;
-	int m = 0;
-	int n = 0;
-	int q = 0;
-	int z = 0;
-	int u = 0;
-	bool print = false;
-	bool debug_output = false;
-	int event_id = 0;
-	int type_radar = 0;
-	int status = 0;
-	int betstop_reason = 0;
-	int index_separator[100];
-	int index_equally[100];
-	int outcome_number;
-	char** outcome_name=new char*[500];
-	int* outcome_id=new int[500];
-	int* outcome_active=new int[500];
-	int* outcome_team = new int[500];
-	float* outcome_probabilities=new float[500];
-	float* outcome_odds=new float[500];
-	for (int i = 0; i < 500; i++) outcome_name[i] = NULL;
-	Line* _line = new Line();
-	char* socket_message_big = new char[145000];
-	char* buffer = new char[145000];
-	size_t offset = 0;
-	size_t retry_offset = 0;
-	int event_lines_l = 0;
-	char* zip_message = nullptr;
-	int zip_len = 0;
-	char* encode_message;// = SendframeEncode(zip_message, zip_len, len);
-	int encode_message_len=0;
-	char* socket_message_little = new char[4096];
-	int outcomeNameError=0;
 		
 
 
 	for (;;) {
 		amqp_rpc_reply_t ret;
 		amqp_envelope_t envelope;
-		//int p1 = timestamp();
-		if (recovery_state == 0) GenerateBigStep();
-		//int p2 = timestamp();
-		//p2 = p2 - p1;
-		//printf("GenerateBigStep=%dms\r\n",p2);
-
-		status = 0;
 		now = now_microseconds();
 		if (now > next_summary_time) {
 			int countOverInterval = received - previous_received;
@@ -7455,2508 +10118,17 @@ static void run(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
-		
-		//envelope.message.body.bytes
-
-
-	std::strncpy(maxbuf, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
-		maxbuf[envelope.message.body.len] = 0;
-		socket_message_big[0] = 0;
-		offset= 0;
-		doc.parse<0>(maxbuf);
-		
-		
-
-		if (doc.first_node() == NULL) continue;
-
-		
-
-
-
-		
-		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
-
-			 type_radar = 0;
-				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-				if (event_id == 0) {event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1;}
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-
-				if (type_radar == 2) {
-					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
-					if (simples_id[event_id] == NULL) {
-						std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
-						tournaments[tournaments_l].id = 0;
-						tournaments[tournaments_l].simple_id = event_id;
-						tournaments[tournaments_l].type_radar = 2;
-						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture change simple %d\r\n", event_id); continue; }
-						tournaments_l++;
-
-					}
-					else if (getTournament(simples_id[event_id], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture %d\r\n", event_id); continue; }
-					std::printf("fixture_change succes for tournamnet simple id=%d\r\n", event_id);
-
-
-				}
-				if (type_radar == 3) {
-					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run fixture change %d\r\n", event_id); continue; }
-					if (seasons_id[event_id] == NULL) {
-						std::printf("Tournament not found in run fixture change. Run getTournament(). season_id=%d\r\n", event_id);
-						tournaments[tournaments_l].id = 0;
-						tournaments[tournaments_l].season_id = event_id;
-						tournaments[tournaments_l].type_radar = 0;
-						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournament season id not found in run %d\r\n", event_id); continue; }
-						else {
-							if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournament season id not found after succes in getTournament run %d\r\n", event_id); 
-							
-							continue; }
-							tournaments_l++; std::printf("fixture_change succes for tournamnet season id=%d\r\n",event_id);
-						}
-						} else if (getTournament(seasons_id[event_id], false) == -1) { std::printf("ERROR!\r\n getTournament in fixture_change season id =%d\r\n", event_id); continue; }
-
-						std::printf("fixture_change succes for tournamnet season id=%d\r\n", event_id);
-					
-					}
-				if (type_radar < 2) {
-					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
-					if (events_id[event_id] == NULL) {
-						std::printf("Event not found in fixture_change. %d\r\n", event_id);
-						k = events_l; events_l++;
-						events[k].id = event_id; events[k].type_radar = type_radar;
-						events_id[event_id] = &events[k];
-					}
-					if (getEventFixture(events_id[event_id]) == -1) { std::printf("fixtur_change error. %d\r\n", event_id); continue; }
-					std::printf("fixture_change success. event_id=%d \r\n",event_id);
-
-				}
-			
-			}
-		else 
-
-			if (std::strcmp("odds_change", doc.first_node()->name()) == 0) {
-				type_radar = 0;
-				event_id = 0;
-				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-				if (event_id == 0) { std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value()); 
-				continue;
-				}
-
-				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
-				
-				if (type_radar == 2) {
-					
-					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run odds_change %d\r\n", event_id); continue; }
-					if (simples_id[event_id] == NULL) {
-						std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
-						tournaments[tournaments_l].id = 0;
-						tournaments[tournaments_l].simple_id = event_id;
-						tournaments[tournaments_l].type_radar = 2;
-						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run simple %d\r\n", event_id); continue; }
-					     tournaments_l++;
-											
-					}
-
-					if (simples_id[event_id] == NULL) { std::printf("ERROR!\r\nTournaments simple id not found after succes in getTournament run simple %d\r\n", event_id); continue; }
-					_tournament = simples_id[event_id];
-
-
-						if (_tournament->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nstournament sport_id out of MAX_SPORTS in run simple%d\r\n", _tournament->sport_id); continue; }
-
-						if (sports_id[_tournament->sport_id] == NULL) { std::printf("Sport not found in run simple. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
-
-						if (recovery_state == 0) {
-							writeInteger(buffer, offset, 1, 2);
-							writeInteger(buffer, offset, type_radar, 1);
-							writeInteger(buffer, offset, event_id, 4);
-							retry_offset = offset;
-							offset += 2;
-							event_lines_l = 0;
-						}
-
-						if (print == true) {
-							std::printf("\r\n***************************************************\r\n");
-							std::printf("Simple id: %d\r\n", event_id);
-							std::printf("NAME:"); std::printf(_tournament->name);
-							std::printf("\r\n");
-						}
-							std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-							std::strcat(socket_message_big, socket_message_little);
-							std::sprintf(socket_message_little, "Simple id: %d\r\n", event_id);
-							std::strcat(socket_message_big, socket_message_little);
-							std::sprintf(socket_message_little, "NAME:");
-							std::strcat(socket_message_big, socket_message_little);
-							std::sprintf(socket_message_little, "\r\n");
-							
-
-
-						
-
-							if (print == true) {
-								std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
-							}
-							std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
-							std::strcat(socket_message_big, "\r\n");
-						
-
-
-						if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run simple %d\r\n", _tournament->category_id); continue; }
-						if (categories_id[_tournament->category_id] == NULL) {
-							std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _tournament->category_id);
-							if (getTournament(simples_id[_tournament->simple_id], false) == -1);  continue;;
-						}
-						if (print == true) {
-							std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
-							std::printf("\r\n***************************************************\r\n");
-						}
-							//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-							std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
-							std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
-
-						
-
-
-						xml_node<> * odds = doc.first_node()->first_node("odds");
-
-						if (odds != NULL) {
-							betstop_reason = 0;
-							if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
-							_line->tournament_id = 0;
-							_line->event_id = 0;
-							_line->simple_id = _tournament->simple_id;
-							_line->betstop_reason = betstop_reason;
-
-							for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
-							{
-								outcomeNameError = 0;
- 								if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
-								if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
-								if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
-								if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
-								if (_line->market_id >= MAX_MARKETS) {
-									std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
-								}
-								if (markets_id[_line->market_id] == NULL) {
-									std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
-								};
-								if (markets_id[_line->market_id][0] == NULL) {
-									std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
-								};
-								_line->variant = markets_id[_line->market_id][0]->variant;
-								_line->type = markets_id[_line->market_id][0]->type;
-								if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
-									if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;
-									if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
-								}
-								if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
-								if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
-								_line->specifier_number = 0;
-								if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
-									if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
-									if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
-								}
-								if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
-								if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
-								_line->extended_specifier_number = 0;
-								if (market_node->first_attribute("specifiers")) {
-									n = 0;
-									m = market_node->first_attribute("specifiers")->value_size();
-									for (q = 0; q < m; q++) {
-										if (market_node->first_attribute("specifiers")->value()[q] == '=')
-											index_equally[n] = q;
-
-										if (market_node->first_attribute("specifiers")->value()[q] == '|') {
-											index_separator[n] = q; n++;
-										}
-
-									}
-									index_separator[n] = q; n++;
-
-
-
-
-									_line->specifier_number = n;
-									if (_line->specifier_number > 0) {
-										_line->specifier_value = new char*[_line->specifier_number];
-										_line->specifier = new char*[_line->specifier_number];
-
-
-										for (q = 0; q < _line->specifier_number; q++) {
-											if (q > 0) {
-												_line->specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
-												strncpy(_line->specifier[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
-												_line->specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
-											}
-											else {
-												_line->specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->specifier[q], market_node->first_attribute("specifiers")->value(), index_equally[q]); _line->specifier[q][index_equally[q]] = 0;
-
-
-											}
-
-											_line->specifier_value[q] = new char[index_separator[q] - index_equally[q]];
-											strncpy(_line->specifier_value[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
-											_line->specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-
-
-
-										}
-									}
-								}
-								if (market_node->first_attribute("extended_specifiers")) {
-									n = 0;
-									m = market_node->first_attribute("extended_specifiers")->value_size();
-									for (q = 0; q < m; q++) {
-										if (market_node->first_attribute("extended_specifiers")->value()[q] == '=')
-											index_equally[n] = q;
-
-										if (market_node->first_attribute("extended_specifiers")->value()[q] == '|') {
-											index_separator[n] = q; n++;
-										}
-
-									}
-									index_separator[n] = q; n++;
-
-
-
-									_line->extended_specifier_number = n;
-									if (_line->extended_specifier_number > 0) {
-										_line->extended_specifier_value = new char*[_line->extended_specifier_number];
-										_line->extended_specifier = new char*[_line->extended_specifier_number];
-
-
-										for (q = 0; q < _line->extended_specifier_number; q++) {
-											if (q > 0) {
-												_line->extended_specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
-												strncpy(_line->extended_specifier[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
-												_line->extended_specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
-											}
-											else {
-												_line->extended_specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->extended_specifier[q], market_node->first_attribute("extended_specifiers")->value(), index_equally[q]); _line->extended_specifier[q][index_equally[q]] = 0;
-
-
-											}
-
-											_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
-											strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
-											_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-											//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
-
-
-										}
-									}
-								}
-							outcomeNameError1: 
-								
-								
-								
-								if (_line->variant > -1) {
-									z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
-
-								
-									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-									if (outcomeNameError == 1||u == max_markets_in[_line->market_id]) {
-										std::printf("Variant market1 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
-										for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-									}
-									_line->market = markets_id[_line->market_id][u];
-									if (outcomeNameError == 1)outcomeNameError = 2;
-									
-									if (_line->type == 3) z = 16;
-								}
-								else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
-								outcome_number = 0;
-
-								for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
-
-
-									if (outcome_node->first_attribute("active")) outcome_active[outcome_number] = atoi(outcome_node->first_attribute("active")->value());
-									else outcome_active[outcome_number] = 0;
-									if (outcome_node->first_attribute("team")) outcome_team[outcome_number] = atoi(outcome_node->first_attribute("team")->value());
-									else outcome_team[outcome_number] = 0;
-									if (outcome_node->first_attribute("id")) {
-										outcome_id[outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + z));
-										if (outcome_id[outcome_number] == 0 && z > 0) {
-											outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
-											if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
-											else {
-												std::printf("_line->type=%d line->market_id=%d  _tournament->type_radar=%d  _line->simple_id =%d \r\n", _line->type, _line->market_id, _tournament->type_radar, _line->simple_id); std::printf(outcome_node->first_attribute("id")->value());
-
-											}
-										}
-
-									}
-									else outcome_id[outcome_number] = 0;
-
-
-									if (outcome_node->first_attribute("odds")) outcome_odds[outcome_number] = atof(outcome_node->first_attribute("odds")->value());
-									else outcome_odds[outcome_number] = 0;
-									if (outcome_node->first_attribute("probabilities")) outcome_probabilities[outcome_number] = atof(outcome_node->first_attribute("probabilities")->value());
-									else outcome_probabilities[outcome_number] = 0;
-									if (outcome_name[outcome_number] != NULL) delete[] outcome_name[outcome_number]; outcome_name[outcome_number] = NULL;
-									if (outcome_node->first_attribute("name")) {
-										outcome_name[outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
-										std::strcpy(outcome_name[outcome_number], outcome_node->first_attribute("name")->value());
-
-									}
-
-									outcome_number++;
-
-								}
-
-
-
-
-								if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != NULL) delete[] _line->outcome_name[i]; };
-
-
-								if (_line->outcome_id != NULL) delete[] _line->outcome_id; if (_line->outcome_active != NULL) delete[] _line->outcome_active; if (_line->outcome_team != NULL) delete[] _line->outcome_team; if (_line->outcome_odds != NULL) delete[] _line->outcome_odds;
-								if (_line->outcome_probabilities != NULL) delete[] _line->outcome_probabilities; if (_line->outcome_name != NULL) delete[] _line->outcome_name;
-								_line->outcome_probabilities = NULL; _line->outcome_name = NULL; _line->outcome_id = NULL; _line->outcome_odds = NULL; _line->outcome_active = NULL;
-								_line->outcome_team = NULL;
-
-
-
-								_line->outcome_number = outcome_number;
-								if (_line->outcome_number > 0) {
-									_line->outcome_name = new char*[_line->outcome_number];
-									_line->outcome_id = new int[_line->outcome_number];
-									_line->outcome_team = new int[_line->outcome_number];
-									_line->outcome_active = new int[_line->outcome_number];
-									_line->outcome_probabilities = new float[_line->outcome_number];
-									_line->outcome_odds = new float[_line->outcome_number];
-
-
-									if (_line->name != NULL) delete[] _line->name;
-
-
-									_line->name = new char[strlen(_line->market->name) + 1];
-									std::strcpy(_line->name, _line->market->name);
-									for (int i = 0; i < _line->specifier_number; i++) {
-										if (i == _line->variant) continue;
-
-										replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
-									}
-									if (simples_id[_line->simple_id]->name != NULL) replace(_line->name, "$event", simples_id[_line->simple_id]->name);
-
-
-									if (print == true) {
-
-										std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
-									}
-
-										//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-										std::strcat(socket_message_big, "\r\n");
-										std::strcat(socket_message_big, _line->name);
-										std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
-									
-
-
-
-
-
-									for (int i = 0; i < _line->outcome_number; i++) {
-										_line->outcome_name[i] = NULL;
-										_line->outcome_id[i] = outcome_id[i];
-										_line->outcome_active[i] = outcome_active[i];
-										_line->outcome_odds[i] = outcome_odds[i];
-										_line->outcome_team[i] = outcome_team[i];
-										_line->outcome_probabilities[i] = outcome_probabilities[i];
-
-
-										if (_line->type == 0) {
-											if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
-											else
-												for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
-
-											if (u < _line->market->outcome_number) {
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-											}
-											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d GoTo GetVarianMarket \r\n", _line->market_id, _line->outcome_id[i]);
-												_line->outcome_name[i] = new char[2];
-												std::strcpy(_line->outcome_name[i], " ");
-												if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text); 
-												if (outcomeNameError == 0) outcomeNameError = 1;
-												
-											
-											}
-
-											for (int j = 0; j < _line->specifier_number; j++) {
-												if (j == _line->variant) continue;
-
-												replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-											}
-											
-											if (simples_id[_line->simple_id]->name != NULL) replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
-
-
-
-											if (print == true) {
-
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
-												//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-											
-
-
-
-										}
-
-										if (_line->type == 1) {
-											if (_line->outcome_id[i] >= MAX_PLAYERS) {
-												std::printf("ERROR in run. player_id out of MAX_PLAYERS. _line->outcome_id[i]=%d  _line->market_id=%d simple_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->simple_id);
-												continue;
-
-											}
-											if (_line->outcome_team[i] != 3) {
-												if (players_id[_line->outcome_id[i]] == NULL) {
-													std::printf("Player2 id=%d not found in market id=%d in simple_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->simple_id);
-													players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
-													{
-														std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
-														_line->outcome_name[i] = new char[2];
-														std::strcpy(_line->outcome_name[i], " ");
-													}
-													else players_l++;
-												}
-
-												if (_line->outcome_name[i] == NULL) {
-													_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-													std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-												}
-
-											}
-
-											if (_line->outcome_team[i] == 3) {
-
-												for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-												if (u < _line->market->outcome_number) {
-													_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-													std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-													for (int j = 0; j < _line->specifier_number; j++) {
-														if (j == _line->variant) continue;
-														replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-													}
-
-													if (simples_id[_line->simple_id]->name != NULL)	replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
-													
-
-
-
-												}
-												else {
-													_line->outcome_name[i] = new char[2];
-													std::strcpy(_line->outcome_name[i], " ");
-												}
-
-
-
-											}
-
-
-
-
-
-											if (print == true) {
-
-
-
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
-
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-
-
-											
-
-
-
-										}
-
-										if (_line->type == 2) {
-											if (_line->outcome_team[i] != 3) {
-												if (_line->outcome_id[i] >= MAX_COMPETITORS) {
-													std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d simple_id=%d\r\n", _line->outcome_id[i], _line->market_id, _tournament->simple_id);
-													continue;
-												}
-												if (competitors_id[_line->outcome_id[i]] == NULL) {
-													std::printf("Competitor id=%d not found in market id=%d in tournament_simple_id=%d  in run simple. getTournament\r\n", _line->outcome_id[i], _line->market_id, _tournament->simple_id);
-													if (getTournament(simples_id[_tournament->simple_id], false) == -1)
-														std::printf("ERROR!\r\nTournaments not found in run simple %d \r\n", _tournament->simple_id);
-												}
-
-												if (competitors_id[_line->outcome_id[i]] == NULL) {
-													std::printf("\r\nCompetitors id=%d not found in tournament simple_id=%d after getTournament . Run getCompetitor\r\n", _line->outcome_id[i], _tournament->simple_id);
-													competitors[competitors_l].id = _line->outcome_id[i];
-													if (getCompetitor(&competitors[competitors_l]) == -1) {
-														std::printf(" Error getCompetitor in run season. line type= 2 id competitor=%d \r\n", _line->outcome_id[i]);
-														_line->outcome_name[i] = new char[2];
-														std::strcpy(_line->outcome_name[i], " ");
-													}
-													else competitors_l++;
-												}
-
-												if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name); }
-
-											}
-											else
-											{
-												for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-												if (u < _line->market->outcome_number) {
-													_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-													std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-													for (int j = 0; j < _line->specifier_number; j++) {
-														if (j == _line->variant) continue;
-														replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-													}
-
-													if (_tournament->name != NULL) replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
-												}
-												else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
-											}
-											if (print == true) {
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);}
-
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-
-
-
-											
-										}
-
-										if (_line->type == 3) {
-
-											if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
-											else
-												for (u = 0; u < _line->market->outcome_number; u++) {
-
-
-													if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
-												}
-
-											if (u < _line->market->outcome_number) {
-
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-											}
-											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-												
-												_line->outcome_name[i] = new char[2];
-												std::strcpy(_line->outcome_name[i], " ");
-												if (outcomeNameError == 0) outcomeNameError = 1;
-												if (_line->market->variant > -1) 
-													printf("_line->market->variant=%s\r\n", _line->market->variable_text);
-													
-											}
-
-											for (int j = 0; j < _line->specifier_number; j++) {
-												if (j == _line->variant) continue;
-
-												replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-											}
-
-											if (_tournament->name) replace(_line->outcome_name[i], "$event", simples_id[_line->simple_id]->name);
-
-
-											//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
-
-											if (print == true) {
-
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-										}
-									}
-
-
-									if (outcomeNameError==1 &&_line->market->variant > -1) goto outcomeNameError1;
-								}
-
-
-
-								if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-
-								auto it = compound2line_index.find(_line[0].getCompoundKey());
-								if (it == compound2line_index.end()) {
-									_line[0].id = lines_l;
-									lines[lines_l] = _line[0];
-								    insert_line(_line[0], lines_l);
-									lines_l++;
-								
-								}
-								else {
-									_line[0].id = it->second;
-									lines[it->second] = _line[0];
-
-									//printf("Line Update\r\n");
-								}
- 
-								if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
-
-								if (recovery_state == 0) {
-									
-									if (debug_output == true) printf("write buffer data\r\n");
-
-									//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
-									//if (_line->status == 0 || _line->status == -3) continue;
-									event_lines_l++;
-									writeInteger(buffer, offset, _line->id, 4);
-									writeInteger(buffer, offset, _line->betstop_reason, 1);
-									writeInteger(buffer, offset, _line->market_id, 2);
-									writeInteger(buffer, offset, _line->type, 1);
-									writeInteger(buffer, offset, _line->favourite, 1);
-									writeInteger(buffer, offset, _line->status, 1);
-									//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
-									writeInteger(buffer, offset, _line->outcome_number, 2);
-									for (int j = 0; j < _line->outcome_number; j++) {
-										writeInteger(buffer, offset, _line->outcome_id[j], 2);
-										writeInteger(buffer, offset, _line->outcome_active[j], 1);
-										if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-										if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-											writeString(buffer, offset, _line->outcome_name[j]);
-										writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
-									}
-
-									writeInteger(buffer, offset, _line->specifier_number, 1);
-									for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
-
-
-									if (debug_output == true) printf("end write buffer data\r\n");
-								}
-
-
-
-
-
-
-
-
-								
-
-
-
-								
-}
-						}
-						if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
-
-					}
-				if (type_radar == 3) {
-					if(event_id>=MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
-					if (seasons_id[event_id] == NULL) {
-						std::printf("Tournament not found. Run getTournament(). season_id=%d\r\n", event_id);
-						tournaments[tournaments_l].id = 0;
-						tournaments[tournaments_l].season_id = event_id;
-						tournaments[tournaments_l].type_radar = 0;
-						if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments season id not found in run season %d\r\n", event_id); continue; }
-						else tournaments_l++;
-					}
-						if (seasons_id[event_id] == NULL) { std::printf("ERROR!\r\nTournaments season id not found after succes in getTournament run season %d\r\n", event_id); continue; }
-						_tournament = seasons_id[event_id];
-
-						if (_tournament->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nstournament sport_id out of MAX_SPORTS in run season%d\r\n", _tournament->sport_id); continue; }
-						
-						if (sports_id[_tournament->sport_id] == NULL) { std::printf("Sport not found in run season. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
-
-
-						if (recovery_state == 0) {
-							writeInteger(buffer, offset, 1, 2);
-							writeInteger(buffer, offset, type_radar, 1);
-							writeInteger(buffer, offset, _tournament->id, 4);
-							retry_offset = offset;
-							offset += 2;
-							event_lines_l = 0;
-						}
-
-
-
-						if (print == true) {
-							std::printf("\r\n***************************************************\r\n");
-							std::printf("Season id: %d\r\n", event_id);
-							std::printf("Tournament id:%d\r\n", _tournament->id);
-							std::printf("NAME:"); std::printf(_tournament->name);
-							std::printf("\r\nSEASON:"); if(_tournament->season_name!=NULL) std::printf(_tournament->season_name); else std::printf(_tournament->name);
-							std::printf("\r\n");
-						}
-
-							std::strcat(socket_message_big, "\r\n***************************************************\r\n");
-							std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
-							std::strcat(socket_message_big, socket_message_little);
-							std::sprintf(socket_message_little, "Tournament id:%d\r\n", _tournament->id);
-							std::strcat(socket_message_big, socket_message_little);
-							std::strcat(socket_message_big, "NAME:");
-							std::strcat(socket_message_big, _tournament->name);
-							std::strcat(socket_message_big, "\r\nSEASON:");
-							if (_tournament->season_name != NULL) std::strcat(socket_message_big, _tournament->season_name);
-							else std::strcat(socket_message_big, _tournament->name);
-							std::strcat(socket_message_big, "\r\n");
-
-						
-
-							if (print == true) {
-								std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
-							}
-							std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
-							std::strcat(socket_message_big, "\r\n");
-						
-
-
-						if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run season %d\r\n", _tournament->category_id); continue; }
-						if (categories_id[_tournament->category_id] == NULL) {
-							std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _tournament->category_id);
-							if (getTournament(tournaments_id[_tournament->id], false) == -1);  continue;;
-						}
-						if (print == true) {
-							std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
-							std::printf("\r\n***************************************************\r\n");
-						}
-
-							//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
-							std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
-							std::strcat(socket_message_big, "\r\n");
-
-
-						
-
-
-						xml_node<> * odds = doc.first_node()->first_node("odds");
-						
-						if (odds != NULL) {
-							betstop_reason=0;
-
-							if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
-							_line->tournament_id = _tournament->id;
-							_line->event_id = 0;
-							_line->simple_id = 0;
-							_line->betstop_reason = betstop_reason;
-
-							for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
-							{       
-								outcomeNameError = 0;
-								if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
-								if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
-								if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
-								if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
-								if (_line->market_id >= MAX_MARKETS) {
-									std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
-								}
-								if (markets_id[_line->market_id] == NULL) {
-									std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
-								};
-								if (markets_id[_line->market_id][0] == NULL) {
-									std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
-								};
-								_line->variant = markets_id[_line->market_id][0]->variant;
-								_line->type = markets_id[_line->market_id][0]->type;
-								if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
-									if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;;
-									if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
-								}
-								if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
-								if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
-								_line->specifier_number = 0;
-								if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
-									if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
-									if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
-								}
-								if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
-								if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
-								_line->extended_specifier_number = 0;
-								if (market_node->first_attribute("specifiers")) {
-									n = 0;
-									m = market_node->first_attribute("specifiers")->value_size();
-									for (q = 0; q < m; q++) {
-										if (market_node->first_attribute("specifiers")->value()[q] == '=')
-											index_equally[n] = q;
-
-										if (market_node->first_attribute("specifiers")->value()[q] == '|') {
-											index_separator[n] = q; n++;
-										}
-
-									}
-									index_separator[n] = q; n++;
-
-
-
-
-									_line->specifier_number = n;
-									if (_line->specifier_number > 0) {
-										_line->specifier_value = new char*[_line->specifier_number];
-										_line->specifier = new char*[_line->specifier_number];
-
-
-										for (q = 0; q < _line->specifier_number; q++) {
-											if (q > 0) {
-												_line->specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
-												strncpy(_line->specifier[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
-												_line->specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
-											}
-											else {
-												_line->specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->specifier[q], market_node->first_attribute("specifiers")->value(), index_equally[q]); _line->specifier[q][index_equally[q]] = 0;
-
-
-											}
-
-											_line->specifier_value[q] = new char[index_separator[q] - index_equally[q]];
-											strncpy(_line->specifier_value[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
-											_line->specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-
-
-
-										}
-									}
-								}
-								if (market_node->first_attribute("extended_specifiers")) {
-									n = 0;
-									m = market_node->first_attribute("extended_specifiers")->value_size();
-									for (q = 0; q < m; q++) {
-										if (market_node->first_attribute("extended_specifiers")->value()[q] == '=')
-											index_equally[n] = q;
-
-										if (market_node->first_attribute("extended_specifiers")->value()[q] == '|') {
-											index_separator[n] = q; n++;
-										}
-
-									}
-									index_separator[n] = q; n++;
-
-
-
-									_line->extended_specifier_number = n;
-									if (_line->extended_specifier_number > 0) {
-										_line->extended_specifier_value = new char*[_line->extended_specifier_number];
-										_line->extended_specifier = new char*[_line->extended_specifier_number];
-
-
-										for (q = 0; q < _line->extended_specifier_number; q++) {
-											if (q > 0) {
-												_line->extended_specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
-												strncpy(_line->extended_specifier[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
-												_line->extended_specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
-											}
-											else {
-												_line->extended_specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->extended_specifier[q], market_node->first_attribute("extended_specifiers")->value(), index_equally[q]); _line->extended_specifier[q][index_equally[q]] = 0;
-
-
-											}
-
-											_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
-											strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
-											_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-											//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
-
-
-										}
-									}
-								}
-								outcomeNameError2:	if (_line->variant > -1) {
-									z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
-									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-									if (outcomeNameError==1 || u == max_markets_in[_line->market_id]) {
-										std::printf("Variant market2 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
-										for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-									}
-									_line->market = markets_id[_line->market_id][u];
-									if (outcomeNameError == 1) outcomeNameError = 2;
-									if (_line->type == 3) z = 16;
-								}
-								else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
-								outcome_number = 0;
-
-								for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
-
-
-									if (outcome_node->first_attribute("active")) outcome_active[outcome_number] = atoi(outcome_node->first_attribute("active")->value());
-									else outcome_active[outcome_number] = 0;
-									if (outcome_node->first_attribute("team")) outcome_team[outcome_number] = atoi(outcome_node->first_attribute("team")->value());
-									else outcome_team[outcome_number] = 0;
-									if (outcome_node->first_attribute("id")) {
-										outcome_id[outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + z));
-										if (outcome_id[outcome_number] == 0 && z > 0) {
-											outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
-											if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
-											else {
-												std::printf("_line->type=%d line->market_id=%d  _tournament->type_radar=%d  _line->tournament_id =%d \r\n", _line->type, _line->market_id, _tournament->type_radar, _line->tournament_id); std::printf(outcome_node->first_attribute("id")->value());
-
-											}
-										}
-
-									}
-									else outcome_id[outcome_number] = 0;
-
-
-									if (outcome_node->first_attribute("odds")) outcome_odds[outcome_number] = atof(outcome_node->first_attribute("odds")->value());
-									else outcome_odds[outcome_number] = 0;
-									if (outcome_node->first_attribute("probabilities")) outcome_probabilities[outcome_number] = atof(outcome_node->first_attribute("probabilities")->value());
-									else outcome_probabilities[outcome_number] = 0;
-									if (outcome_name[outcome_number] != NULL) delete[] outcome_name[outcome_number]; outcome_name[outcome_number] = NULL;
-									if (outcome_node->first_attribute("name")) {
-										outcome_name[outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
-										std::strcpy(outcome_name[outcome_number], outcome_node->first_attribute("name")->value());
-
-									}
-
-									outcome_number++;
-
-								}
-
-
-
-
-								if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != NULL) delete[] _line->outcome_name[i]; };
-
-
-								if (_line->outcome_id != NULL) delete[] _line->outcome_id; if (_line->outcome_active != NULL) delete[] _line->outcome_active; if (_line->outcome_team != NULL) delete[] _line->outcome_team; if (_line->outcome_odds != NULL) delete[] _line->outcome_odds;
-								if (_line->outcome_probabilities != NULL) delete[] _line->outcome_probabilities; if (_line->outcome_name != NULL) delete[] _line->outcome_name;
-								_line->outcome_probabilities = NULL; _line->outcome_name = NULL; _line->outcome_id = NULL; _line->outcome_odds = NULL; _line->outcome_active = NULL;
-								_line->outcome_team = NULL;
-
-
-
-								_line->outcome_number = outcome_number;
-								if (_line->outcome_number > 0) {
-									_line->outcome_name = new char*[_line->outcome_number];
-									_line->outcome_id = new int[_line->outcome_number];
-									_line->outcome_team = new int[_line->outcome_number];
-									_line->outcome_active = new int[_line->outcome_number];
-									_line->outcome_probabilities = new float[_line->outcome_number];
-									_line->outcome_odds = new float[_line->outcome_number];
-
-
-									if (_line->name != NULL) delete[] _line->name;
-
-
-									_line->name = new char[strlen(_line->market->name) + 1];
-									std::strcpy(_line->name, _line->market->name);
-									for (int i = 0; i < _line->specifier_number; i++) {
-										if (i == _line->variant) continue;
-
-										replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
-									} 
-									if (tournaments_id[_line->tournament_id]->season_name != NULL) replace(_line->name, "$event", tournaments_id[_line->tournament_id]->season_name);
-
-
-									if (print == true) {
-
-										std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
-									}
-
-
-										//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
-										std::strcat(socket_message_big, "\r\n");
-										std::strcat(socket_message_big, _line->name);
-										std::strcat(socket_message_big, "\r\n");
-										std::strcat(socket_message_big, "------------------------------------------------------------------------------\r\n");
-
-									
-
-
-
-
-
-									for (int i = 0; i < _line->outcome_number; i++) {
-										_line->outcome_name[i] = NULL;
-										_line->outcome_id[i] = outcome_id[i];
-										_line->outcome_active[i] = outcome_active[i];
-										_line->outcome_odds[i] = outcome_odds[i];
-										_line->outcome_team[i] = outcome_team[i];
-										_line->outcome_probabilities[i] = outcome_probabilities[i];
-
-
-										if (_line->type == 0) {
-											if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
-											else
-												for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
-
-											if (u < _line->market->outcome_number) {
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-											}
-											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]); 
-												_line->outcome_name[i] = new char[2];
-												std::strcpy(_line->outcome_name[i], " ");
-
-												if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
-													if (outcomeNameError == 0) outcomeNameError = 1;
-
-											}
-
-											for (int j = 0; j < _line->specifier_number; j++) {
-												if (j == _line->variant) continue;
-
-												replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-											}
-                                           if(tournaments_id[_line->tournament_id]->season_name !=NULL) replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
-
-
-
-										   if (print == true) {
-
-											   std::printf(_line->outcome_name[i]); std::printf("\t");
-											   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-											   std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										   }
-
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-
-
-											
-
-
-
-										}
-
-										if (_line->type == 1) {
-											if (_line->outcome_id[i] >= MAX_PLAYERS) {
-												std::printf("ERROR in run. player_id out of MAX_PLAYERS. _line->outcome_id[i]=%d  _line->market_id=%d tournament_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->tournament_id);
-												continue;
-
-											}
-											if(_line->outcome_team[i] != 3){
-											if (players_id[_line->outcome_id[i]] == NULL) {
-												std::printf("Player3 id=%d not found in market id=%d in tournament_id=%d  in run function . getPlayer\r\n", _line->outcome_id[i], _line->market_id, _line->tournament_id);
-												players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
-												{
-													std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
-													_line->outcome_name[i] = new char[2];
-													std::strcpy(_line->outcome_name[i], " ");
-												} else players_l++;
-											}
-
-											if (_line->outcome_name[i] == NULL) {
-												_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-													std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-													}
-												
-											}
-
-											if (_line->outcome_team[i] == 3) {
-
-												for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-												if (u < _line->market->outcome_number) {
-													_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-													std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-													for (int j = 0; j < _line->specifier_number; j++) {
-														if (j == _line->variant) continue;
-														replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-													}
-
-											if(tournaments_id[_line->tournament_id]->season_name!=NULL)	replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
-											
-												}
-												else {
-													_line->outcome_name[i] = new char[2];
-													std::strcpy(_line->outcome_name[i], " ");
-												}
-
-
-
-											}
-
-
-
-
-
-											if (print == true) {
-
-
-
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
-
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-
-
-											
-
-
-
-										}
-
-										if (_line->type == 2) {
-											if (_line->outcome_team[i] != 3) {
-												if (_line->outcome_id[i] >= MAX_COMPETITORS) {
-													std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d tournament_id=%d\r\n", _line->outcome_id[i], _line->market_id, _tournament->id);
-													continue;
-												}
-												if (competitors_id[_line->outcome_id[i]] == NULL) {
-													std::printf("Competitor id=%d not found in market id=%d in tournament_id=%d  in run season. getTournament\r\n", _line->outcome_id[i], _line->market_id, _tournament->id);
-													if (getTournament(tournaments_id[_tournament->id], false) == -1)
-														std::printf("ERROR!\r\nTournaments not found in run season %d \r\n", _tournament->id);
-												}
-
-												if (competitors_id[_line->outcome_id[i]] == NULL) {
-													std::printf("\r\nCompetitors id=%d not found in tournament id=%d after getTournament . Run getCompetitor\r\n", _line->outcome_id[i], _tournament->id);
-													competitors[competitors_l].id = _line->outcome_id[i];
-													if (getCompetitor(&competitors[competitors_l]) == -1) {
-														std::printf(" Error getCompetitor in run season. line type= 2 id competitor=%d \r\n", _line->outcome_id[i]);
-														_line->outcome_name[i] = new char[2];
-														std::strcpy(_line->outcome_name[i], " ");
-													}
-													else competitors_l++;
-												}
-
-												if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name); }
-
-											}
-											else
-											{
-												for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-												if (u < _line->market->outcome_number) {
-													_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-													std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-													for (int j = 0; j < _line->specifier_number; j++) {
-														if (j == _line->variant) continue;
-														replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-													}
-													
-													if (_tournament->season_name!=NULL) replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
-												}
-												else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
-											}
-											if (print == true) {
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
-
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-
-											
-										}
-
-										if (_line->type == 3) {
-
-											if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
-											else
-												for (u = 0; u < _line->market->outcome_number; u++) {
-
-
-													if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
-												}
-
-											if (u < _line->market->outcome_number) {
-
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-											}
-											else {
-												std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]); 
-												_line->outcome_name[i] = new char[2];
-												std::strcpy(_line->outcome_name[i], " ");
-
-												if (_line->market->variant > -1) 
-													printf("_line->market->variant=%s\r\n", _line->market->variable_text);
-												if (outcomeNameError == 0) outcomeNameError = 1;
-														
-											}
-
-											for (int j = 0; j < _line->specifier_number; j++) {
-												if (j == _line->variant) continue;
-
-												replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-											}
-
-											if (_tournament->season_name) replace(_line->outcome_name[i], "$event", tournaments_id[_line->tournament_id]->season_name);
-
-
-											//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
-
-											if (print == true) {
-
-												std::printf(_line->outcome_name[i]); std::printf("\t");
-												std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-												printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											}
-												std::strcat(socket_message_big, _line->outcome_name[i]);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-												std::strcat(socket_message_big, socket_message_little);
-												std::strcat(socket_message_big, "\t");
-												std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-												std::strcat(socket_message_big, socket_message_little);
-											
-
-
-
-										}
-
-
-									}
-
-									if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
-								}
-
-
-								if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-
-								auto it = compound2line_index.find(_line[0].getCompoundKey());
-								if (it == compound2line_index.end()) {
-									_line[0].id = lines_l;
-									lines[lines_l] = _line[0];
-									insert_line(_line[0], lines_l);
-									lines_l++;
-
-								}
-								else {
-									_line[0].id = it->second;
-									lines[it->second] = _line[0];
-
-									//printf("Line Update\r\n");
-								}
-								if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
-
-								if (recovery_state == 0) {
-
-									if (debug_output == true) printf("write buffer data\r\n");
-
-									//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
-									//if (_line->status == 0 || _line->status == -3) continue;
-									event_lines_l++;
-									writeInteger(buffer, offset, _line->id, 4);
-									writeInteger(buffer, offset, _line->betstop_reason, 1);
-									writeInteger(buffer, offset, _line->market_id, 2);
-									writeInteger(buffer, offset, _line->type, 1);
-									writeInteger(buffer, offset, _line->favourite, 1);
-									writeInteger(buffer, offset, _line->status, 1);
-									//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
-									writeInteger(buffer, offset, _line->outcome_number, 2);
-									for (int j = 0; j < _line->outcome_number; j++) {
-										writeInteger(buffer, offset, _line->outcome_id[j], 2);
-										writeInteger(buffer, offset, _line->outcome_active[j], 1);
-										if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-										if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-											writeString(buffer, offset, _line->outcome_name[j]);
-
-										writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
-									}
-
-									writeInteger(buffer, offset, _line->specifier_number, 1);
-									for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
-
-									if (debug_output == true) printf("end write buffer data\r\n");
-
-								}
-
-
-
-
-
-
-							}
-						}
-						if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
-}
-				if (type_radar < 2) {
-					if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
-					if (events_id[event_id] == NULL) {
-						std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
-						events[events_l].id = event_id;
-						events[events_l].type_radar = type_radar;
-						if (getEventFixture(&events[events_l]) == -1) { std::printf("ERROR!\r\n getEventFixture1 error return in run %d .\r\n", event_id); continue; }
-						events_l++;
-
-					}
-					_event = events_id[event_id];
-					if (_event->show == 0) {events_show[events_show_l] = _event; events_show_l++;
-				}
-					_event->show = 1;
-
-
-					if (print == true) {
-						std::printf("\r\n***************************************************\r\n");
-						std::printf("%d\r\n", _event->id);
-						std::printf(_event->home_name); if (_event->away_name != NULL) { std::printf(" - ");  std::printf(_event->away_name); }
-						std::printf("\r\n");
-					}
-
-						std::strcat(socket_message_big, "\r\n***************************************************\r\n");
-						std::sprintf(socket_message_little, "%d\r\n", _event->id);
-						std::strcat(socket_message_big, socket_message_little);
-						std::strcat(socket_message_big, _event->home_name);
-						if (_event->away_name != NULL) {std::strcat(socket_message_big, " - ");  std::strcat(socket_message_big, _event->away_name);
-						
-
-
-					}
-					if (_event->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nsevent sport_id out of MAX_SPORTS in run %d\r\n", _event->sport_id); continue; }
-					if (sports_id[_event->sport_id] == NULL) { std::printf("Sport not found. Run getSports. sport_id=%d\r\n", _event->sport_id); getSports(); }
-					if (print == true) {
-						std::printf(sports_id[_event->sport_id]->name); std::printf("\r\n");
-					}
-						std::strcat(socket_message_big, sports_id[_event->sport_id]->name);
-						std::strcat(socket_message_big, "\r\n");
-								        					
-					if (_event->type_radar < 2 && _event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->tournament_id); continue; }
-					if (_event->type_radar == 2 && _event->simple_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->simple_id); continue; }
-					if (_event->type_radar == 0 && tournaments_id[_event->tournament_id] == NULL) {
-						std::printf("Tournament not found. Run getTournament(). tournament_id=%d\r\n", _event->tournament_id);
-						tournaments[tournaments_l].id = _event->tournament_id;
-						tournaments[tournaments_l].type_radar = _event->type_radar;
-						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nTournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture2 error return in run %d .\r\n", _event->id); continue; } }
-						else tournaments_l++;
-
-
-					}
-					if (_event->type_radar == 2 && simples_id[_event->simple_id] == NULL) {
-						std::printf("Simple Tournament not found. Run getTournament(). simples_id=%d _event_id=%d\r\n ", _event->simple_id, _event->id);
-						tournaments[tournaments_l].simple_id = _event->simple_id;
-						tournaments[tournaments_l].id = 0;
-						tournaments[tournaments_l].type_radar = _event->type_radar;
-						if (getTournament(&tournaments[tournaments_l], true) == -1) { std::printf("ERROR!\r\nSimple Tournaments not found in run %d . Run getEventFixture\r\n", _event->tournament_id); if (getEventFixture(_event) == -1) { std::printf("ERROR!\r\n getEventFixture3 error return in run %d .\r\n", _event->id); continue; } }
-						else tournaments_l++;
-
-
-					}
-
-
-					if (print == true) {
-						if (_event->type_radar == 0) std::printf(tournaments_id[_event->tournament_id]->name);
-						if (_event->type_radar == 2) std::printf(simples_id[_event->simple_id]->name);
-						std::printf("\r\n");
-					}
-
-						if (_event->type_radar == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
-						if (_event->type_radar == 2) std::strcat(socket_message_big, simples_id[_event->simple_id]->name);
-						std::strcat(socket_message_big, "\r\n");
-
-						
-
-
-
-					
-
-					if (_event->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\nsevent category_id out of MAX_CATEGORIES in run %d\r\n", _event->category_id); continue; }
-					if (categories_id[_event->category_id] == NULL) {
-						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _event->category_id);
-						if (_event->type_radar == 0) {
-							if (getTournament(tournaments_id[_event->tournament_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
-						}
-						if (_event->type_radar == 2) {
-							if (getTournament(simples_id[_event->simple_id], false) == -1) if (getEventFixture(_event) == -1) continue;;
-						}
-
-
-					}
-					if (print == true) {
-						std::printf(categories_id[_event->category_id]->name); std::printf("\r\n");
-						std::printf("\r\n***************************************************\r\n");
-					}
-						std::strcat(socket_message_big, categories_id[_event->category_id]->name);
-						std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
-						
-
-					
-
-					if (doc.first_node()->first_attribute("timestamp")) _event->timestamp = atoi(doc.first_node()->first_attribute("timestamp")->value());
-
-					xml_node<> * sport_event_status = doc.first_node()->first_node("sport_event_status");
-					if (sport_event_status != NULL) {
-
-						xml_node<> * statistics = sport_event_status->first_node("statistics");
-
-						if (statistics != NULL) {
-						
-							if (statistics->first_node("yellow_cards")) {
-								_event->home_yellowcards = atoi(statistics->first_node("yellow_cards")->first_attribute("home")->value());
-								_event->away_yellowcards = atoi(statistics->first_node("yellow_cards")->first_attribute("away")->value());
-							}
-							
-							if (statistics->first_node("red_cards")) {
-								_event->home_redcards = atoi(statistics->first_node("red_cards")->first_attribute("home")->value());
-								_event->away_redcards = atoi(statistics->first_node("red_cards")->first_attribute("away")->value());
-							}
-							if (statistics->first_node("yellow_red_cards")) {
-								_event->home_yellow_red_cards = atoi(statistics->first_node("yellow_red_cards")->first_attribute("home")->value());
-								_event->away_yellow_red_cards = atoi(statistics->first_node("yellow_red_cards")->first_attribute("away")->value());
-							}
-						
-							if (statistics->first_node("corners")) {
-								_event->home_corners = atoi(statistics->first_node("corners")->first_attribute("home")->value());
-								_event->away_corners = atoi(statistics->first_node("corners")->first_attribute("away")->value());
-							}
-												
-						}
-
-
-						if (sport_event_status->first_attribute("status")) _event->status = atoi(sport_event_status->first_attribute("status")->value());
-						if (sport_event_status->first_attribute("possession")) _event->possession = atoi(sport_event_status->first_attribute("possession")->value());
-						if (sport_event_status->first_attribute("try")) _event->try_num = atoi(sport_event_status->first_attribute("try")->value());
-						if (sport_event_status->first_attribute("throw")) _event->throw_num = atoi(sport_event_status->first_attribute("throw")->value());
-						if (sport_event_status->first_attribute("delivery")) _event->delivery = atoi(sport_event_status->first_attribute("delivery")->value());
-						if (sport_event_status->first_attribute("current_ct_team")) _event->delivery = atoi(sport_event_status->first_attribute("current_ct_team")->value());
-						if (sport_event_status->first_attribute("yards")) _event->yards = atoi(sport_event_status->first_attribute("yards")->value());
-						if (sport_event_status->first_attribute("innings")) _event->innings = atoi(sport_event_status->first_attribute("innings")->value());
-						if (sport_event_status->first_attribute("over")) _event->over = atoi(sport_event_status->first_attribute("over")->value());
-						if (sport_event_status->first_attribute("current_end")) _event->current_end = atoi(sport_event_status->first_attribute("current_end")->value());
-						if (sport_event_status->first_attribute("position")) _event->position = atoi(sport_event_status->first_attribute("position")->value());
-						if (sport_event_status->first_attribute("away_yellowcards")) 
-							_event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellowcards")->value()); 
-						if (sport_event_status->first_attribute("home_yellowcards")) _event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellowcards")->value()); 
-						if (sport_event_status->first_attribute("away_yellow_cards")) 
-							_event->away_yellowcards = atoi(sport_event_status->first_attribute("away_yellow_cards")->value()); 
-						if (sport_event_status->first_attribute("home_yellow_cards")) 
-							_event->home_yellowcards = atoi(sport_event_status->first_attribute("home_yellow_cards")->value()); 
-						if (sport_event_status->first_attribute("away_redcards")) _event->away_redcards = atoi(sport_event_status->first_attribute("away_redcards")->value());
-						if (sport_event_status->first_attribute("home_redcards")) _event->home_redcards = atoi(sport_event_status->first_attribute("home_redcards")->value());
-						if (sport_event_status->first_attribute("away_dismissals")) _event->away_dismissals = atoi(sport_event_status->first_attribute("away_dismissals")->value());
-						if (sport_event_status->first_attribute("home_dismissals")) _event->home_dismissals = atoi(sport_event_status->first_attribute("home_dismissals")->value());
-						if (sport_event_status->first_attribute("away_penalty_runs")) _event->away_penalty_runs = atoi(sport_event_status->first_attribute("away_penalty_runs")->value());
-						if (sport_event_status->first_attribute("home_penalty_runs")) _event->home_penalty_runs = atoi(sport_event_status->first_attribute("home_penalty_runs")->value());
-						if (sport_event_status->first_attribute("away_score")) _event->away_score = atof(sport_event_status->first_attribute("away_score")->value());
-						if (sport_event_status->first_attribute("home_score")) _event->home_score = atof(sport_event_status->first_attribute("home_score")->value());
-						if (sport_event_status->first_attribute("away_gamescore")) _event->away_gamescore = atoi(sport_event_status->first_attribute("away_gamescore")->value());
-						if (sport_event_status->first_attribute("home_gamescore")) _event->home_gamescore = atoi(sport_event_status->first_attribute("home_gamescore")->value());
-						if (sport_event_status->first_attribute("away_legscore")) _event->away_legscore = atoi(sport_event_status->first_attribute("away_legscore")->value());
-						if (sport_event_status->first_attribute("home_legscore")) _event->home_legscore = atoi(sport_event_status->first_attribute("home_legscore")->value());
-                        if (sport_event_status->first_attribute("visit")) _event->visit = atoi(sport_event_status->first_attribute("visit")->value());
-						if (sport_event_status->first_attribute("reporting")) _event->reporting = atoi(sport_event_status->first_attribute("reporting")->value());
-						if (sport_event_status->first_attribute("remaining_reds")) _event->remaining_reds = atoi(sport_event_status->first_attribute("remaining_reds")->value());
-						if (sport_event_status->first_attribute("match_status")) _event->match_status = atoi(sport_event_status->first_attribute("match_status")->value());
-						if (sport_event_status->first_attribute("home_suspend")) _event->home_suspend = atoi(sport_event_status->first_attribute("home_suspend")->value());
-						if (sport_event_status->first_attribute("away_suspend")) _event->away_suspend = atoi(sport_event_status->first_attribute("away_suspend")->value());
-						if (sport_event_status->first_attribute("current_server")) _event->current_server = atoi(sport_event_status->first_attribute("current_server")->value());
-						if (sport_event_status->first_attribute("winner_id")) _event->winner_id = atoi(sport_event_status->first_attribute("winner_id")->value());
-						if (sport_event_status->first_attribute("home_batter")) _event->home_batter = atoi(sport_event_status->first_attribute("home_batter")->value());
-						if (sport_event_status->first_attribute("away_batter")) _event->away_batter = atoi(sport_event_status->first_attribute("away_batter")->value());
-						if (sport_event_status->first_attribute("away_remaining_bowls")) _event->away_remaining_bowls = atoi(sport_event_status->first_attribute("away_remaining_bowls")->value());
-						if (sport_event_status->first_attribute("home_remaining_bowls")) _event->home_remaining_bowls = atoi(sport_event_status->first_attribute("home_remaining_bowls")->value());
-						if (sport_event_status->first_attribute("outs")) _event->outs = atoi(sport_event_status->first_attribute("outs")->value());
-						if (sport_event_status->first_attribute("strikes")) _event->strikes = atoi(sport_event_status->first_attribute("strikes")->value());
-						if (sport_event_status->first_attribute("balls")) _event->balls = atoi(sport_event_status->first_attribute("balls")->value());
-						if (sport_event_status->first_attribute("bases")) {
-							if (_event->bases != NULL) { delete[] _event->bases; _event->bases = NULL; }
-							_event->bases = new char[strlen(sport_event_status->first_attribute("bases")->value()) + 1];
-							std::strcpy(_event->bases, sport_event_status->first_attribute("bases")->value());
-
-						}
-
-
-
-
-						if (sport_event_status->first_attribute("tiebreak") && sport_event_status->first_attribute("tiebreak")->value()[0] == 't' && sport_event_status->first_attribute("tiebreak")->value()[1] == 'r')  _event->tiebreak = 1;
-						if (sport_event_status->first_attribute("tiebreak") && sport_event_status->first_attribute("tiebreak")->value()[0] == 'f' && sport_event_status->first_attribute("tiebreak")->value()[1] == 'a')  _event->tiebreak = 0;
-
-						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 't' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'r')  _event->expedite_mode = 1;
-						if (sport_event_status->first_attribute("expedite_mode") && sport_event_status->first_attribute("expedite_mode")->value()[0] == 'f' && sport_event_status->first_attribute("expedite_mode")->value()[1] == 'a')  _event->expedite_mode = 0;
-
-
-
-
-						xml_node<> * period_scores = sport_event_status->first_node("period_scores");
-
-						j = 0;
-						if (period_scores != NULL) {
-
-
-							for (xml_node<> * period_score = period_scores->first_node("period_score"); period_score; period_score = period_score->next_sibling())
-							{
-								if (j == 0) strcpy(set_scores, period_score->first_attribute("home_score")->value());
-								if (j > 0) {
-									std::strcat(set_scores, "-");
-									std::strcat(set_scores, period_score->first_attribute("home_score")->value());
-								}
-								std::strcat(set_scores, ":");
-								std::strcat(set_scores, period_score->first_attribute("away_score")->value());
-								j++;
-							}
-
-							//printf(set_scores);
-							//printf("\r\n");
-							if (_event->set_scores != NULL) { delete[] _event->set_scores; _event->set_scores = NULL; }
-							_event->set_scores = new char[strlen(set_scores) + 1]; strcpy(_event->set_scores, set_scores);
-						}
-
-
-
-
-						xml_node<> * clock = sport_event_status->first_node("clock");
-						if (clock != NULL) {
-
-							if (clock->first_attribute("stopped") && clock->first_attribute("stopped")->value()[0] == 't' && clock->first_attribute("stopped")->value()[1] == 'r')  _event->stopped = 1;
-
-							if (clock->first_attribute("stopped") && clock->first_attribute("stopped")->value()[0] == 'f' && clock->first_attribute("stopped")->value()[1] == 'a')  _event->stopped = 0;
-
-							if (clock->first_attribute("remaining_time_in_period")) {
-								if (_event->remaining_time_in_period != NULL) delete[] _event->remaining_time_in_period;
-								_event->remaining_time_in_period = new char[strlen(clock->first_attribute("remaining_time_in_period")->value()) + 1];
-								std::strcpy(_event->remaining_time_in_period, clock->first_attribute("remaining_time_in_period")->value());
-							}
-
-							if (clock->first_attribute("stoppage_time")) {
-								if (_event->stoppage_time != NULL) delete[] _event->stoppage_time;
-								_event->stoppage_time = new char[strlen(clock->first_attribute("stoppage_time")->value()) + 1];
-								std::strcpy(_event->stoppage_time, clock->first_attribute("stoppage_time")->value());
-							}
-							if (clock->first_attribute("stoppage_time_announced")) {
-								if (_event->stoppage_time_announced != NULL) delete[] _event->stoppage_time_announced;
-								_event->stoppage_time_announced = new char[strlen(clock->first_attribute("stoppage_time_announced")->value()) + 1];
-								std::strcpy(_event->stoppage_time_announced, clock->first_attribute("stoppage_time_announced")->value());
-							}
-							
-
-							if (clock->first_attribute("remaining_time")) {
-								if (_event->remaining_time != NULL) delete[] _event->remaining_time;
-								_event->remaining_time = new char[strlen(clock->first_attribute("remaining_time")->value()) + 1];
-								std::strcpy(_event->remaining_time, clock->first_attribute("remaining_time")->value());
-							}
-
-							if (clock->first_attribute("match_time")) {
-								if (_event->match_time != NULL) delete[] _event->match_time;
-								_event->match_time = new char[strlen(clock->first_attribute("match_time")->value()) + 1];
-								std::strcpy(_event->match_time, clock->first_attribute("match_time")->value());
-							}
-
-
-						}
-
-
-					}
-
-				//	if (_event->status > 0) print = true; else print = false;
-
-					if (print == true) {
-						if (_event->set_scores != NULL) { std::printf("set_scores="); std::printf(_event->set_scores); }
-						if (_event->match_time != NULL) { std::printf("match_time="); std::printf(_event->match_time); std::printf(" "); }
-						if (_event->remaining_time != NULL) { std::printf("remaining_time="); std::printf(_event->remaining_time); std::printf(" "); }
-						if (_event->remaining_time_in_period != NULL) { std::printf("remaining_time_in_period="); std::printf(_event->remaining_time_in_period); std::printf(" "); }
-						if (_event->bases != NULL) { std::printf("bases="); std::printf(_event->bases); std::printf(" "); }
-
-
-						std::printf("stopped=%d ", _event->stopped);
-						std::printf("period_length=%d ", _event->period_length);
-						std::printf("numbers of set=%d ", _event->bo);
-						std::printf("status=%d ", _event->status); std::printf("possession=%d ", _event->possession); std::printf("home_score=%g ", _event->away_score);
-						std::printf("away_score=%g ", _event->away_score); std::printf("home_yellowcards=%d ", _event->home_yellowcards); std::printf("away_yellowcards=%d ", _event->away_yellowcards); std::printf("home_redcards=%d ", _event->home_redcards); std::printf("away_redcards=%d ", _event->away_redcards); std::printf("expedite_mode=%d ", _event->expedite_mode); std::printf("tiebreak=%d ", _event->tiebreak); std::printf("outs=%d ", _event->outs); std::printf("strikes=%d ", _event->strikes); std::printf("balls=%d ", _event->balls);  std::printf("home_remaining_bowls=%d ", _event->home_remaining_bowls);
-						std::printf("away_remaining_bowls=%d ", _event->away_remaining_bowls); std::printf("home_batter=%d ", _event->home_batter); std::printf("away_batter=%d ", _event->away_batter); std::printf("winner_id=%d ", _event->winner_id); std::printf("home_suspend=%d ", _event->home_suspend); std::printf("away_suspend=%d ", _event->away_suspend); std::printf("match_status=%d ", _event->match_status); std::printf("remaining_reds=%d ", _event->remaining_reds); std::printf("reporting=%d ", _event->reporting); std::printf("position=%d ", _event->position); std::printf("home_gamescore=%d ", _event->home_gamescore); std::printf("away_gamescore=%d ", _event->away_gamescore); std::printf("visit=%d ", _event->visit); std::printf("home_dismissals=%d ", _event->home_dismissals); std::printf("away_dismissals=%d ", _event->away_dismissals); std::printf("home_penalty_runs=%d ", _event->home_penalty_runs);	std::printf("away_penalty_runs=%d ", _event->away_penalty_runs);
-						std::printf("over=%d ", _event->over); std::printf("try_num=%d ", _event->try_num); std::printf("trow_num=%d ", _event->throw_num);
-						std::printf("delivery=%d ", _event->delivery); std::printf("yards=%d ", _event->yards); std::printf("current_server=%d ", _event->current_server);
-						std::printf("innings=%d ", _event->innings);
-						std::printf("\r\n\r\n");
-					}
-
-					xml_node<> * odds = doc.first_node()->first_node("odds");
-
-
-					if (recovery_state == 0) {
-						writeInteger(buffer, offset, 1, 2);
-						writeInteger(buffer, offset, type_radar, 1);
-						writeInteger(buffer, offset, _event->id, 4);
-						writeInteger(buffer, offset, _event->home_id, 4);
-						writeInteger(buffer, offset, _event->away_id, 4);
-
-						writeInteger(buffer, offset, _event->type_radar, 1);
-						writeInteger(buffer, offset, _event->status, 1);
-						writeInteger(buffer, offset, _event->sport_id, 2);
-						writeInteger(buffer, offset, _event->category_id, 2);
-						if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
-						else writeInteger(buffer, offset, _event->simple_id, 4);
-						writeInteger(buffer, offset, _event->start_time + 4 * 3600, 4);
-						writeInteger(buffer, offset, _event->period_length, 1);
-						writeInteger(buffer, offset, _event->overtime_length, 1);
-						if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
-						writeString(buffer, offset, _event->home_name);
-						writeString(buffer, offset, _event->away_name);
-						writeString(buffer, offset, _event->tv_channels);
-						if (_event->status == 0)  writeInteger(buffer, offset, _event->booked, 1);
-						if (_event->status > 0) {
-
-							writeInteger(buffer, offset, (int)(_event->home_score * 100), 2);
-							writeInteger(buffer, offset, (int)(_event->away_score * 100), 2);
-							writeString(buffer, offset, _event->set_scores);
-							writeString(buffer, offset, _event->match_time);
-							writeString(buffer, offset, _event->remaining_time);
-							writeString(buffer, offset, _event->remaining_time_in_period);
-							writeString(buffer, offset, matchstatus_id[_event->match_status]->description);
-							writeInteger(buffer, offset, _event->stopped, 1);
-							//writeInteger(buffer, offset, _event->stopped, 1); 
-							if (_event->sport_id == 1) {
-								writeInteger(buffer, offset, _event->home_redcards, 1);
-								writeInteger(buffer, offset, _event->home_yellowcards, 1);
-								writeInteger(buffer, offset, _event->away_redcards, 1);
-								writeInteger(buffer, offset, _event->away_yellowcards, 1);
-								writeString(buffer, offset, _event->stoppage_time);
-								writeString(buffer, offset, _event->stoppage_time_announced);
-								writeInteger(buffer, offset, _event->home_corners, 1);
-								writeInteger(buffer, offset, _event->away_corners, 1);
-								writeInteger(buffer, offset, _event->home_yellow_red_cards, 1);
-								writeInteger(buffer, offset, _event->away_yellow_red_cards, 1);
-							}
-
-							if (_event->sport_id == 5) {
-								writeInteger(buffer, offset, _event->home_gamescore, 1);
-								writeInteger(buffer, offset, _event->away_gamescore, 1);
-								writeInteger(buffer, offset, _event->tiebreak, 1);
-							}
-
-							if (_event->sport_id == 20) writeInteger(buffer, offset, _event->expedite_mode, 1);
-
-
-							if (_event->sport_id == 4 || _event->sport_id == 6 || _event->sport_id == 29) {
-								writeInteger(buffer, offset, _event->home_suspend, 1); writeInteger(buffer, offset, _event->away_suspend, 1);
-							}
-
-
-							if (_event->sport_id == 5 || _event->sport_id == 20 || _event->sport_id == 34 || _event->sport_id == 19 || _event->sport_id == 23 || _event->sport_id == 22 || _event->sport_id == 31)
-								writeInteger(buffer, offset, _event->current_server, 1);
-
-
-							if (_event->sport_id == 3) {
-								writeInteger(buffer, offset, _event->home_batter, 1);
-								writeInteger(buffer, offset, _event->away_batter, 1);
-								writeInteger(buffer, offset, _event->outs, 1);
-								writeInteger(buffer, offset, _event->balls, 1);
-								writeInteger(buffer, offset, _event->strikes, 1);
-								writeString(buffer, offset, _event->bases);
-							}
-
-							if (_event->sport_id == 16) {
-								writeInteger(buffer, offset, _event->possession, 1);
-								writeInteger(buffer, offset, _event->try_num, 1);
-								writeInteger(buffer, offset, _event->yards, 1);
-							}
-
-
-
-
-							if (_event->sport_id == 19) {
-								writeInteger(buffer, offset, _event->visit, 1);
-								writeInteger(buffer, offset, _event->remaining_reds, 1);
-							}
-
-
-							if (_event->sport_id == 22) {
-								writeInteger(buffer, offset, _event->home_legscore, 1);
-								writeInteger(buffer, offset, _event->away_legscore, 1);
-								writeInteger(buffer, offset, _event->throw_num, 1);
-								writeInteger(buffer, offset, _event->visit, 1);
-							}
-
-							if (_event->sport_id == 32) {
-								writeInteger(buffer, offset, _event->delivery, 1);
-								writeInteger(buffer, offset, _event->home_remaining_bowls, 1);
-								writeInteger(buffer, offset, _event->away_remaining_bowls, 1);
-								writeInteger(buffer, offset, _event->current_end, 1);
-							}
-
-							if (_event->sport_id == 21) {
-								writeInteger(buffer, offset, _event->home_dismissals, 1);
-								writeInteger(buffer, offset, _event->away_dismissals, 1);
-								writeInteger(buffer, offset, _event->home_penalty_runs, 1);
-								writeInteger(buffer, offset, _event->away_penalty_runs, 1);
-								writeInteger(buffer, offset, _event->innings, 1);
-								writeInteger(buffer, offset, _event->over, 1);
-								writeInteger(buffer, offset, _event->delivery, 1);
-
-							}
-
-							if (_event->sport_id == 0) writeInteger(buffer, offset, _event->current_ct_team, 1);
-
-							writeInteger(buffer, offset, _event->position, 1);
-
-						}
-
-						if (event2lines.find(_event->id) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
-						else writeInteger(buffer, offset, event2lines[_event->id]->size(), 2);
-						retry_offset = offset;
-						offset += 2;
-						event_lines_l = 0;
-					}
-
-
-
-
-
-					if (odds != NULL) {
-						betstop_reason = 0;
-						if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
-						_line->betstop_reason = betstop_reason;
-						_line->event_id = event_id;
-						_line->tournament_id = 0;
-						_line->simple_id = 0;
-						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
-						{
-							outcomeNameError = 0;
-							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
-							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
-							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
-							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
-
-							//if (_line->market_id == 1) printf(" markets_id[_line->market_id][0]->line_type=%d\r\n", markets_id[_line->market_id][0]->line_type);
-							if (_line->market_id >= MAX_MARKETS) {
-								std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
-							}
-							if (markets_id[_line->market_id] == NULL) {
-								std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
-							};
-							if (markets_id[_line->market_id][0] == NULL) {
-								std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
-							};
-							_line->variant = markets_id[_line->market_id][0]->variant;
-							_line->type = markets_id[_line->market_id][0]->type;
-							if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
-								if (_line->specifier[q] != NULL) delete[] _line->specifier[q]; _line->specifier[q] = NULL;
-								if (_line->specifier_value[q] != NULL)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = NULL;
-							}
-							if (_line->specifier != NULL) { delete[] _line->specifier; _line->specifier = NULL; }
-							if (_line->specifier_value != NULL) { delete[] _line->specifier_value; _line->specifier_value = NULL; }
-							_line->specifier_number = 0;
-							if (_line->extended_specifier_number > 0) for (q = 0; q < _line->extended_specifier_number; q++) {
-								if (_line->extended_specifier[q] != NULL) delete[] _line->extended_specifier[q];
-								if (_line->extended_specifier_value[q] != NULL)  delete[] _line->extended_specifier_value[q];
-							}
-							if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
-							if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
-							_line->extended_specifier_number = 0;
-							if (market_node->first_attribute("specifiers")) {
-								n = 0;
-								m = market_node->first_attribute("specifiers")->value_size();
-								for (q = 0; q < m; q++) {
-									if (market_node->first_attribute("specifiers")->value()[q] == '=')
-										index_equally[n] = q;
-
-									if (market_node->first_attribute("specifiers")->value()[q] == '|') {
-										index_separator[n] = q; n++;
-									}
-
-								}
-								index_separator[n] = q; n++;
-
-
-
-
-								_line->specifier_number = n;
-								if (_line->specifier_number > 0) {
-									_line->specifier_value = new char*[_line->specifier_number];
-									_line->specifier = new char*[_line->specifier_number];
-
-
-									for (q = 0; q < _line->specifier_number; q++) {
-										if (q > 0) {
-											_line->specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
-											strncpy(_line->specifier[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
-											_line->specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
-										}
-										else {
-											_line->specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->specifier[q], market_node->first_attribute("specifiers")->value(), index_equally[q]); _line->specifier[q][index_equally[q]] = 0;
-
-
-										}
-
-										_line->specifier_value[q] = new char[index_separator[q] - index_equally[q]];
-										strncpy(_line->specifier_value[q], (char*)((char*)market_node->first_attribute("specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
-										_line->specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-
-
-
-									}
-								}
-							}
-							if (market_node->first_attribute("extended_specifiers")) {
-								n = 0;
-								m = market_node->first_attribute("extended_specifiers")->value_size();
-								for (q = 0; q < m; q++) {
-									if (market_node->first_attribute("extended_specifiers")->value()[q] == '=')
-										index_equally[n] = q;
-
-									if (market_node->first_attribute("extended_specifiers")->value()[q] == '|') {
-										index_separator[n] = q; n++;
-									}
-
-								}
-								index_separator[n] = q; n++;
-
-
-
-								_line->extended_specifier_number = n;
-								if (_line->extended_specifier_number > 0) {
-									_line->extended_specifier_value = new char*[_line->extended_specifier_number];
-									_line->extended_specifier = new char*[_line->extended_specifier_number];
-
-
-									for (q = 0; q < _line->extended_specifier_number; q++) {
-										if (q > 0) {
-											_line->extended_specifier[q] = new char[index_equally[q] - index_separator[q - 1]];
-											strncpy(_line->extended_specifier[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_separator[q - 1]) + 1, index_equally[q] - index_separator[q - 1] - 1);
-											_line->extended_specifier[q][index_equally[q] - index_separator[q - 1] - 1] = 0;
-										}
-										else {
-											_line->extended_specifier[q] = new char[index_equally[q] + 1]; strncpy(_line->extended_specifier[q], market_node->first_attribute("extended_specifiers")->value(), index_equally[q]); _line->extended_specifier[q][index_equally[q]] = 0;
-
-
-										}
-
-										_line->extended_specifier_value[q] = new char[index_separator[q] - index_equally[q]];
-										strncpy(_line->extended_specifier_value[q], (char*)((char*)market_node->first_attribute("extended_specifiers")->value() + index_equally[q]) + 1, index_separator[q] - index_equally[q] - 1);
-										_line->extended_specifier_value[q][index_separator[q] - index_equally[q] - 1] = 0;
-										//printf(_line->extended_specifier[q]);std::printf("\r\n");std::printf(_line->extended_specifier_value[q]);std::printf("\r\n");
-
-
-									}
-								}
-							}
-							outcomeNameError3: if (_line->variant > -1) {
-								z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
-								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-								if (outcomeNameError==1 || u == max_markets_in[_line->market_id]) {
-									std::printf("Variant market3 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
-									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
-								}
-								_line->market = markets_id[_line->market_id][u];
-								if (outcomeNameError == 1) outcomeNameError = 2;
-								if (_line->type == 3) z = 16;
-							}
-							else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
-							outcome_number = 0;
-
-							for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
-
-
-								if (outcome_node->first_attribute("active")) outcome_active[outcome_number] = atoi(outcome_node->first_attribute("active")->value());
-								else outcome_active[outcome_number] = 0;
-								if (outcome_node->first_attribute("team")) outcome_team[outcome_number] = atoi(outcome_node->first_attribute("team")->value());
-								else outcome_team[outcome_number] = 0;
-								if (outcome_node->first_attribute("id")) {
-									outcome_id[outcome_number] = atoi((char*)((char*)outcome_node->first_attribute("id")->value() + z));
-									if (outcome_id[outcome_number] == 0 && z > 0) {
-										outcome_id[outcome_number] = atoi(outcome_node->first_attribute("id")->value());
-										if (outcome_id[outcome_number] > 0) outcome_team[outcome_number] = 3;
-										else {
-											std::printf("_line->type=%d line->market_id=%d  _event->type_radar=%d  _line->event_id =%d \r\n", _line->type, _line->market_id, _event->type_radar, _line->event_id); std::printf(outcome_node->first_attribute("id")->value());
-
-										}
-									}
-
-								}
-								else outcome_id[outcome_number] = 0;
-
-
-								if (outcome_node->first_attribute("odds")) outcome_odds[outcome_number] = atof(outcome_node->first_attribute("odds")->value());
-								else outcome_odds[outcome_number] = 0;
-								if (outcome_node->first_attribute("probabilities")) outcome_probabilities[outcome_number] = atof(outcome_node->first_attribute("probabilities")->value());
-								else outcome_probabilities[outcome_number] = 0;
-								if (outcome_name[outcome_number] != NULL) delete[] outcome_name[outcome_number]; outcome_name[outcome_number] = NULL;
-								if (outcome_node->first_attribute("name")) {
-									outcome_name[outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
-									std::strcpy(outcome_name[outcome_number], outcome_node->first_attribute("name")->value());
-
-								}
-
-								outcome_number++;
-
-							}
-
-
-
-
-							if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != NULL) delete[] _line->outcome_name[i]; };
-
-
-							if (_line->outcome_id != NULL) delete[] _line->outcome_id; if (_line->outcome_active != NULL) delete[] _line->outcome_active; if (_line->outcome_team != NULL) delete[] _line->outcome_team; if (_line->outcome_odds != NULL) delete[] _line->outcome_odds;
-							if (_line->outcome_probabilities != NULL) delete[] _line->outcome_probabilities; if (_line->outcome_name != NULL) delete[] _line->outcome_name;
-							_line->outcome_probabilities = NULL; _line->outcome_name = NULL; _line->outcome_id = NULL; _line->outcome_odds = NULL; _line->outcome_active = NULL;
-							_line->outcome_team = NULL;
-
-
-
-							_line->outcome_number = outcome_number;
-							if (_line->outcome_number > 0) {
-								_line->outcome_name = new char*[_line->outcome_number];
-								_line->outcome_id = new int[_line->outcome_number];
-								_line->outcome_team = new int[_line->outcome_number];
-								_line->outcome_active = new int[_line->outcome_number];
-								_line->outcome_probabilities = new float[_line->outcome_number];
-								_line->outcome_odds = new float[_line->outcome_number];
-
-
-								if (_line->name != NULL) delete[] _line->name;
-
-
-								_line->name = new char[strlen(_line->market->name) + 1];
-								std::strcpy(_line->name, _line->market->name);
-								for (int i = 0; i < _line->specifier_number; i++) {
-									if (i == _line->variant) continue;
-
-									replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
-								}
-
-								replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
-								if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
-								if (_event->type_radar > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
-
-
-								if (print == true) {
-
-									std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
-								}
-
-									std::strcat(socket_message_big, "\r\n");
-									std::strcat(socket_message_big, _line->name);
-									std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
-
-
-								
-
-
-
-
-
-								for (int i = 0; i < _line->outcome_number; i++) {
-									_line->outcome_name[i] = NULL;
-									_line->outcome_id[i] = outcome_id[i];
-									_line->outcome_active[i] = outcome_active[i];
-									_line->outcome_odds[i] = outcome_odds[i];
-									_line->outcome_team[i] = outcome_team[i];
-									_line->outcome_probabilities[i] = outcome_probabilities[i];
-
-
-									if (_line->type == 0) {
-										if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
-										else
-											for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
-
-										if (u < _line->market->outcome_number) {
-											_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-											std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-										}
-										else {
-											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-											
-											_line->outcome_name[i] = new char[2];
-											std::strcpy(_line->outcome_name[i], " ");
-											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
-											if (outcomeNameError == 0) outcomeNameError = 1;
-											
-
-										}
-
-										for (int j = 0; j < _line->specifier_number; j++) {
-											if (j == _line->variant) continue;
-
-											replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-										}
-
-										replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-										if (_event->away_name != NULL) replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-										if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
-
-
-
-										if (print == true) {
-
-											std::printf(_line->outcome_name[i]); std::printf("\t");
-											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-											std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										}
-											std::strcat(socket_message_big, _line->outcome_name[i]);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-											std::strcat(socket_message_big, socket_message_little);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											std::strcat(socket_message_big, socket_message_little);
-
-
-										
-
-
-
-									}
-
-									if (_line->type == 1) {
-										if (_line->outcome_id[i] >= MAX_PLAYERS) {
-											std::printf("ERROR in run. player_id out of MAX_PLAYERS. _line->outcome_id[i]=%d  _line->market_id=%d event_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-											continue;
-
-										}
-
-										if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 2) {
-											std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-											if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
-												std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", events_id[_line->event_id]->away_id, _line->event_id);
-												continue;
-											}
-
-											if (competitors_id[events_id[_line->event_id]->away_id] == NULL) {
-												std::printf("Competitor id %d not found in team 2 run. getCompetitor\r\n", events_id[_line->event_id]->away_id);
-												competitors[competitors_l].id = events_id[_line->event_id]->away_id;
-												if (getCompetitor(&competitors[competitors_l]) == -1) {
-													std::printf(" Error get competitors id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
-												}
-												else competitors_l++;
-
-
-											}
-										}
-
-										if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 1) {
-											std::printf("Player5 id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-											if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
-												std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", events_id[_line->event_id]->home_id, _line->event_id);
-												continue;
-											}
-
-											if (competitors_id[events_id[_line->event_id]->home_id] == NULL) {
-												std::printf("Competitor id %d not found in team 1 run. getCompetitor\r\n", events_id[_line->event_id]->home_id);
-												competitors[competitors_l].id = events_id[_line->event_id]->home_id;
-												if (getCompetitor(&competitors[competitors_l]) == -1) {
-													std::printf(" Error get competitors id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
-												}
-												else competitors_l++;
-
-
-											}
-										}
-									
-
-										if (_line->outcome_team[i] < 3 && players_id[_line->outcome_id[i]] == NULL) {
-											std::printf("Player6 id=%d  not found in run after get competitor. getPlayer\r\n ", _line->outcome_id[i]);
-											players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
-											{
-												std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
-												_line->outcome_name[i] = new char[2];
-												std::strcpy(_line->outcome_name[i], " ");
-											} else players_l++;
-										}
-
-										if (_line->outcome_team[i] < 3 && _line->outcome_name[i] == NULL) {
-											if (_line->outcome_team[i] == 1) {
-												_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
-												std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-												std::strcat(_line->outcome_name[i], " (");
-												std::strcat(_line->outcome_name[i], _event->home_name);
-												std::strcat(_line->outcome_name[i], ")");
-
-											}
-											if (_line->outcome_team[i] == 2) {
-												if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-												std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-												if (_event->away_name != NULL) {
-													std::strcat(_line->outcome_name[i], " (");
-													std::strcat(_line->outcome_name[i], _event->away_name);
-													std::strcat(_line->outcome_name[i], ")");
-												}
-
-											}
-
-										}
-
-										if (_line->outcome_team[i] == 3) {
-
-											for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-											if (u < _line->market->outcome_number) {
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-												for (int j = 0; j < _line->specifier_number; j++) {
-													if (j == _line->variant) continue;
-
-													replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-												}
-
-												replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-												replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-												if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
-
-
-
-											}
-											else {
-												_line->outcome_name[i] = new char[2];
-												std::strcpy(_line->outcome_name[i], " ");
-											}
-
-
-
-										}
-
-
-
-
-
-										if (print == true) {
-
-
-
-											std::printf(_line->outcome_name[i]); std::printf("\t");
-											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										}
-											std::strcat(socket_message_big, _line->outcome_name[i]);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-											std::strcat(socket_message_big, socket_message_little);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											std::strcat(socket_message_big, socket_message_little);
-										
-
-
-
-									}
-
-									if (_line->type == 2) {
-										if (_line->outcome_team[i] != 3) {
-											if (_line->outcome_id[i] >= MAX_COMPETITORS) {
-												std::printf("ERROR in run. competitor_id out of MAX_COMPETITORS. _line->outcome_id[i]=%d  _line->market_id=%d event_id=%d\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-												continue;
-											}
-											if (competitors_id[_line->outcome_id[i]] == NULL) {
-												std::printf("Competitor id=%d not found in market id=%d in event_id=%d  in run function. getTournament\r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-												//tournaments[tournaments_l].id = _event->tournament_id;
-												//tournaments[tournaments_l].type_radar = _event->type_radar;
-											
-												if (_event->type_radar == 0 && getTournament(tournaments_id[_event->tournament_id], false) == -1)
-													std::printf("ERROR!\r\nTournaments not found in run %d \r\n", _event->tournament_id);
-											
-												if (_event->type_radar == 2 && getTournament(simples_id[_event->simple_id], false) == -1)
-													std::printf("ERROR!\r\nSimples Tournaments not found in run %d \r\n", _event->simple_id);
-											
-											}
-
-											if (competitors_id[_line->outcome_id[i]] == NULL) {
-												std::printf("\r\nCompetitors id=%d not found in tournament id=%d . Run getCompetitor\r\n", _line->outcome_id[i], _event->tournament_id);
-												competitors[competitors_l].id = _line->outcome_id[i];
-												if (getCompetitor(&competitors[competitors_l]) == -1) {
-													std::printf(" Error get competitors in run function line type= 2 id=%d \r\n", _line->outcome_id[i]);
-													_line->outcome_name[i] = new char[2];
-													std::strcpy(_line->outcome_name[i], " ");
-												}
-												else competitors_l++;
-											}
-
-											if (competitors_id[_line->outcome_id[i]] != NULL) { _line->outcome_name[i] = new char[strlen(competitors_id[_line->outcome_id[i]]->name) + 1]; std::strcpy(_line->outcome_name[i], competitors_id[_line->outcome_id[i]]->name); }
-
-										}
-										else
-										{
-											for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-											if (u < _line->market->outcome_number) {
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-												for (int j = 0; j < _line->specifier_number; j++) {
-													if (j == _line->variant) continue;
-													replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-												}
-												replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-												replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-												if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
-											}
-											else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
-										}
-										if (print == true) {
-											std::printf(_line->outcome_name[i]); std::printf("\t");
-											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										}
-											std::strcat(socket_message_big, _line->outcome_name[i]);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-											std::strcat(socket_message_big, socket_message_little);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											std::strcat(socket_message_big, socket_message_little);
-										
-									}
-
-									if (_line->type == 3) {
-
-										if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
-										else
-											for (u = 0; u < _line->market->outcome_number; u++) {
-
-
-												if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
-											}
-
-										if (u < _line->market->outcome_number) {
-
-											_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-											std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
-
-										}
-										else {
-											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
-											_line->outcome_name[i] = new char[2];
-											std::strcpy(_line->outcome_name[i], " ");
-											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
-											if (outcomeNameError == 0) outcomeNameError = 1;
-										}
-
-										for (int j = 0; j < _line->specifier_number; j++) {
-											if (j == _line->variant) continue;
-
-											replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
-										}
-
-										replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-										replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-										if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
-
-
-										//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
-
-										if (print == true) {
-
-											std::printf(_line->outcome_name[i]); std::printf("\t");
-											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										}
-											std::strcat(socket_message_big, _line->outcome_name[i]);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
-											std::strcat(socket_message_big, socket_message_little);
-											std::strcat(socket_message_big, "\t");
-											std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-											std::strcat(socket_message_big, socket_message_little);
-										
-
-
-
-									}
-
-
-								}
-
-
-
-								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
-							}
-							
-							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-
-							auto it = compound2line_index.find(_line[0].getCompoundKey());
-							if (it == compound2line_index.end()) {
-								_line[0].id = lines_l;
-								lines[lines_l] = _line[0];
-								insert_line(_line[0], lines_l);
-								lines_l++;
-
-							}
-							else {
-								_line[0].id = it->second;
-								lines[it->second] = _line[0];
-
-								//printf("Line Update\r\n");
-							}
-
-							if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
-
-							if (recovery_state == 0) {
-
-								if (debug_output == true) printf("write buffer data\r\n");
-
-								//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
-								//if (_line->status == 0 || _line->status == -3) continue;
-								event_lines_l++;
-								writeInteger(buffer, offset, _line->id, 4);
-								writeInteger(buffer, offset, _line->betstop_reason, 1);
-								writeInteger(buffer, offset, _line->market_id, 2);
-								writeInteger(buffer, offset, _line->type, 1);
-								writeInteger(buffer, offset, _line->favourite, 1);
-								writeInteger(buffer, offset, _line->status, 1);
-								//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
-								writeInteger(buffer, offset, _line->outcome_number, 2);
-								for (int j = 0; j < _line->outcome_number; j++) {
-									writeInteger(buffer, offset, _line->outcome_id[j], 2);
-									writeInteger(buffer, offset, _line->outcome_active[j], 1);
-									if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-									if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-										writeString(buffer, offset, _line->outcome_name[j]);
-									writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 100), 4);
-								}
-
-								writeInteger(buffer, offset, _line->specifier_number, 1);
-								for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
-
-								if (debug_output == true) printf("end write buffer data\r\n");
-
-							}
-							
-
-						}
-					}
-					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
-
-}
-
-            if (debug_output == true) printf("end parse type_radar=%d\r\n", type_radar);
-
-				if (recovery_state == 0) {
-			  if (debug_output == true) printf("radarmessagehandler\r\n");
-
-					zip_len = gzip(buffer, offset, zip_message, 2);
-					//delete[] buffer;
-					if (zip_len > 1)
-					{
-						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
-						radarMessageHandler(encode_message, encode_message_len);
-						//printf("encode_message_len=%d\r\n", encode_message_len);
-						delete[] encode_message;
-						encode_message = nullptr;
-
-					}
-					delete[] zip_message;
-					zip_message = nullptr;
-					if (debug_output == true) printf("end radarmessagehandler\r\n");
-				}
-//delete[] zip_message;
-
-
-
-
-
-
-
-
-
-
-}
-		else {
-			if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
-			printf(doc.first_node()->name());std::printf("\r\n");
-		}
-
-		
-
-
-		doc.clear();
-
-		//printf("lines_l=%d\r\n",lines_l);
-		//string String(socket_message_big);
-		
-		//radarMessageHandler(socket_message_big, strlen(socket_message_big));
-		
-		
-/*
-		
-		root_node = doc.first_node("odds_change");
-		if (root_node && root_node->first_node("sport_event_status") && root_node->first_node("sport_event_status")->first_attribute("status")) {
-		
-		//	printf(root_node->first_node("sport_event_status")->first_attribute("status")->value());
-
-		status=atoi(root_node->first_node("sport_event_status")->first_attribute("status")->value());
-			
-		}
-
-		*/
-		
-		//if (i < 100 && _event->sport_id == 21 && (envelope.message.body.len > 8000 || status == 1))
-
-	/*	
-		if (i < 100 && status == 1 && (_event->away_yellowcards>0 || _event->away_redcards>0 || _event->home_yellowcards>0 || _event->home_redcards>0)) {
-			i++;std::strcpy(name, "C://unifeed");
-			_itoa(i, buf, 10);
-			strcat(name, buf);
-			strcat(name, ".xml");
-			DeleteFile(name);
-			File = CreateFile(name, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
-			l = SetFilePointer(File, 0, 0, FILE_BEGIN);
-			printf(name);
-			printf("\r\n");
-			printf("message length= %d\r\n", envelope.message.body.len);
-			WriteFile(File, envelope.message.body.bytes, envelope.message.body.len, &l, NULL);
-			CloseHandle(File);
-		}
-
-		*/
-		//WriteFile(File, "<endmessage></endmessage>", strlen("<endmessage></endmessage>"), &l, NULL);
-
-		//if (i > 50) return;
-
-		//if(i<4)std::printf((char*)envelope.message.body.bytes);
-		//i++;
-
-	//	if (_line != nullptr) {
-//			delete _line; _line = nullptr;
-//		}
-
-	
+		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
+		std::strncpy(AMQP_message, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
+		AMQP_message_len = envelope.message.body.len;
+		amqp_empty_flag = false;
+		amqp_lock_flag.clear(std::memory_order_release);
 
 
 		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
 			if (AMQP_RESPONSE_LIBRARY_EXCEPTION == ret.reply_type &&
 				AMQP_STATUS_UNEXPECTED_STATE == ret.library_error) {
 				if (AMQP_STATUS_OK != amqp_simple_wait_frame(conn, &frame)) {
-					
-					delete[] outcome_team;
-					delete[] outcome_name;
-					delete[] outcome_id;
-					delete[] outcome_active;
-					delete[] outcome_probabilities;
-					delete[] outcome_odds;
-					delete[] name;
-					delete[] buf;
-					delete[] maxbuf;
-					delete[] socket_message_big;
-					delete[] socket_message_little;
-					delete[] buffer;
-
 					
 					return;
 				}
@@ -9977,19 +10149,6 @@ static void run(amqp_connection_state_t conn)
 						amqp_message_t message;
 						ret = amqp_read_message(conn, frame.channel, &message, 0);
 						if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
-							delete[] outcome_team;
-							delete[] outcome_name;
-							delete[] outcome_id;
-							delete[] outcome_active;
-							delete[] outcome_probabilities;
-							delete[] outcome_odds;
-							delete[] name;
-							delete[] buf;
-							delete[] maxbuf;
-							delete[] socket_message_big;
-							delete[] socket_message_little;
-							delete[] buffer;
-							
 							return;
 						}
 
@@ -10007,18 +10166,7 @@ static void run(amqp_connection_state_t conn)
 						* to the previous channel
 						*/
 
-						delete[] outcome_team;
-						delete[] outcome_name;
-						delete[] outcome_id;
-						delete[] outcome_active;
-						delete[] outcome_probabilities ;
-						delete[] outcome_odds;
-						delete[] name;
-						delete[] buf;
-						delete[] maxbuf;
-						delete[] socket_message_big;
-						delete[] socket_message_little;
-						delete[] buffer;
+					
 						return;
 
 					case AMQP_CONNECTION_CLOSE_METHOD:
@@ -10027,34 +10175,12 @@ static void run(amqp_connection_state_t conn)
 						*
 						* In this case the whole connection must be restarted.
 						*/
-						delete[] outcome_team;
-						delete[] outcome_name;
-						delete[] outcome_id;
-						delete[] outcome_active;
-						delete[] outcome_probabilities;
-						delete[] outcome_odds;
-						delete[] name;
-						delete[] buf;
-						delete[] maxbuf;
-						delete[] socket_message_big;
-						delete[] socket_message_little;
-						delete[] buffer;
+					
 						return;
 
 					default:
 						fprintf(stderr, "An unexpected method was received %u\n", frame.payload.method.id);
-						delete[] outcome_team;
-						delete[] outcome_name;
-						delete[] outcome_id;
-						delete[] outcome_active;
-						delete[] outcome_probabilities;
-						delete[] outcome_odds;
-						delete[] name;
-						delete[] buf;
-						delete[] maxbuf;
-						delete[] socket_message_big;
-						delete[] socket_message_little;
-						delete[] buffer;
+						
 
 						return;
 					}
@@ -10069,7 +10195,7 @@ static void run(amqp_connection_state_t conn)
 
 		received++;
 	}
-	CloseHandle(File);
+	
 }
 void rabbitmqssl() {
 	char const *hostname;
