@@ -741,7 +741,7 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		//if (callOnMessage != NULL)	callOnMessage(clientID, data.substr(0, dataLength));
 		if (data.substr(0, 7) == "rospis@") {
 		int event_id =atoi(data.substr(7, dataLength).c_str());
-		if (event_id != 0 && client->plus == 0) client->plus = event_id; printf("client=%d\r\n", client);
+		if (event_id != 0 && client->plus == 0) client->plus = event_id; 
 		}
 
 	}
@@ -3217,6 +3217,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	
 	for (;;) {
 		
+		
 		if (recovery_state == 0) {
 			
 			if (new_message_arrived == true)  GenerateBigStep(); 
@@ -3243,7 +3244,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		if (amqp_empty_flag == true) { amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; continue; }
 		std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
 		amqp_empty_flag = true;
-		amqp_lock_flag.clear(std::memory_order_release); 
+		amqp_lock_flag.clear(std::memory_order_release);
 		new_message_arrived = true;
 
 		maxbuf[AMQP_message_len] = 0;
@@ -5679,9 +5680,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			}
 
 
-
-
 			doc.clear();
+			
 
 			//printf("lines_l=%d\r\n",lines_l);
 			//string String(socket_message_big);
@@ -10118,6 +10118,7 @@ static void run(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
+		while(amqp_empty_flag == false) Sleep(1);
 		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
 		std::strncpy(AMQP_message, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
 		AMQP_message_len = envelope.message.body.len;
