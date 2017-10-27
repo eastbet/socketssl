@@ -212,6 +212,9 @@ public:
 		current2 = -1;
 		step_buffer_len_2 = -1;
 		step_buffer_len_1 = -1;
+		plus_create = false;
+		plus_send = false;
+
 		//flag = 0;
 
 	}
@@ -245,6 +248,8 @@ public:
 	atomic_int64_t last_message_queue;
 	atomic_int64_t last_message_queue_socket;
 	int plus;
+	std::atomic<bool> plus_create;
+	std::atomic<bool> plus_send;
 	char* message_ping;
 	char* message_pong;
 	char* message_close;
@@ -741,7 +746,12 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		//if (callOnMessage != NULL)	callOnMessage(clientID, data.substr(0, dataLength));
 		if (data.substr(0, 7) == "rospis@") {
 		int event_id =atoi(data.substr(7, dataLength).c_str());
-		if (event_id != 0 && client->plus == 0) client->plus = event_id; 
+		if (event_id != 0 && client->plus_send == false && client->plus_create == false) {
+		client->plus = event_id; client->plus_create = true;
+		
+		
+		}
+		
 		}
 
 	}
@@ -1517,7 +1527,7 @@ void webSocket::startServer(int port) {
 								writeopcode = 7;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_2, wsClients[socketIDmap[i]]->step_buffer_len_2);
 							}
-							else if (wsClients[socketIDmap[i]]->plus_message_length > 0 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
+							else if (wsClients[socketIDmap[i]]->plus_send == true && wsClients[socketIDmap[i]]->plus_create == false && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 								writeopcode = 8;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->plus_message, wsClients[socketIDmap[i]]->plus_message_length);
 							}
@@ -1676,10 +1686,12 @@ void webSocket::startServer(int port) {
 								}
 
 								if (writeopcode == 8) {
+									//printf("wsClients[%d]->plus=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->plus);
 									if (wsClients[socketIDmap[i]]->plus_message != nullptr) delete[] wsClients[socketIDmap[i]]->plus_message;
+									wsClients[socketIDmap[i]]->plus = 0;
 									wsClients[socketIDmap[i]]->plus_message = nullptr;
 									wsClients[socketIDmap[i]]->plus_message_length = 0;
-									wsClients[socketIDmap[i]]->plus = 0;
+									wsClients[socketIDmap[i]]->plus_send = false;
 									
 								}
 								
@@ -1966,6 +1978,7 @@ public:
 	int id;
 	int sport_id;
 	int sort;
+	int outrights;
 	char *name;
 	void operator = (const Category&);
 };
@@ -1974,6 +1987,7 @@ void Category:: operator = (const Category & rhs) {
 	id = rhs.id;
 	sport_id = rhs.sport_id;
 	sort = rhs.sort;
+	outrights = rhs.outrights;
 	if (name != NULL) {
 		delete[] name; name = NULL;
 	}
@@ -1986,6 +2000,7 @@ Category::Category() {
 	id = 0;
 	sport_id = 0;
 	sort = 0;
+	outrights = 0;
 	name = NULL;
 };
 class Event {
@@ -3226,8 +3241,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				clientIDs = server.getClientIDs();
 				for (i = 0; i < clientIDs.size(); i++) {
 					if (server.wsClients[clientIDs[i]] == NULL)  continue; 
-					if (server.wsClients[clientIDs[i]]->plus != 0 && server.wsClients[clientIDs[i]]->plus_message_length == 0)
-						CreatePlus_2(server.wsClients[clientIDs[i]]);
+					if (server.wsClients[clientIDs[i]]->plus_create == true && server.wsClients[clientIDs[i]]->plus_send == false)
+					CreatePlus_2(server.wsClients[clientIDs[i]]);
+					
+					
+					
 				}
 			
 				server.ws_clients_flag.clear(std::memory_order_release);
@@ -3268,6 +3286,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+
+			
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -3326,8 +3346,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			if (std::strcmp("odds_change", doc.first_node()->name()) == 0) {
 				type_radar = 0;
 				event_id = 0;
+				
 				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-				//if (event_id == 11830190) printf("ERRRRRRRRRRRRRRRRRRRRRR");
+				//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
+	
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
@@ -3335,11 +3357,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value());
 					continue;
 				}
+				
+
+	
 
 				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
 
 				if (type_radar == 2) {
-
+				
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run odds_change %d\r\n", event_id); continue; }
 					if (simples_id[event_id] == NULL) {
 						std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
@@ -3397,8 +3422,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run simple %d\r\n", _tournament->category_id); continue; }
 					if (categories_id[_tournament->category_id] == NULL) {
 						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _tournament->category_id);
-						if (getTournament(simples_id[_tournament->simple_id], false) == -1);  continue;;
+						if (getTournament(simples_id[_tournament->simple_id], false) == -1);  continue;
 					}
+					categories_id[_tournament->category_id]->outrights = 1;
 					if (print == true) {
 						std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 						std::printf("\r\n***************************************************\r\n");
@@ -3975,6 +4001,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				}
 				if (type_radar == 3) {
+			
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
 					if (seasons_id[event_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). season_id=%d\r\n", event_id);
@@ -4037,8 +4064,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (_tournament->category_id >= MAX_CATEGORIES) { std::printf("ERROR DATA!\r\ntournament category_id out of MAX_CATEGORIES in run season %d\r\n", _tournament->category_id); continue; }
 					if (categories_id[_tournament->category_id] == NULL) {
 						std::printf("Category not found. Run getTournament(). category_id=%d\r\n", _tournament->category_id);
-						if (getTournament(tournaments_id[_tournament->id], false) == -1);  continue;;
+						if (getTournament(tournaments_id[_tournament->id], false) == -1);  continue;
+						
 					}
+					categories_id[_tournament->category_id]->outrights = 1;
 					if (print == true) {
 						std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 						std::printf("\r\n***************************************************\r\n");
@@ -9159,6 +9188,7 @@ for (i = 0; i < categories_l; i++) {
 	writeInteger(buffer, offset, categories[i].id, 2);
 	writeInteger(buffer, offset, categories[i].sport_id, 2);
 	writeInteger(buffer, offset, categories[i].sort, 2);
+	writeInteger(buffer, offset, categories[i].outrights, 1);
 	writeString(buffer, offset, categories[i].name);
 }
 writeInteger(buffer, offset, tournaments_l, 2);
@@ -9408,11 +9438,11 @@ void CreatePlus_2(wsClient* client) {
 	size_t offset = 0;
 	size_t retry_offset = 0;
 	int event_id = client->plus;
-
+	
 	//printf("CreatePlus_2 server.wsClients[%d]->plus=%d\r\n", clientID, server.wsClients[clientID]->plus);
 
 	if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in CreatePlus_2 %d\r\n", event_id); return; }
-	if(events_id[event_id]==nullptr) { std::printf("\r\nEvent id= %d not found in CreatePlus_2 %d\r\n", event_id); return; }
+	if(events_id[event_id]==nullptr) { std::printf("\r\nEvent id= %d not found in CreatePlus_2 %d len=%d\r\n", event_id, client->plus_message_length); return; }
 	if (events_id[event_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); return; }
 	if (event2lines.find(event_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); return; }
 	writeInteger(buffer, offset, 1, 2);
@@ -9471,7 +9501,9 @@ void CreatePlus_2(wsClient* client) {
 
 	//printf("server.wsClients[clientID]->plus_message_length=%d\r\n", server.wsClients[clientID]->plus_message_length);
 	
-
+	client->plus_send = true;
+	client->plus_create = false;
+	
 
 };
 char* SendframeEncode(char* message, int messageLen, int &totalLength) {
