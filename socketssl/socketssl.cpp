@@ -201,6 +201,11 @@ public:
 		message_pong_length = 0;
 		message_close_length = 0;
 		plus_message_length = 0;
+		outright_message_length = 0;
+		outright = 0;
+		outright_create = false;
+		outright_send = false;
+		outright_message = nullptr;
 		plus = 0;
 		handshake_message = nullptr;
 		plus_message = nullptr;
@@ -225,6 +230,7 @@ public:
 	if (message_close != nullptr) delete[] message_close;
 	if (handshake_message != nullptr) delete[] handshake_message;
 	if (plus_message != nullptr) delete[] plus_message;
+	if (outright_message != nullptr) delete[] outright_message;
 	if (step_buffer_1 != nullptr) delete[] step_buffer_1;
 	if (step_buffer_2 != nullptr) delete[] step_buffer_2;
 	
@@ -265,6 +271,12 @@ public:
 	int step_buffer_len_2;
 	int current1;
 	int current2;
+	int outright_message_length;
+	int outright = 0;
+	std::atomic<bool> outright_create;
+	std::atomic<bool> outright_send;
+	char* outright_message;
+
 
 	//int flag;
 	//std::mutex mutex;
@@ -746,7 +758,7 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		//if (callOnMessage != NULL)	callOnMessage(clientID, data.substr(0, dataLength));
 		if (data.substr(0, 7) == "rospis@") {
 		int event_id =atoi(data.substr(7, dataLength).c_str());
-		if (event_id != 0 && client->plus_send == false && client->plus_create == false) {
+		if (event_id != 0 && event_id<MAX_EVENTS && events_id[event_id]!=nullptr && client->plus_send == false && client->plus_create == false) {
 		client->plus = event_id; client->plus_create = true;
 		
 		
@@ -754,6 +766,15 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		
 		}
 
+		
+		if (data.substr(0, 9) == "outright@") {
+			int category_id = atoi(data.substr(9, dataLength).c_str());
+			if (category_id != 0 && category_id<MAX_CATEGORIES && categories_id[category_id] != nullptr && client->outright_send == false && client->outright_create == false) {client->outright = category_id; client->outright_create = true;}
+
+		}
+	
+	
+	
 	}
 	else {
 		// unknown opcode
@@ -1531,6 +1552,10 @@ void webSocket::startServer(int port) {
 								writeopcode = 8;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->plus_message, wsClients[socketIDmap[i]]->plus_message_length);
 							}
+							else if (wsClients[socketIDmap[i]]->outright_send == true && wsClients[socketIDmap[i]]->outright_create == false && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
+								writeopcode = 9;
+								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->outright_message, wsClients[socketIDmap[i]]->outright_message_length);
+							}
 							else if (wsClients[socketIDmap[i]]->last_message_queue > wsClients[socketIDmap[i]]->last_message_queue_socket && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 								writeopcode = 5;
 								nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->message_queue[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH], wsClients[socketIDmap[i]]->message_queue_length[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH]);}
@@ -1695,6 +1720,30 @@ void webSocket::startServer(int port) {
 									
 								}
 								
+								if (writeopcode == 9) {
+									//printf("wsClients[%d]->outright=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->outright);
+									if (wsClients[socketIDmap[i]]->outright_message != nullptr) delete[] wsClients[socketIDmap[i]]->outright_message;
+									wsClients[socketIDmap[i]]->outright = 0;
+									wsClients[socketIDmap[i]]->outright_message = nullptr;
+									wsClients[socketIDmap[i]]->outright_message_length = 0;
+									wsClients[socketIDmap[i]]->outright_send = false;
+
+								}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 							}
@@ -1974,11 +2023,13 @@ Tournament::Tournament() {
 class Category {
 public:
 	Category();
-	~Category() { if (name != NULL) delete[] name; };
+	~Category() { if (name != NULL) delete[] name; outrights_id.clear();
+	};
 	int id;
 	int sport_id;
 	int sort;
 	int outrights;
+	vector<int> outrights_id;
 	char *name;
 	void operator = (const Category&);
 };
@@ -2001,7 +2052,7 @@ Category::Category() {
 	sport_id = 0;
 	sort = 0;
 	outrights = 0;
-	name = NULL;
+	name = nullptr;
 };
 class Event {
 public:
@@ -2629,7 +2680,7 @@ void Line:: operator = (const Line & rhs) {
 Line::Line() {
 	id = 0;
 	betstop_reason=0;
-	tournament_id = 0;
+    tournament_id = 0;
 	event_id = 0;
 	status = 0;
 	favourite = 0;
@@ -2783,6 +2834,7 @@ void writeFloat(char*, size_t &, float);
 char* CreateStep_1(int&);
 char* CreateStep_2(int&);
 void CreatePlus_2(wsClient*);
+void CreateOutright_2(wsClient*);
 void getSports();
 void getEvents(time_t,int);
 void getCategoriesTournaments();
@@ -3243,7 +3295,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (server.wsClients[clientIDs[i]] == NULL)  continue; 
 					if (server.wsClients[clientIDs[i]]->plus_create == true && server.wsClients[clientIDs[i]]->plus_send == false)
 					CreatePlus_2(server.wsClients[clientIDs[i]]);
-					
+					if (server.wsClients[clientIDs[i]]->outright_create == true && server.wsClients[clientIDs[i]]->outright_send == false)
+						CreateOutright_2(server.wsClients[clientIDs[i]]);
 					
 					
 				}
@@ -3353,6 +3406,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+				//2  sr:simple_tournament:
+				//0  sr:match:
+		        //3  sr:season:  
+				//1  sr:race_event:  
+
 				if (event_id == 0) {
 					std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value());
 					continue;
@@ -3450,7 +3508,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						{
 							outcomeNameError = 0;
 							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
-							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
+							if (market_node->first_node("market_metadata") && market_node->first_node("market_metadata")->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_node("market_metadata")->first_attribute("next_betstop")->value());
+                            if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
 							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
 							if (_line->market_id >= MAX_MARKETS) {
@@ -3941,6 +4000,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								lines[lines_l] = _line[0];
 								insert_line(_line[0], lines_l);
 								lines_l++;
+								categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
 
 							}
 							else {
@@ -3960,7 +4020,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								//if (_line->status == 0 || _line->status == -3) continue;
 								event_lines_l++;
 								writeInteger(buffer, offset, _line->id, 4);
-								writeInteger(buffer, offset, _line->betstop_reason, 1);
+								//writeInteger(buffer, offset, _line->betstop_reason, 1);
+								writeInteger(buffer, offset, _line->next_betstop, 4);
 								writeInteger(buffer, offset, _line->market_id, 2);
 								writeInteger(buffer, offset, _line->type, 1);
 								writeInteger(buffer, offset, _line->favourite, 1);
@@ -4583,6 +4644,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												lines[lines_l] = _line[0];
 												insert_line(_line[0], lines_l);
 												lines_l++;
+												categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
 
 											}
 											else {
@@ -4601,7 +4663,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												//if (_line->status == 0 || _line->status == -3) continue;
 												event_lines_l++;
 												writeInteger(buffer, offset, _line->id, 4);
-												writeInteger(buffer, offset, _line->betstop_reason, 1);
+												//writeInteger(buffer, offset, _line->betstop_reason, 1);
+												writeInteger(buffer, offset, _line->next_betstop, 1);
 												writeInteger(buffer, offset, _line->market_id, 2);
 												writeInteger(buffer, offset, _line->type, 1);
 												writeInteger(buffer, offset, _line->favourite, 1);
@@ -5641,7 +5704,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   //if (_line->status == 0 || _line->status == -3) continue;
 											   event_lines_l++;
 											   writeInteger(buffer, offset, _line->id, 4);
-											   writeInteger(buffer, offset, _line->betstop_reason, 1);
+											   //writeInteger(buffer, offset, _line->betstop_reason, 1);
 											   writeInteger(buffer, offset, _line->market_id, 2);
 											   writeInteger(buffer, offset, _line->type, 1);
 											   writeInteger(buffer, offset, _line->favourite, 1);
@@ -9381,7 +9444,7 @@ char* CreateStep_2(int& len) {
 			if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
 			event_lines_l++;
 			writeInteger(buffer, offset, lines[*(it)].id, 4);
-			writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
+			//writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
 			writeInteger(buffer, offset, lines[*(it)].market_id, 2);
 			writeInteger(buffer, offset, lines[*(it)].type, 1);
 			writeInteger(buffer, offset, lines[*(it)].favourite, 1);
@@ -9446,7 +9509,7 @@ void CreatePlus_2(wsClient* client) {
 	if (events_id[event_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); return; }
 	if (event2lines.find(event_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); return; }
 	writeInteger(buffer, offset, 1, 2);
-	writeInteger(buffer, offset, 100, 1);
+	writeInteger(buffer, offset, 4, 1);
 	writeInteger(buffer, offset, event_id, 4);
 	//writeInteger(buffer, offset, event2lines[event_id]->size(), 2);
 	event_lines_l = 0;
@@ -9506,6 +9569,89 @@ void CreatePlus_2(wsClient* client) {
 	
 
 };
+void CreateOutright_2(wsClient* client) {
+	//printf("CreateOutright_2\r\n");
+	//server.wsClients[clientIDs[i]]
+	int i, j, l, k = 0;
+	int events_send_l = 0;
+	int event_lines_l = 0;
+
+	char* buffer = new char[SEND_BUFLEN];
+	int len = 0;
+	size_t offset = 0;
+	size_t retry_offset = 0;
+	int category_id = client->outright;
+
+	//printf("CreateOutright_2 server.wsClients[%d]->outright=%d\r\n", clientID, server.wsClients[clientID]->outright);
+
+	if (category_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in CreateOutright_2 %d\r\n", category_id); return; }
+	if (categories_id[category_id] == nullptr) { std::printf("\r\nEvent id= %d not found in CreateOutright_2 %d len=%d\r\n", category_id, client->outright_message_length); return; }
+	if (categories_id[category_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreateOutright_2 %d\r\n", category_id); return; }
+	if (event2lines.find(category_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreateOutright_2 %d\r\n", category_id); return; }
+	writeInteger(buffer, offset, 1, 2);
+	writeInteger(buffer, offset, 100, 1);
+	writeInteger(buffer, offset, category_id, 4);
+	//writeInteger(buffer, offset, event2lines[category_id]->size(), 2);
+	event_lines_l = 0;
+	retry_offset = offset;
+	offset += 2;
+
+	for (unordered_set<int>::iterator it = event2lines[category_id]->begin(); it != event2lines[category_id]->end(); ++it)
+	{
+		//if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events_show[i]->status == 0) continue;
+		if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
+		event_lines_l++;
+		writeInteger(buffer, offset, lines[*(it)].id, 4);
+		writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
+		writeInteger(buffer, offset, lines[*(it)].market_id, 2);
+		writeInteger(buffer, offset, lines[*(it)].type, 1);
+		writeInteger(buffer, offset, lines[*(it)].favourite, 1);
+		writeInteger(buffer, offset, lines[*(it)].status, 1);
+		//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
+		writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
+		for (j = 0; j < lines[*(it)].outcome_number; j++) {
+			writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 2);
+			writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
+			if (lines[*(it)].type == 1 || lines[*(it)].type == 2) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+			if ((lines[*(it)].type == 1 || lines[*(it)].type == 2) && lines[*(it)].outcome_team[j] != 3)
+				writeString(buffer, offset, lines[*(it)].outcome_name[j]);
+			writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j] * 100), 4);
+
+		}
+
+		writeInteger(buffer, offset, lines[*(it)].specifier_number, 1);
+		for (j = 0; j < lines[*(it)].specifier_number; j++)
+			writeString(buffer, offset, lines[*(it)].specifier_value[j]);
+
+
+
+
+	}
+
+	writeInteger(buffer, retry_offset, event_lines_l, 2);
+
+
+	char* zip_message = nullptr;
+	int zip_len = gzip(buffer, offset, zip_message, 2);
+	delete[] buffer;
+	if (zip_len < 1) return;
+	char* encode_message = SendframeEncode(zip_message, zip_len, len);
+	delete[] zip_message;
+	client->outright_message = encode_message;
+	client->outright_message_length = len;
+
+	//printf("CreateOutright_2 client->outright_message_length=%d\r\n",client->outright_message_length);
+
+	//printf("server.wsClients[clientID]->outright_message_length=%d\r\n", server.wsClients[clientID]->outright_message_length);
+
+	client->outright_send = true;
+	client->outright_create = false;
+
+
+};
+
+
+
 char* SendframeEncode(char* message, int messageLen, int &totalLength) {
 	char *buf = nullptr;
 	unsigned char opcode = WS_OPCODE_BINARY;
