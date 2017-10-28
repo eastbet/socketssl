@@ -4038,7 +4038,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								event_lines_l++;
 								writeInteger(buffer, offset, _line->id, 4);
 								//writeInteger(buffer, offset, _line->betstop_reason, 1);
-								writeInteger(buffer, offset, _line->next_betstop, 4);
+								//writeInteger(buffer, offset, _line->next_betstop, 4);
 								writeInteger(buffer, offset, _line->market_id, 2);
 								writeInteger(buffer, offset, _line->type, 1);
 								writeInteger(buffer, offset, _line->favourite, 1);
@@ -4685,7 +4685,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												event_lines_l++;
 												writeInteger(buffer, offset, _line->id, 4);
 												//writeInteger(buffer, offset, _line->betstop_reason, 1);
-												writeInteger(buffer, offset, _line->next_betstop, 1);
+												//writeInteger(buffer, offset, _line->next_betstop, 1);
 												writeInteger(buffer, offset, _line->market_id, 2);
 												writeInteger(buffer, offset, _line->type, 1);
 												writeInteger(buffer, offset, _line->favourite, 1);
@@ -9715,7 +9715,7 @@ void CreateOutright_2(wsClient* client) {
 		writeInteger(buffer, offset, event_lines_l, 2);
 		writeInteger(buffer, offset, _line->id, 4);
 		//writeInteger(buffer, offset, _line->betstop_reason, 1);
-		writeInteger(buffer, offset, _line->next_betstop, 4);
+		//writeInteger(buffer, offset, _line->next_betstop, 4);
 		writeInteger(buffer, offset, _line->market_id, 2);
 		writeInteger(buffer, offset, _line->type, 1);
 		writeInteger(buffer, offset, _line->favourite, 1);
