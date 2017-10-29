@@ -9594,7 +9594,7 @@ void CreatePlus_2(wsClient* client) {
 	if(events_id[event_id]==nullptr) { std::printf("\r\nEvent id= %d not found in CreatePlus_2 \r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
 	if (events_id[event_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
 	if (event2lines.find(event_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
-	//events_send_l = 1;
+	events_send_l = 1;
 	writeInteger(buffer, offset, events_send_l, 2);
 	writeInteger(buffer, offset, 4, 1); //4 response for rospis command
 	writeInteger(buffer, offset, event_id, 4);
@@ -9609,7 +9609,7 @@ void CreatePlus_2(wsClient* client) {
 			if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
 			event_lines_l++;
 			writeInteger(buffer, offset, lines[*(it)].id, 4);
-			writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
+			//writeInteger(buffer, offset, lines[*(it)].betstop_reason, 1);
 			writeInteger(buffer, offset, lines[*(it)].market_id, 2);
 			writeInteger(buffer, offset, lines[*(it)].type, 1);
 			writeInteger(buffer, offset, lines[*(it)].favourite, 1);
