@@ -1268,8 +1268,8 @@ public:
 		if (handshake_message != nullptr) delete[] handshake_message;
 		if (plus_message != nullptr) delete[] plus_message;
 		if (outright_message != nullptr) delete[] outright_message;
-		if (step_buffer_1 != nullptr) delete[] step_buffer_1;
-		if (step_buffer_2 != nullptr) delete[] step_buffer_2;
+		//if (step_buffer_1 != nullptr) delete[] step_buffer_1;
+		//if (step_buffer_2 != nullptr) delete[] step_buffer_2;
 
 	}
 
@@ -2219,7 +2219,7 @@ void webSocket::startServer(int port) {
 	char* writeBuffer = nullptr;
 	size_t writeBufferLen = 0;
 	int iResult = 0;
-	int current = 0;
+	atomic_int64_t current = 0;
 	int i = 0;
 	struct sockaddr_in serv_addr, cli_addr;
 
@@ -2560,7 +2560,7 @@ void webSocket::startServer(int port) {
 							else if (wsClients[socketIDmap[i]]->step_buffer_len_1 == -1 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 								if (current_data_step_1 != -1) {
 									writeopcode = 6;
-									current = current_data_step_1;
+									current =current_data_step_1.load();
 									wsClients[socketIDmap[i]]->step_buffer_1 = array_data_step_1[current];
 									wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1[current];
 
@@ -2577,7 +2577,7 @@ void webSocket::startServer(int port) {
 							else if (wsClients[socketIDmap[i]]->step_buffer_len_2 == -1 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 								if (current_data_step_2 != -1) {
 									writeopcode = 7;
-									current = current_data_step_2;
+									current = current_data_step_2.load();
 									wsClients[socketIDmap[i]]->step_buffer_2 = array_data_step_2[current];
 									wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2[current];
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_2, wsClients[socketIDmap[i]]->step_buffer_len_2);
@@ -2703,7 +2703,7 @@ void webSocket::startServer(int port) {
 									delete[] wsClients[socketIDmap[i]]->handshake_message;
 									wsClients[socketIDmap[i]]->handshake_message = nullptr;
 									if (current_data_step_1 != -1) {
-										current = current_data_step_1;
+										current = current_data_step_1.load();
 										wsClients[socketIDmap[i]]->step_buffer_1 = array_data_step_1[current];
 										wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1[current];
 									}
@@ -2740,7 +2740,7 @@ void webSocket::startServer(int port) {
 									wsClients[socketIDmap[i]]->step_buffer_1 = nullptr;
 									wsClients[socketIDmap[i]]->step_buffer_len_1 = 0;
 									if (current_data_step_2 != -1) {
-										current = current_data_step_2;
+										current = current_data_step_2.load();
 										wsClients[socketIDmap[i]]->step_buffer_2 = array_data_step_2[current];
 										wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2[current];
 									}
