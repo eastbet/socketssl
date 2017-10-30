@@ -3,9 +3,19 @@
 #undef _UNICODE
 #undef UNICODE
 
-
-
 #include "stdafx.h"
+
+// MongoDB related (should come before the other include's. otherwise some errors about max macro)
+
+#include <cstdint>
+#include <bsoncxx/builder/basic/document.hpp>
+#include <bsoncxx/builder/basic/kvp.hpp>
+#include <bsoncxx/types.hpp>
+#include <bsoncxx/json.hpp>
+#include <mongocxx/client.hpp>
+#include <mongocxx/exception/exception.hpp>
+#include <mongocxx/instance.hpp>
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <mutex>
 #include <winsock2.h>
@@ -42,6 +52,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <atomic>
+
+
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -3063,15 +3075,158 @@ int reload_step_1 = 1;
 int booking = 0;
 //std::mutex _mutex;
 
+// Mongo Related
+using bsoncxx::builder::basic::kvp;
+using bsoncxx::builder::basic::sub_document;
+using bsoncxx::builder::basic::sub_array;
 
 
+mongocxx::instance instance{}; // This should be done only once.
+mongocxx::uri mongo_uri("mongodb://localhost:27017");
+mongocxx::client mongo_client(mongo_uri);
+
+void writeCategoriesDB();
+void writeMarketsDB();
+void writeTournamentsDB();
+void writeSportsDB();
+
+auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
 
+void writeCategoriesDB() {	
+	auto coll = db["categories"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < categories_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			builder.append(kvp("cat_id", categories[i].id),
+				kvp("sport_id", categories[i].sport_id),
+				kvp("sort", categories[i].sort),
+				kvp("name", categories[i].name)
+			);
+			docs.push_back(builder.extract());
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " category docs created..." << endl;
+	} catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeMarketsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+void writeMarketsDB() {
+	auto coll = db["markets"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < markets_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			builder.append(kvp("market_id", markets[i].id),
+				kvp("type", markets[i].type),
+				kvp("line_type", markets[i].line_type),
+				kvp("name", markets[i].name),
+				kvp("variant", markets[i].variant)
+			);
+			if (markets[i].variant > -1 && markets[i].variable_text != NULL) {
+				builder.append(kvp("variable_text", markets[i].variable_text));
+			}
+			auto outcomes = bsoncxx::builder::basic::array{};
+			for (int j = 0; j < markets[i].outcome_number; j++) {
+				string key = to_string(markets[i].outcome_id[j]);
+				string val = markets[i].outcome_name[j];
+				bsoncxx::document::value subdoc = bsoncxx::builder::stream::document{}
+					<< key << val
+					<< bsoncxx::builder::stream::finalize;
+				// cout << j << ":::" << bsoncxx::to_json(subdoc.view()) << endl;
+				outcomes.append(std::move(subdoc));
+				// cout << j << ":::" << markets[i].outcome_id[j] << "," << markets[i].outcome_name[j] << endl;
+				// cout << bsoncxx::to_json(outcomes.view()) << endl;
+			}
+			builder.append(kvp("outcomes", std::move(outcomes)));
+			auto specifiers = bsoncxx::builder::basic::array{};
+			for (int j = 0; j < markets[i].specifier_number; j++) {
+				string val = markets[i].specifier_name[j];
+				specifiers.append(val);
+			}
+			builder.append(kvp("specifiers", std::move(specifiers)));
+			// std::cout << bsoncxx::to_json(builder.view()) << std::endl;
+			// getchar();
+			docs.push_back(builder.extract());
+		}
+		// cout << docs.size() << " market docs ready to write ..." << endl;
+		coll.insert_many(docs);
+		cout << docs.size() << " market docs created ..." << endl;
+	} catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeMarketsDB: " << e.what() << std::endl;	
+	}
+	return;
+}
+
+void writeTournamentsDB() {
+	auto coll = db["tournaments"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < tournaments_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			builder.append(kvp("type_radar", tournaments[i].type_radar),
+				kvp("tournament_id", tournaments[i].id),
+				kvp("season_id", tournaments[i].season_id),
+				kvp("simple_id", tournaments[i].simple_id),
+				kvp("sport_id", tournaments[i].sport_id),
+				kvp("category_id", tournaments[i].category_id),
+				kvp("sort", tournaments[i].sort),
+				kvp("name", tournaments[i].name)
+			);
+			docs.push_back(builder.extract());
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " tournament docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeTournamentsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+void writeSportsDB() {
+	auto coll = db["sports"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < sports_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			builder.append(kvp("_id", sports[i].id),
+				kvp("sort", sports[i].sort),
+				kvp("name", sports[i].name)
+			);
+			docs.push_back(builder.extract());
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " sports docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeSportsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+/*
+for (i = 0; i < sports_l; i++) {
+writeInteger(buffer, offset, sports[i].id, 2);
+writeInteger(buffer, offset, sports[i].sort, 1);
+writeString(buffer, offset, sports[i].name);
+}
+}
+
+}
+*/
 int main(){
 using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+// hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
 
 int port = 1443;
@@ -3130,16 +3285,21 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	if (full_data == false) {
 		//getMarkets();
 		//getEvents(0, 10);
-		//return 0;
+		//return 0;		
+		writeSportsDB();
 		loadMarketsFromFiles();
+		writeMarketsDB();
 		loadCategoriesFromFiles();
+		writeCategoriesDB();
 		loadTournamentsFromFiles();
+		writeTournamentsDB();
 		loadEventsFromFiles();
-		loadCompetitorsFromFiles();
-		loadPlayersFromFiles();
-
+		// writeEventsDB();
+		// loadCompetitorsFromFiles();
+		// loadPlayersFromFiles();
 	}
-
+	// izzet: for now
+	return 0;
 
 	if (full_data == true) {
 		getMarkets();
