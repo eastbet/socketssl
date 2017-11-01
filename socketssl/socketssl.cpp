@@ -2404,7 +2404,8 @@ void webSocket::startServer(int port) {
 							ssl = SSL_new(ctx);
 							SSL_set_fd(ssl, ClientSocket);
 							SSL_set_accept_state(ssl);
-							cert = SSL_get_peer_certificate(ssl);
+
+/*							cert = SSL_get_peer_certificate(ssl);
 							if (cert != NULL) {
 								std::printf("Client certificate:\n");
 
@@ -2416,15 +2417,15 @@ void webSocket::startServer(int port) {
 								std::printf("\t issuer: %s\n", str);
 								OPENSSL_free(str);
 
-								/* We could do all sorts of certificate verification stuff here before
-								deallocating the certificate. */
+								 //We could do all sorts of certificate verification stuff here before
+								//deallocating the certificate. 
 
 								X509_free(cert);
 							}
 							else {
 								//printf("Client does not have certificate.\n");
 							}
-
+							*/
 							wsAddClient(ClientSocket, ssl, cli_addr.sin_addr);
 							//ssl = nullptr;
 							//std::printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
@@ -2466,6 +2467,7 @@ void webSocket::startServer(int port) {
 
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
+									delete[] error_str;
 									//std::printf("could not SSL_read (returned 0): %s\n", error_str);
 								}
 
@@ -2499,7 +2501,7 @@ void webSocket::startServer(int port) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									std::printf("could not SSL_read (returned -1) %s\n", error_str);
-
+									delete[] error_str;
 
 								}
 
@@ -2509,9 +2511,10 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
-								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
+								/*if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
 									wsRemoveClient(socketIDmap[i]); else
-									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);*/
+								wsRemoveClient(socketIDmap[i]);
 							}
 							else if (nbytes == 0) {
 								wsRemoveClient(socketIDmap[i]);
@@ -2641,6 +2644,7 @@ void webSocket::startServer(int port) {
 
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
+									delete[] error_str;
 								}
 								//std::printf("could not SSL_write (returned 0): %s\n", error_str);
 
@@ -2670,6 +2674,7 @@ void webSocket::startServer(int port) {
 								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
+									delete[] error_str;
 								}
 								//std::printf("could not SSL_write (returned -1): %s\n", error_str);
 
@@ -3143,7 +3148,51 @@ int booking = 0;
 
 
 
-int main(){
+int main() {
+	/*
+	loadCompetitorsFromFiles();
+
+	HANDLE File;
+	DWORD l = 0;
+	char buf[20];
+	int i = 0;
+	char file_path[MAX_PATH];
+	char https_path[MAX_PATH];
+	char* recvbuf = new char[DEFAULT_BUFLEN];
+	int len = 0;
+	printf(" competitors_l=%d\r\n", competitors_l);
+	for (int j = 0; j < competitors_l; j++) {
+	std::strcpy(https_path, "/ls/crest/big/");
+	_itoa(competitors[j].id, buf, 10);
+	strcat(https_path, buf);
+	strcat(https_path, ".png");
+
+	std::strcpy(file_path, "D://Logo//");
+	_itoa(competitors[j].id, buf, 10);
+	strcat(file_path, buf);
+	strcat(file_path, ".png");
+
+	printf("process competitors=%s\r\n", competitors[j].name);
+	printf("https:/ls.betradar.com/%s\r\n",https_path);
+
+	len = httpsRequest("ls.betradar.com", https_path, recvbuf, 0);
+	if (len < 1000) { printf("competitors[j].id=%d no logo\r\n", competitors[j].id); continue; }
+
+	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
+
+	for (i = 0; i < len - 4; i++) if (recvbuf[i] == '\r' && recvbuf[i + 1] == '\n' && recvbuf[i + 2] == '\r' && recvbuf[i + 3] == '\n') break;
+	
+	WriteFile(File, ((char*)((char*)recvbuf + i + 4)), (len - i - 4), &l, NULL);
+	CloseHandle(File);
+
+}
+
+	delete recvbuf;
+	return 0;
+
+*/	
+
 using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
@@ -10116,7 +10165,7 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
 	if (iResult != NO_ERROR) { wprintf(L"WSAStartup() failed with error: %d\n", iResult); return -1; }
 
-
+	
 	remoteHost = gethostbyname(domain);
 	if (remoteHost == NULL) {
 		dwError = WSAGetLastError(); if (dwError != 0) {
@@ -10162,7 +10211,7 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	printf("NETBIOS address was returned\n");
 	}
 	}*/
-
+	
 
 	sdkSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 	if (sdkSocket == INVALID_SOCKET) { wprintf(L"socket function failed with error: %ld\n", WSAGetLastError());   WSACleanup(); return -1; }
@@ -10170,6 +10219,7 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	sdkService.sin_addr.s_addr = inet_addr(inet_ntoa(*(struct in_addr *)*remoteHost->h_addr_list));
 	sdkService.sin_port = htons(443);
 	iResult = connect(sdkSocket, (SOCKADDR *)& sdkService, sizeof(sdkService));
+	
 	if (iResult == SOCKET_ERROR) {
 		wprintf(L"connect function failed with error: %ld\n", WSAGetLastError()); iResult = closesocket(sdkSocket);
 		if (iResult == SOCKET_ERROR) wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());  WSACleanup(); 
@@ -10178,23 +10228,29 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	ctx = SSL_CTX_new(SSLv23_client_method()); ssl = SSL_new(ctx);
 	if (!ssl) {
 		wprintf(L"SSL creation error\n"); iResult = closesocket(sdkSocket); if (iResult == SOCKET_ERROR) wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
-		WSACleanup(); return 1;
+		WSACleanup(); return -1;
 	}
 	SSL_set_fd(ssl, sdkSocket);
 	iResult = SSL_connect(ssl);
 	if (!iResult) {
 		wprintf(L"SSL connect error\nretval: %d\n", iResult); iResult = closesocket(sdkSocket);
 		if (iResult == SOCKET_ERROR) { SSL_CTX_free(ctx);  wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError()); WSACleanup(); return -1; }
-		iResult = SSL_get_error(ssl, iResult); wprintf(L"SSL error: %d\n", iResult); return 1;
+		iResult = SSL_get_error(ssl, iResult); wprintf(L"SSL error: %d\n", iResult); return -1;
 	}
-	cert = SSL_get_peer_certificate(ssl);
-	str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
+	
+	//cert = SSL_get_peer_certificate(ssl);
+	
+	//str = X509_NAME_oneline(X509_get_subject_name(cert), 0, 0);
 	//printf("\t subject: %s\n", str);
-	OPENSSL_free(str);
-	str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
+	//OPENSSL_free(str);
+
+	
+	//str = X509_NAME_oneline(X509_get_issuer_name(cert), 0, 0);
 	//printf("\t issuer: %s\n", str);
-	OPENSSL_free(str);
-	X509_free(cert);
+	//OPENSSL_free(str);
+	
+	
+	//X509_free(cert);
 	sendBuf = new char[1024];
 	if (mode == 0) strcpy(sendBuf, "GET ");
 	else strcpy(sendBuf, "POST ");
@@ -10203,15 +10259,18 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	strcat(sendBuf, domain);
 	strcat(sendBuf, "\r\nx-access-token: YaNJ9uwq8GHe953XQD\r\nUser-Agent: Webclient\r\nAccept:*/*\r\n\r\n");
 	iResult = SSL_write(ssl, sendBuf, strlen(sendBuf));
+	
 
 	do {
+		
 		iResult = SSL_read(ssl, (char*)recv + readBytes, buflen - readBytes);
 		if (iResult > 0) {
 			readBytes = readBytes + iResult;
-			recv[readBytes] = '\0';
+			
 		}
+	
 	} while (iResult > 0);
-
+	recv[readBytes] = '\0';
 	
 	delete[] sendBuf;
 	closesocket(sdkSocket);
@@ -10220,7 +10279,7 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	SSL_CTX_free(ctx);
 
 	WSACleanup();
-	return 0;
+	return readBytes;
 
 };
 uint64_t now_microseconds(void)
