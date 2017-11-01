@@ -3342,10 +3342,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	
 	for (;;) {
 		
-		
+		if (debug_output == true) printf("pos=0\r\n");
+			
 		if (recovery_state == 0) {
 			
 			if (new_message_arrived == true)  GenerateBigStep(); 
+			if (debug_output == true) printf("pos=1\r\n");
 			if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
 				clientIDs.clear();
 				clientIDs = server.getClientIDs();
@@ -3367,10 +3369,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		//int p2 = timestamp();
 		//p2 = p2 - p1;
 		//printf("GenerateBigStep=%dms\r\n",p2);
+		if (debug_output == true) printf("pos=2\r\n");
 
 		status = 0;
 		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
-		if (amqp_empty_flag == true) { amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; continue; }
+		if (amqp_empty_flag == true) { amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; if (debug_output == true) printf("pos=3\r\n"); continue; }
 		std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
 		amqp_empty_flag = true;
 		amqp_lock_flag.clear(std::memory_order_release);
@@ -3379,6 +3382,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		maxbuf[AMQP_message_len] = 0;
 		socket_message_big[0] = 0;
 		offset = 0;
+		if (debug_output == true) printf("pos=4\r\n");
 		doc.parse<0>(maxbuf);
 
 
@@ -3475,7 +3479,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				}
 				
 
-	
+				
 
 				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
 
@@ -3553,7 +3557,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
 					std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
 
-
+					if (debug_output == true) printf("odds start\r\n");
 
 
 					xml_node<> * odds = doc.first_node()->first_node("odds");
@@ -3876,8 +3880,19 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											}
 
 											if (_line->outcome_name[i] == NULL) {
-												_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-												std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+												if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
+													_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
+													std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+
+
+												}
+												else {
+													_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+													std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+												}
+
+
+
 											}
 
 										}
@@ -4057,7 +4072,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+							//if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 							auto it = compound2line_index.find(_line[0].getCompoundKey());
 							if (it == compound2line_index.end()) {
@@ -4076,11 +4091,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								//printf("Line Update\r\n");
 							}
 
-							if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+							//if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 							if (recovery_state == 0) {
 
-								if (debug_output == true) printf("write buffer data\r\n");
+								//if (debug_output == true) printf("write buffer data\r\n");
 
 								//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 								//if (_line->status == 0 || _line->status == -3) continue;
@@ -4107,7 +4122,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
 
-								if (debug_output == true) printf("end write buffer data\r\n");
+								//if (debug_output == true) printf("end write buffer data\r\n");
 							}
 
 
@@ -4124,11 +4139,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						}
 					}
+
+					if (debug_output == true) printf("odds end\r\n");
 					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 
 				}
 				if (type_radar == 3) {
-			
+					
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
 					if (seasons_id[event_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). season_id=%d\r\n", event_id);
@@ -4206,7 +4223,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					std::strcat(socket_message_big, "\r\n");
 
 
-
+					if (debug_output == true) printf("odds start\r\n");
 
 
 					xml_node<> * odds = doc.first_node()->first_node("odds");
@@ -4524,8 +4541,19 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															}
 
 															if (_line->outcome_name[i] == NULL) {
-																_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-																std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+																if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
+																	_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
+																	std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+
+
+																}
+																else {
+																	_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+																	std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+																}
+
+
+
 															}
 
 														}
@@ -4704,7 +4732,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											}
 
 
-											if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+											//if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 											auto it = compound2line_index.find(_line[0].getCompoundKey());
 											if (it == compound2line_index.end()) {
@@ -4723,11 +4751,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												//printf("Line Update\r\n");
 											}
-											if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+											//if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 											if (recovery_state == 0) {
 
-												if (debug_output == true) printf("write buffer data\r\n");
+												//if (debug_output == true) printf("write buffer data\r\n");
 
 												//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 												//if (_line->status == 0 || _line->status == -3) continue;
@@ -4754,7 +4782,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												writeInteger(buffer, offset, _line->specifier_number, 1);
 												for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
-												if (debug_output == true) printf("end write buffer data\r\n");
+												//if (debug_output == true) printf("end write buffer data\r\n");
 
 											}
 
@@ -4765,6 +4793,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						}
 					}
+					if (debug_output == true) printf("odds end\r\n");
 					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 				}
 				if (type_radar < 2) {
@@ -4871,6 +4900,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 					if (doc.first_node()->first_attribute("timestamp")) _event->timestamp = atoi(doc.first_node()->first_attribute("timestamp")->value());
+					
+					if (debug_output == true) printf("sport_event_status start\r\n");
 
 					xml_node<> * sport_event_status = doc.first_node()->first_node("sport_event_status");
 					if (sport_event_status != NULL) {
@@ -5035,6 +5066,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 					}
 
+					if (debug_output == true) printf("sport_event_status end\r\n");
 					//	if (_event->status > 0) print = true; else print = false;
 
 					if (print == true) {
@@ -5186,7 +5218,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 
 
-
+					if (debug_output == true) printf("odds start\r\n");
 
 
 					if (odds != NULL) {
@@ -5198,13 +5230,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						_line->simple_id = 0;
 						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 						{
+							if (debug_output == true) printf("odds 1 \r\n");
 							outcomeNameError = 0;
 							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 							if (market_node->first_node("market_metadata") && market_node->first_node("market_metadata")->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_node("market_metadata")->first_attribute("next_betstop")->value());
 							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
 							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
-
+							if (debug_output == true) printf("odds 2 \r\n");
 							//if (_line->market_id == 1) printf(" markets_id[_line->market_id][0]->line_type=%d\r\n", markets_id[_line->market_id][0]->line_type);
 							if (_line->market_id >= MAX_MARKETS) {
 								std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
@@ -5231,6 +5264,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
 							if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
 							_line->extended_specifier_number = 0;
+							if (debug_output == true) printf("odds 2 \r\n");
+
 							if (market_node->first_attribute("specifiers")) {
 								n = 0;
 								m = market_node->first_attribute("specifiers")->value_size();
@@ -5318,6 +5353,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									}
 								}
 							}
+							if (debug_output == true) printf("odds 3 \r\n");
 						outcomeNameError3: if (_line->variant > -1) {
 							z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
@@ -5332,6 +5368,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 										   outcome_number = 0;
 
+										   if (debug_output == true) printf("odds 4\r\n");
 										   for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 
 
@@ -5391,7 +5428,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   _line->outcome_probabilities = new float[_line->outcome_number];
 											   _line->outcome_odds = new float[_line->outcome_number];
 
-
+											   if (debug_output == true) printf("odds 5 \r\n");
 											   if (_line->name != NULL) delete[] _line->name;
 
 
@@ -5420,7 +5457,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-
+											   if (debug_output == true) printf("odds 6 \r\n");
 
 
 
@@ -5546,16 +5583,31 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 													   if (_line->outcome_team[i] < 3 && _line->outcome_name[i] == NULL) {
 														   if (_line->outcome_team[i] == 1) {
-															   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
-															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															   if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
+																   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + strlen(_event->home_name) + 4];
+																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+															   }
+															   else {
+																   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
+																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															   }
 															   std::strcat(_line->outcome_name[i], " (");
 															   std::strcat(_line->outcome_name[i], _event->home_name);
 															   std::strcat(_line->outcome_name[i], ")");
 
 														   }
 														   if (_line->outcome_team[i] == 2) {
-															   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															   if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
+																   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + strlen(_event->away_name) + 4];
+																   else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
+																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+															   } else {
+																   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4];
+																   else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+															   }
+															   
+															   
 															   if (_event->away_name != NULL) {
 																   std::strcat(_line->outcome_name[i], " (");
 																   std::strcat(_line->outcome_name[i], _event->away_name);
@@ -5743,12 +5795,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 											   }
 
-
+											   if (debug_output == true) printf("odds 7 \r\n");
 
 											   if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 										   }
 
-										   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+										   //if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 										   auto it = compound2line_index.find(_line[0].getCompoundKey());
 										   if (it == compound2line_index.end()) {
@@ -5766,11 +5818,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   //printf("Line Update\r\n");
 										   }
 
-										   if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+										   //if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 										   if (recovery_state == 0) {
 
-											   if (debug_output == true) printf("write buffer data\r\n");
+											   //if (debug_output == true) printf("write buffer data\r\n");
 
 											   //if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 											   //if (_line->status == 0 || _line->status == -3) continue;
@@ -5795,13 +5847,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   writeInteger(buffer, offset, _line->specifier_number, 1);
 											   for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
-											   if (debug_output == true) printf("end write buffer data\r\n");
+											   //if (debug_output == true) printf("end write buffer data\r\n");
 
 										   }
 
 
 						}
 					}
+					if (debug_output == true) printf("odds end\r\n");
+
 					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 
 				}
@@ -5843,7 +5897,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				printf(doc.first_node()->name()); std::printf("\r\n");
 			}
 
-
+			if (debug_output == true); printf("pos=5\r\n");
 			doc.clear();
 			
 
