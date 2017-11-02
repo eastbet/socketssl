@@ -2465,10 +2465,10 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-									long error = ERR_get_error();
-									const char* error_str = ERR_error_string(error, NULL);
-									delete[] error_str;
-									//std::printf("could not SSL_read (returned 0): %s\n", error_str);
+									//long error = ERR_get_error();
+									//const char* error_str = ERR_error_string(error, NULL);
+									//delete[] error_str;
+									std::printf("could not SSL_read (returned 0):\n");
 								}
 
 							}
@@ -2498,10 +2498,10 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-									long error = ERR_get_error();
-									const char* error_str = ERR_error_string(error, NULL);
-									std::printf("could not SSL_read (returned -1) %s\n", error_str);
-									delete[] error_str;
+									//long error = ERR_get_error();
+									//const char* error_str = ERR_error_string(error, NULL);
+									std::printf("could not SSL_read (returned -1)\n");
+									//delete[] error_str;
 
 								}
 
@@ -2511,10 +2511,10 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
-								/*if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
+								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
 									wsRemoveClient(socketIDmap[i]); else
-									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);*/
-								wsRemoveClient(socketIDmap[i]);
+									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+								//wsRemoveClient(socketIDmap[i]);
 							}
 							else if (nbytes == 0) {
 								wsRemoveClient(socketIDmap[i]);
@@ -2641,10 +2641,10 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-
-									long error = ERR_get_error();
+									std::printf("could not SSL_write (returned 0):\n");
+									/*long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
-									delete[] error_str;
+									delete[] error_str;*/
 								}
 								//std::printf("could not SSL_write (returned 0): %s\n", error_str);
 
@@ -2671,12 +2671,15 @@ void webSocket::startServer(int port) {
 
 								}
 
-								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8) {
+
+								/*if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8 && writeopcode != 9) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									delete[] error_str;
+								}*/
+								else {
+									std::printf("could not SSL_write (returned -1):\n");
 								}
-								//std::printf("could not SSL_write (returned -1): %s\n", error_str);
 
 
 
@@ -5897,7 +5900,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				printf(doc.first_node()->name()); std::printf("\r\n");
 			}
 
-			if (debug_output == true); printf("pos=5\r\n");
+			if (debug_output == true) printf("pos=5\r\n");
 			doc.clear();
 			
 
