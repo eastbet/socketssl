@@ -3209,8 +3209,8 @@ int port = 1443;
 //server.setMessageHandler(messageHandler);
 //server.setPeriodicHandler(periodicHandler);
 
-//while (port == 1443) Sleep(1);
-server.startServer(port);
+while (port == 1443) Sleep(1);
+//server.startServer(port);
 
 return 0;
 
@@ -3312,7 +3312,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = false;
+	bool print = true;
 	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
