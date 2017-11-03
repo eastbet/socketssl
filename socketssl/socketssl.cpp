@@ -136,7 +136,8 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MATCHSTATUS 1000
 #define QUEUE_LENGTH 2000
 #define STEP_QUEUE 100
-#define AMQP_BUFLEN 1048576
+#define AMQP_QUEUE 2000
+#define AMQP_BUFLEN 100000
 #pragma pack(push, 8)
 //#pragma pack(pop)
 
@@ -161,13 +162,16 @@ void GenerateBigStep();
 int* data_step_len_1 = new int[STEP_QUEUE];
 int* data_step_len_2 = new int[STEP_QUEUE];
 char** array_data_step_1 = new char*[STEP_QUEUE];
-char** array_data_step_2 = new char*[STEP_QUEUE];
-char* AMQP_message = new char[AMQP_BUFLEN];
-int AMQP_message_len = 0;
-atomic_flag amqp_lock_flag = ATOMIC_FLAG_INIT;
-volatile bool amqp_empty_flag = true;
-atomic_int64_t current_data_step_1 = -1;
-atomic_int64_t current_data_step_2 = -1;
+char** array_data_step_2 = new char*[STEP_QUEUE]; 
+char** AMQP_message = new char* [AMQP_QUEUE];
+atomic_int64_t process_index = 0;
+atomic_int64_t rabbit_index = 0;
+
+//volatile atomic_int64_t AMQP_message_len = 0;
+//volatile atomic_flag amqp_lock_flag = ATOMIC_FLAG_INIT;
+//volatile bool amqp_empty_flag = true;
+volatile atomic_int64_t current_data_step_1 = -1;
+volatile atomic_int64_t current_data_step_2 = -1;
 volatile int64_t current_data_step_temp_1 = -1;
 volatile int64_t current_data_step_temp_2 = -1;
 
@@ -3238,7 +3242,20 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		data_step_len_1[j] = 0;
 		data_step_len_2[j] = 0;
 	}
+	for (int j = 0; j < AMQP_QUEUE; j++) {
+		
+		//AMQP_message[j] = new char[AMQP_BUFLEN];
+		
+		
+		array_data_step_2[j] = nullptr;
+		array_data_step_1[j] = nullptr;
+		data_step_len_1[j] = 0;
+		data_step_len_2[j] = 0;
 
+
+
+
+	}
 
 	getSports();
 
@@ -3298,7 +3315,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	char* name = new char[MAX_PATH];
 	char* buf = new char[MAX_PATH];
 	char set_scores[1024];
-	char* maxbuf = new char[AMQP_BUFLEN];
+	//char* maxbuf = nullptr;// new char[AMQP_BUFLEN];
 	Event* _event = nullptr;
 	Tournament* _tournament = nullptr;
 	int i = 0;
@@ -3369,22 +3386,34 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		//printf("GenerateBigStep=%dms\r\n",p2);
 
 		status = 0;
-		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
-		if (amqp_empty_flag == true) { amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; continue; }
-		std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
-		amqp_empty_flag = true;
-		amqp_lock_flag.clear(std::memory_order_release);
-		new_message_arrived = true;
-
-		maxbuf[AMQP_message_len] = 0;
+		//printf("process 1\r\n");
+		//while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
+		//printf("process 2\r\n");
+		//if (amqp_empty_flag == true) { //printf("process 3\r\n");  
+		//amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; continue; }
+		//std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
+		//maxbuf = AMQP_message[process_index];
+		//printf("process 4\r\n");
+		//amqp_empty_flag = true;
+		//maxbuf[AMQP_message_len] = 0;
+		//amqp_lock_flag.clear(std::memory_order_release);
+		//new_message_arrived = true;
+		//printf("process 5\r\n");
+		
 		socket_message_big[0] = 0;
 		offset = 0;
-		doc.parse<0>(maxbuf);
 
+		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
+		//printf("process_index=%d\r\n", process_index);
+		new_message_arrived = true;
+		doc.parse<0>(AMQP_message[process_index%AMQP_QUEUE]);
+		process_index++;
+		//new_message_arrived = false;
 
-
-		if (doc.first_node() == NULL) continue;
-
+		if (doc.first_node() == NULL) {
+			new_message_arrived = false; continue;
+		}
+		//new_message_arrived = true;
 
 
 
@@ -5839,7 +5868,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			}
 			else {
-				if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
+				if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) { recovery_state = 0; new_message_arrived = true; }
 				printf(doc.first_node()->name()); std::printf("\r\n");
 			}
 
@@ -5909,7 +5938,7 @@ delete[] outcome_probabilities;
 delete[] outcome_odds;
 delete[] name;
 delete[] buf;
-delete[] maxbuf;
+//delete[] maxbuf;
 delete[] socket_message_big;
 delete[] socket_message_little;
 delete[] buffer;
@@ -10447,7 +10476,10 @@ static void run(amqp_connection_state_t conn)
 	amqp_frame_t frame;
 	uint64_t now;
 		
+	for (int j = 0; j < AMQP_QUEUE; j++) {
 
+		AMQP_message[j] = new char[AMQP_BUFLEN];
+	}
 
 	for (;;) {
 		amqp_rpc_reply_t ret;
@@ -10465,13 +10497,22 @@ static void run(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
-		while(amqp_empty_flag == false) Sleep(1);
-		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
-		std::strncpy(AMQP_message, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
-		AMQP_message_len = envelope.message.body.len;
-		amqp_empty_flag = false;
-		amqp_lock_flag.clear(std::memory_order_release);
+		//printf("run 1\r\n");
+		//while(amqp_empty_flag == false) Sleep(1);
+		//printf("run 2\r\n");
+		//hile (amqp_lock_flag.test_and_set(std::memory_order_acquire));
+		//printf("run 3\r\n");
+		//amqp_empty_flag = false;
 
+
+		//printf("rabbit_index=%d\r\n", rabbit_index%AMQP_QUEUE);
+		//printf("envelope.message.body.len=%dr\n" , envelope.message.body.len);
+		AMQP_message[rabbit_index%AMQP_QUEUE][0] = 0;
+		std::strncpy(AMQP_message[rabbit_index%AMQP_QUEUE], ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
+		AMQP_message[rabbit_index%AMQP_QUEUE][envelope.message.body.len] = 0;
+		rabbit_index++;
+		//printf("2rabbit_index=%d\r\n", rabbit_index);
+		//printf("run 4\r\n");
 
 		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
 			if (AMQP_RESPONSE_LIBRARY_EXCEPTION == ret.reply_type &&
