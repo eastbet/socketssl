@@ -136,7 +136,8 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MATCHSTATUS 1000
 #define QUEUE_LENGTH 2000
 #define STEP_QUEUE 100
-#define AMQP_BUFLEN 1048576
+#define AMQP_QUEUE 2000
+#define AMQP_BUFLEN 100000
 #pragma pack(push, 8)
 //#pragma pack(pop)
 
@@ -161,13 +162,16 @@ void GenerateBigStep();
 int* data_step_len_1 = new int[STEP_QUEUE];
 int* data_step_len_2 = new int[STEP_QUEUE];
 char** array_data_step_1 = new char*[STEP_QUEUE];
-char** array_data_step_2 = new char*[STEP_QUEUE];
-char* AMQP_message = new char[AMQP_BUFLEN];
-int AMQP_message_len = 0;
-atomic_flag amqp_lock_flag = ATOMIC_FLAG_INIT;
-volatile bool amqp_empty_flag = true;
-atomic_int64_t current_data_step_1 = -1;
-atomic_int64_t current_data_step_2 = -1;
+char** array_data_step_2 = new char*[STEP_QUEUE]; 
+char** AMQP_message = new char* [AMQP_QUEUE];
+atomic_int64_t process_index = 0;
+atomic_int64_t rabbit_index = 0;
+
+//volatile atomic_int64_t AMQP_message_len = 0;
+//volatile atomic_flag amqp_lock_flag = ATOMIC_FLAG_INIT;
+//volatile bool amqp_empty_flag = true;
+volatile atomic_int64_t current_data_step_1 = -1;
+volatile atomic_int64_t current_data_step_2 = -1;
 volatile int64_t current_data_step_temp_1 = -1;
 volatile int64_t current_data_step_temp_2 = -1;
 
@@ -2465,10 +2469,10 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-									//long error = ERR_get_error();
-									//const char* error_str = ERR_error_string(error, NULL);
-									//delete[] error_str;
-									std::printf("could not SSL_read (returned 0):\n");
+									long error = ERR_get_error();
+									const char* error_str = ERR_error_string(error, NULL);
+									delete[] error_str;
+									//std::printf("could not SSL_read (returned 0): %s\n", error_str);
 								}
 
 							}
@@ -2498,10 +2502,10 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-									//long error = ERR_get_error();
-									//const char* error_str = ERR_error_string(error, NULL);
-									std::printf("could not SSL_read (returned -1)\n");
-									//delete[] error_str;
+									long error = ERR_get_error();
+									const char* error_str = ERR_error_string(error, NULL);
+									std::printf("could not SSL_read (returned -1) %s\n", error_str);
+									delete[] error_str;
 
 								}
 
@@ -2511,10 +2515,10 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
-								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
+								/*if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
 									wsRemoveClient(socketIDmap[i]); else
-									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-								//wsRemoveClient(socketIDmap[i]);
+									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);*/
+								wsRemoveClient(socketIDmap[i]);
 							}
 							else if (nbytes == 0) {
 								wsRemoveClient(socketIDmap[i]);
@@ -2641,10 +2645,10 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-									std::printf("could not SSL_write (returned 0):\n");
-									/*long error = ERR_get_error();
+
+									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
-									delete[] error_str;*/
+									delete[] error_str;
 								}
 								//std::printf("could not SSL_write (returned 0): %s\n", error_str);
 
@@ -2671,15 +2675,12 @@ void webSocket::startServer(int port) {
 
 								}
 
-
-								/*if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8 && writeopcode != 9) {
+								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									delete[] error_str;
-								}*/
-								else {
-									std::printf("could not SSL_write (returned -1):\n");
 								}
+								//std::printf("could not SSL_write (returned -1): %s\n", error_str);
 
 
 
@@ -3209,8 +3210,8 @@ int port = 1443;
 //server.setMessageHandler(messageHandler);
 //server.setPeriodicHandler(periodicHandler);
 
-while (port == 1443) Sleep(1);
-//server.startServer(port);
+//while (port == 1443) Sleep(1);
+server.startServer(port);
 
 return 0;
 
@@ -3241,7 +3242,20 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		data_step_len_1[j] = 0;
 		data_step_len_2[j] = 0;
 	}
+	for (int j = 0; j < AMQP_QUEUE; j++) {
+		
+		//AMQP_message[j] = new char[AMQP_BUFLEN];
+		
+		
+		array_data_step_2[j] = nullptr;
+		array_data_step_1[j] = nullptr;
+		data_step_len_1[j] = 0;
+		data_step_len_2[j] = 0;
 
+
+
+
+	}
 
 	getSports();
 
@@ -3301,7 +3315,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	char* name = new char[MAX_PATH];
 	char* buf = new char[MAX_PATH];
 	char set_scores[1024];
-	char* maxbuf = new char[AMQP_BUFLEN];
+	//char* maxbuf = nullptr;// new char[AMQP_BUFLEN];
 	Event* _event = nullptr;
 	Tournament* _tournament = nullptr;
 	int i = 0;
@@ -3312,7 +3326,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = true;
+	bool print = false;
 	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
@@ -3345,12 +3359,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	
 	for (;;) {
 		
-		if (debug_output == true) printf("pos=0\r\n");
-			
+		
 		if (recovery_state == 0) {
 			
 			if (new_message_arrived == true)  GenerateBigStep(); 
-			if (debug_output == true) printf("pos=1\r\n");
 			if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
 				clientIDs.clear();
 				clientIDs = server.getClientIDs();
@@ -3372,26 +3384,36 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		//int p2 = timestamp();
 		//p2 = p2 - p1;
 		//printf("GenerateBigStep=%dms\r\n",p2);
-		if (debug_output == true) printf("pos=2\r\n");
 
 		status = 0;
-		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
-		if (amqp_empty_flag == true) { amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; if (debug_output == true) printf("pos=3\r\n"); continue; }
-		std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
-		amqp_empty_flag = true;
-		amqp_lock_flag.clear(std::memory_order_release);
-		new_message_arrived = true;
-
-		maxbuf[AMQP_message_len] = 0;
+		//printf("process 1\r\n");
+		//while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
+		//printf("process 2\r\n");
+		//if (amqp_empty_flag == true) { //printf("process 3\r\n");  
+		//amqp_lock_flag.clear(std::memory_order_release); new_message_arrived = false; continue; }
+		//std::strncpy(maxbuf, AMQP_message, AMQP_message_len);
+		//maxbuf = AMQP_message[process_index];
+		//printf("process 4\r\n");
+		//amqp_empty_flag = true;
+		//maxbuf[AMQP_message_len] = 0;
+		//amqp_lock_flag.clear(std::memory_order_release);
+		//new_message_arrived = true;
+		//printf("process 5\r\n");
+		
 		socket_message_big[0] = 0;
 		offset = 0;
-		if (debug_output == true) printf("pos=4\r\n");
-		doc.parse<0>(maxbuf);
 
+		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
+		//printf("process_index=%d\r\n", process_index);
+		new_message_arrived = true;
+		doc.parse<0>(AMQP_message[process_index%AMQP_QUEUE]);
+		process_index++;
+		//new_message_arrived = false;
 
-
-		if (doc.first_node() == NULL) continue;
-
+		if (doc.first_node() == NULL) {
+			new_message_arrived = false; continue;
+		}
+		//new_message_arrived = true;
 
 
 
@@ -3482,7 +3504,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				}
 				
 
-				
+	
 
 				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
 
@@ -3560,7 +3582,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
 					std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
 
-					if (debug_output == true) printf("odds start\r\n");
+
 
 
 					xml_node<> * odds = doc.first_node()->first_node("odds");
@@ -3883,19 +3905,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											}
 
 											if (_line->outcome_name[i] == NULL) {
-												if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
-													_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
-													std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
-
-
-												}
-												else {
-													_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-													std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-												}
-
-
-
+												_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+												std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
 											}
 
 										}
@@ -4075,7 +4086,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-							//if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 							auto it = compound2line_index.find(_line[0].getCompoundKey());
 							if (it == compound2line_index.end()) {
@@ -4094,11 +4105,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								//printf("Line Update\r\n");
 							}
 
-							//if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+							if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 							if (recovery_state == 0) {
 
-								//if (debug_output == true) printf("write buffer data\r\n");
+								if (debug_output == true) printf("write buffer data\r\n");
 
 								//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 								//if (_line->status == 0 || _line->status == -3) continue;
@@ -4125,7 +4136,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
 
-								//if (debug_output == true) printf("end write buffer data\r\n");
+								if (debug_output == true) printf("end write buffer data\r\n");
 							}
 
 
@@ -4142,13 +4153,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						}
 					}
-
-					if (debug_output == true) printf("odds end\r\n");
 					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 
 				}
 				if (type_radar == 3) {
-					
+			
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsseason id out of MAX_TOURNAMENTS in run %d\r\n", event_id); continue; }
 					if (seasons_id[event_id] == NULL) {
 						std::printf("Tournament not found. Run getTournament(). season_id=%d\r\n", event_id);
@@ -4226,7 +4235,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					std::strcat(socket_message_big, "\r\n");
 
 
-					if (debug_output == true) printf("odds start\r\n");
+
 
 
 					xml_node<> * odds = doc.first_node()->first_node("odds");
@@ -4544,19 +4553,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															}
 
 															if (_line->outcome_name[i] == NULL) {
-																if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
-																	_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
-																	std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
-
-
-																}
-																else {
-																	_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-																	std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-																}
-
-
-
+																_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+																std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
 															}
 
 														}
@@ -4735,7 +4733,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											}
 
 
-											//if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+											if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 											auto it = compound2line_index.find(_line[0].getCompoundKey());
 											if (it == compound2line_index.end()) {
@@ -4754,11 +4752,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												//printf("Line Update\r\n");
 											}
-											//if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+											if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 											if (recovery_state == 0) {
 
-												//if (debug_output == true) printf("write buffer data\r\n");
+												if (debug_output == true) printf("write buffer data\r\n");
 
 												//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 												//if (_line->status == 0 || _line->status == -3) continue;
@@ -4785,7 +4783,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												writeInteger(buffer, offset, _line->specifier_number, 1);
 												for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
-												//if (debug_output == true) printf("end write buffer data\r\n");
+												if (debug_output == true) printf("end write buffer data\r\n");
 
 											}
 
@@ -4796,7 +4794,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						}
 					}
-					if (debug_output == true) printf("odds end\r\n");
 					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 				}
 				if (type_radar < 2) {
@@ -4903,8 +4900,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 					if (doc.first_node()->first_attribute("timestamp")) _event->timestamp = atoi(doc.first_node()->first_attribute("timestamp")->value());
-					
-					if (debug_output == true) printf("sport_event_status start\r\n");
 
 					xml_node<> * sport_event_status = doc.first_node()->first_node("sport_event_status");
 					if (sport_event_status != NULL) {
@@ -5069,7 +5064,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 					}
 
-					if (debug_output == true) printf("sport_event_status end\r\n");
 					//	if (_event->status > 0) print = true; else print = false;
 
 					if (print == true) {
@@ -5221,7 +5215,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 
 
-					if (debug_output == true) printf("odds start\r\n");
+
 
 
 					if (odds != NULL) {
@@ -5233,14 +5227,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						_line->simple_id = 0;
 						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 						{
-							if (debug_output == true) printf("odds 1 \r\n");
 							outcomeNameError = 0;
 							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 							if (market_node->first_node("market_metadata") && market_node->first_node("market_metadata")->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_node("market_metadata")->first_attribute("next_betstop")->value());
 							if (market_node->first_attribute("favourite")) _line->favourite = atoi(market_node->first_attribute("favourite")->value());
 							if (market_node->first_attribute("status")) _line->status = atoi(market_node->first_attribute("status")->value());
 							if (market_node->first_attribute("id")) _line->market_id = atoi(market_node->first_attribute("id")->value());
-							if (debug_output == true) printf("odds 2 \r\n");
+
 							//if (_line->market_id == 1) printf(" markets_id[_line->market_id][0]->line_type=%d\r\n", markets_id[_line->market_id][0]->line_type);
 							if (_line->market_id >= MAX_MARKETS) {
 								std::printf("ERROR DATA!\r\nmarket id out of MAX_MARKETS in run%d\r\n", _line->market_id); continue;
@@ -5267,8 +5260,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							if (_line->extended_specifier != NULL) { delete[] _line->extended_specifier; _line->extended_specifier = NULL; }
 							if (_line->extended_specifier_value != NULL) { delete[] _line->extended_specifier_value; _line->extended_specifier_value = NULL; }
 							_line->extended_specifier_number = 0;
-							if (debug_output == true) printf("odds 2 \r\n");
-
 							if (market_node->first_attribute("specifiers")) {
 								n = 0;
 								m = market_node->first_attribute("specifiers")->value_size();
@@ -5356,7 +5347,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									}
 								}
 							}
-							if (debug_output == true) printf("odds 3 \r\n");
 						outcomeNameError3: if (_line->variant > -1) {
 							z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
@@ -5371,7 +5361,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 										   outcome_number = 0;
 
-										   if (debug_output == true) printf("odds 4\r\n");
 										   for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 
 
@@ -5431,7 +5420,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   _line->outcome_probabilities = new float[_line->outcome_number];
 											   _line->outcome_odds = new float[_line->outcome_number];
 
-											   if (debug_output == true) printf("odds 5 \r\n");
+
 											   if (_line->name != NULL) delete[] _line->name;
 
 
@@ -5460,7 +5449,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-											   if (debug_output == true) printf("odds 6 \r\n");
+
 
 
 
@@ -5586,31 +5575,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 													   if (_line->outcome_team[i] < 3 && _line->outcome_name[i] == NULL) {
 														   if (_line->outcome_team[i] == 1) {
-															   if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
-																   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + strlen(_event->home_name) + 4];
-																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
-															   }
-															   else {
-																   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
-																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-															   }
+															   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
 															   std::strcat(_line->outcome_name[i], " (");
 															   std::strcat(_line->outcome_name[i], _event->home_name);
 															   std::strcat(_line->outcome_name[i], ")");
 
 														   }
 														   if (_line->outcome_team[i] == 2) {
-															   if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
-																   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + strlen(_event->away_name) + 4];
-																   else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
-																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
-															   } else {
-																   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4];
-																   else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-																   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
-															   }
-															   
-															   
+															   if (_event->away_name != NULL) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
 															   if (_event->away_name != NULL) {
 																   std::strcat(_line->outcome_name[i], " (");
 																   std::strcat(_line->outcome_name[i], _event->away_name);
@@ -5798,12 +5772,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 											   }
 
-											   if (debug_output == true) printf("odds 7 \r\n");
+
 
 											   if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 										   }
 
-										   //if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+										   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 										   auto it = compound2line_index.find(_line[0].getCompoundKey());
 										   if (it == compound2line_index.end()) {
@@ -5821,11 +5795,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   //printf("Line Update\r\n");
 										   }
 
-										   //if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+										   if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 										   if (recovery_state == 0) {
 
-											   //if (debug_output == true) printf("write buffer data\r\n");
+											   if (debug_output == true) printf("write buffer data\r\n");
 
 											   //if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 											   //if (_line->status == 0 || _line->status == -3) continue;
@@ -5850,15 +5824,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   writeInteger(buffer, offset, _line->specifier_number, 1);
 											   for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 
-											   //if (debug_output == true) printf("end write buffer data\r\n");
+											   if (debug_output == true) printf("end write buffer data\r\n");
 
 										   }
 
 
 						}
 					}
-					if (debug_output == true) printf("odds end\r\n");
-
 					if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 
 				}
@@ -5896,11 +5868,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			}
 			else {
-				if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) recovery_state = 0;
+				if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) { recovery_state = 0; new_message_arrived = true; }
 				printf(doc.first_node()->name()); std::printf("\r\n");
 			}
 
-			if (debug_output == true) printf("pos=5\r\n");
+
 			doc.clear();
 			
 
@@ -5966,7 +5938,7 @@ delete[] outcome_probabilities;
 delete[] outcome_odds;
 delete[] name;
 delete[] buf;
-delete[] maxbuf;
+//delete[] maxbuf;
 delete[] socket_message_big;
 delete[] socket_message_little;
 delete[] buffer;
@@ -10504,7 +10476,10 @@ static void run(amqp_connection_state_t conn)
 	amqp_frame_t frame;
 	uint64_t now;
 		
+	for (int j = 0; j < AMQP_QUEUE; j++) {
 
+		AMQP_message[j] = new char[AMQP_BUFLEN];
+	}
 
 	for (;;) {
 		amqp_rpc_reply_t ret;
@@ -10522,13 +10497,22 @@ static void run(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
-		while(amqp_empty_flag == false) Sleep(1);
-		while (amqp_lock_flag.test_and_set(std::memory_order_acquire));
-		std::strncpy(AMQP_message, ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
-		AMQP_message_len = envelope.message.body.len;
-		amqp_empty_flag = false;
-		amqp_lock_flag.clear(std::memory_order_release);
+		//printf("run 1\r\n");
+		//while(amqp_empty_flag == false) Sleep(1);
+		//printf("run 2\r\n");
+		//hile (amqp_lock_flag.test_and_set(std::memory_order_acquire));
+		//printf("run 3\r\n");
+		//amqp_empty_flag = false;
 
+
+		//printf("rabbit_index=%d\r\n", rabbit_index%AMQP_QUEUE);
+		//printf("envelope.message.body.len=%dr\n" , envelope.message.body.len);
+		AMQP_message[rabbit_index%AMQP_QUEUE][0] = 0;
+		std::strncpy(AMQP_message[rabbit_index%AMQP_QUEUE], ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
+		AMQP_message[rabbit_index%AMQP_QUEUE][envelope.message.body.len] = 0;
+		rabbit_index++;
+		//printf("2rabbit_index=%d\r\n", rabbit_index);
+		//printf("run 4\r\n");
 
 		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
 			if (AMQP_RESPONSE_LIBRARY_EXCEPTION == ret.reply_type &&
