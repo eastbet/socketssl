@@ -1752,8 +1752,6 @@ void webSocket::wsRemoveClient(int clientID) {
 	//SSL_shutdown(client->ssl);
 	//SSL_CTX_free(client->ssl);
 	while (ws_clients_flag.test_and_set(std::memory_order_acquire));
-
-
 	FD_CLR(client->socket, &r_fds);
 	FD_CLR(client->socket, &w_fds);
 	closesocket(client->socket);
@@ -2501,11 +2499,11 @@ void webSocket::startServer(int port) {
 									//continue;
 								}
 								else {
-
-									long error = ERR_get_error();
+									std::printf("could not SSL_read (returned -1)\n");
+									/*long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									std::printf("could not SSL_read (returned -1) %s\n", error_str);
-									delete[] error_str;
+									delete[] error_str;*/
 
 								}
 
@@ -2515,10 +2513,10 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
-								/*if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
+								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
 									wsRemoveClient(socketIDmap[i]); else
-									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);*/
-								wsRemoveClient(socketIDmap[i]);
+									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+								//wsRemoveClient(socketIDmap[i]);
 							}
 							else if (nbytes == 0) {
 								wsRemoveClient(socketIDmap[i]);
@@ -5845,7 +5843,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (zip_len > 1)
 					{
 						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
+						while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
 						radarMessageHandler(encode_message, encode_message_len);
+						server.ws_clients_flag.clear(std::memory_order_release);
 						//printf("encode_message_len=%d\r\n", encode_message_len);
 						delete[] encode_message;
 						encode_message = nullptr;
