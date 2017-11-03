@@ -3327,7 +3327,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = true;
+	bool print = false;
 	bool debug_output = true;
 	int event_id = 0;
 	int type_radar = 0;
@@ -3405,9 +3405,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		
 		socket_message_big[0] = 0;
 		offset = 0;
+		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
 		printf("process_index=%d\r\n", process_index);
 		printf("rabbit_index=%d\r\n", rabbit_index);
-		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
+
 		//printf("process_index=%d\r\n", process_index);
 		new_message_arrived = true;
 		doc.parse<0>(AMQP_message[process_index%AMQP_QUEUE]);
@@ -4098,9 +4099,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							if (it == compound2line_index.end()) {
 								if (debug_output == true) printf("new line add");
 								_line[0].id = lines_l;
+								if (debug_output == true) printf("new line add1");
 								lines[lines_l] = _line[0];
 								lines_id[_line[0].id] = &lines[lines_l];
+								if (debug_output == true) printf("new line add2");
 								insert_line(_line[0], lines_l);
+								if (debug_output == true) printf("new line add3");
 								lines_l++;
 								if (debug_output == true) printf("new line add finish");
 
@@ -4758,9 +4762,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											if (it == compound2line_index.end()) {
 												if (debug_output == true) printf("new line add");
 												_line[0].id = lines_l;
+												if (debug_output == true) printf("new line add1");
 												lines[lines_l] = _line[0];
 												lines_id[_line[0].id] = &lines[lines_l];
+												if (debug_output == true) printf("new line add2");
 												insert_line(_line[0], lines_l);
+												if (debug_output == true) printf("new line add3");
 												lines_l++;
 												if (debug_output == true) printf("new line add finish");
 
@@ -5809,9 +5816,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   if (it == compound2line_index.end()) {
 											   if (debug_output == true) printf("new line add");
 											   _line[0].id = lines_l;
+											   if (debug_output == true) printf("new line add1");
 											   lines[lines_l] = _line[0];
 											   lines_id[_line[0].id] = &lines[lines_l];
+											   if (debug_output == true) printf("new line add2");
 											   insert_line(_line[0], lines_l);
+											   if (debug_output == true) printf("new line add3");
 											   lines_l++;
 											   if (debug_output == true) printf("new line add finish");
 
