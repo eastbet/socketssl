@@ -137,7 +137,7 @@ typedef void(*messageCallback)(int, string);
 #define MAX_MATCHSTATUS 1000
 #define QUEUE_LENGTH 2000
 #define STEP_QUEUE 100
-#define AMQP_QUEUE 2000
+#define AMQP_QUEUE 5000
 #define AMQP_BUFLEN 131072//;262144;
 #pragma pack(push, 8)
 //#pragma pack(pop)
@@ -1101,7 +1101,7 @@ string Line::getCatKey() {
 		return "e" + to_string(event_id);
 	}
 	else if (tournament_id > 0) {
-		return "t" + to_string(event_id);
+		return "t" + to_string(tournament_id);
 	}
 	else if (simple_id > 0) {
 		return "s" + to_string(simple_id);
@@ -3327,8 +3327,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int q = 0;
 	int z = 0;
 	int u = 0;
-	bool print = false;
-	bool debug_output = false;
+	bool print = true;
+	bool debug_output = true;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
@@ -3405,8 +3405,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		
 		socket_message_big[0] = 0;
 		offset = 0;
-		//printf("process_index=%d\r\n", process_index);
-		//printf("rabbit_index=%d\r\n", rabbit_index);
+		printf("process_index=%d\r\n", process_index);
+		printf("rabbit_index=%d\r\n", rabbit_index);
 		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
 		//printf("process_index=%d\r\n", process_index);
 		new_message_arrived = true;
@@ -4093,21 +4093,35 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 							auto it = compound2line_index.find(_line[0].getCompoundKey());
+							if (debug_output == true) printf(_line[0].getCompoundKey().c_str());
+							printf("\r\n");
 							if (it == compound2line_index.end()) {
+								if (debug_output == true) printf("new line add");
 								_line[0].id = lines_l;
 								lines[lines_l] = _line[0];
-								insert_line(_line[0], lines_l);
 								lines_id[_line[0].id] = &lines[lines_l];
+								insert_line(_line[0], lines_l);
 								lines_l++;
-								categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
+								if (debug_output == true) printf("new line add finish");
 
 							}
 							else {
+								if (debug_output == true) printf("line update");
 								_line[0].id = it->second;
+								if (debug_output == true) printf("line update1");
 								lines[it->second] = _line[0];
+								if (debug_output == true) printf("line finish");
 
 								//printf("Line Update\r\n");
 							}
+
+
+
+
+
+
+
+
 
 							if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
@@ -4738,24 +4752,30 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 											if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-
 											auto it = compound2line_index.find(_line[0].getCompoundKey());
+											if (debug_output == true) printf(_line[0].getCompoundKey().c_str());
+											printf("\r\n");
 											if (it == compound2line_index.end()) {
+												if (debug_output == true) printf("new line add");
 												_line[0].id = lines_l;
 												lines[lines_l] = _line[0];
 												lines_id[_line[0].id] = &lines[lines_l];
 												insert_line(_line[0], lines_l);
-
 												lines_l++;
-												categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
+												if (debug_output == true) printf("new line add finish");
 
 											}
 											else {
+												if (debug_output == true) printf("line update");
 												_line[0].id = it->second;
+												if (debug_output == true) printf("line update1");
 												lines[it->second] = _line[0];
+												if (debug_output == true) printf("line finish");
 
 												//printf("Line Update\r\n");
 											}
+
+
 											if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 											if (recovery_state == 0) {
@@ -5784,17 +5804,24 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 										   auto it = compound2line_index.find(_line[0].getCompoundKey());
+										   if (debug_output == true) printf(_line[0].getCompoundKey().c_str());
+										   printf("\r\n");
 										   if (it == compound2line_index.end()) {
+											   if (debug_output == true) printf("new line add");
 											   _line[0].id = lines_l;
 											   lines[lines_l] = _line[0];
 											   lines_id[_line[0].id] = &lines[lines_l];
 											   insert_line(_line[0], lines_l);
 											   lines_l++;
+											   if (debug_output == true) printf("new line add finish");
 
 										   }
 										   else {
+											   if (debug_output == true) printf("line update");
 											   _line[0].id = it->second;
+											   if (debug_output == true) printf("line update1");
 											   lines[it->second] = _line[0];
+											   if (debug_output == true) printf("line finish");
 
 											   //printf("Line Update\r\n");
 										   }
@@ -10512,6 +10539,7 @@ static void run(amqp_connection_state_t conn)
 		//AMQP_message[rabbit_index%AMQP_QUEUE][0] = 0;
 		//std::strncpy(AMQP_message[rabbit_index%AMQP_QUEUE], ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
 		memcpy(AMQP_message[rabbit_index%AMQP_QUEUE], envelope.message.body.bytes, envelope.message.body.len);
+		if (envelope.message.body.len >= AMQP_BUFLEN) printf("ERROR rabbit!envelope.message.body.len=%d\r\n", envelope.message.body.len);
 		AMQP_message[rabbit_index%AMQP_QUEUE][envelope.message.body.len] = 0;
 		rabbit_index++;
 		//printf("2rabbit_index=%d\r\n", rabbit_index);
