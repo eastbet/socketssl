@@ -91,6 +91,7 @@ typedef void(*messageCallback)(int, string);
 #define WS_READY_STATE_CLOSING    2
 #define WS_READY_STATE_CLOSED     3
 
+
 #define WS_STATUS_NORMAL_CLOSE             1000
 #define WS_STATUS_GONE_AWAY                1001
 #define WS_STATUS_PROTOCOL_ERROR           1002
@@ -137,7 +138,7 @@ typedef void(*messageCallback)(int, string);
 #define QUEUE_LENGTH 2000
 #define STEP_QUEUE 100
 #define AMQP_QUEUE 2000
-#define AMQP_BUFLEN 100000
+#define AMQP_BUFLEN 131072//;262144;
 #pragma pack(push, 8)
 //#pragma pack(pop)
 
@@ -2315,7 +2316,7 @@ void webSocket::startServer(int port) {
 		exit(1);
 	}
 
-
+	int retValue;
 	fdmax = ListenSocket;
 	int writeopcode = 0;
 	fd_set read_fds;
@@ -2434,7 +2435,7 @@ void webSocket::startServer(int port) {
 						}
 					}
 					else {
-
+						retValue = 0;
 
 						if (socketIDmap.find(i) != socketIDmap.end()) {
 							//std::printf("start read from socket %d\r\n", i);
@@ -2499,7 +2500,9 @@ void webSocket::startServer(int port) {
 									//continue;
 								}
 								else {
+									retValue = 1;
 									std::printf("could not SSL_read (returned -1)\n");
+
 									/*long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									std::printf("could not SSL_read (returned -1) %s\n", error_str);
@@ -2513,9 +2516,12 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
+								if(retValue == 1) std::printf("2 could not SSL_read (returned -1)\n");
+								
 								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
 									wsRemoveClient(socketIDmap[i]); else
 									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
+								if (retValue == 1) std::printf("3 could not SSL_read (returned -1)\n");
 								//wsRemoveClient(socketIDmap[i]);
 							}
 							else if (nbytes == 0) {
@@ -3195,9 +3201,39 @@ int main() {
 
 */	
 
+
+
+	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = NULL;
+	for (int i = 0; i < MAX_EVENTS; i++) events_show[i] = NULL;
+	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = NULL;
+	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
+	for (int i = 0; i < MAX_TOURNAMENTS; i++) seasons_id[i] = NULL;
+	for (int i = 0; i < MAX_TOURNAMENTS; i++) simples_id[i] = NULL;
+	for (int i = 0; i < MAX_CATEGORIES; i++) categories_id[i] = NULL;
+	for (int i = 0; i < MAX_SPORTS; i++) sports_id[i] = NULL;
+	for (int i = 0; i < MAX_COMPETITORS; i++) competitors_id[i] = NULL;
+	for (int i = 0; i < MAX_PLAYERS; i++) players_id[i] = NULL;
+	for (int i = 0; i < MAX_MARKETS; i++) markets_id[i] = NULL;
+	for (int i = 0; i < MAX_MARKETS; i++) max_markets_in[i] = 2;
+	for (int i = 0; i < MAX_BETSTOPS; i++) betstops_id[i] = NULL;
+	for (int i = 0; i < MAX_MATCHSTATUS; i++) matchstatus_id[i] = NULL;
+	for (int j = 0; j < STEP_QUEUE; j++) {
+		array_data_step_2[j] = nullptr;
+		array_data_step_1[j] = nullptr;
+		data_step_len_1[j] = 0;
+		data_step_len_2[j] = 0;
+	}
+	for (int j = 0; j < AMQP_QUEUE; j++) AMQP_message[j] = new char[AMQP_BUFLEN];
+	
+
+
+
+
+
 using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
+//BetradarProcessThread();
 hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
 
@@ -3220,40 +3256,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	bool full_data = false;
 	//int recvbuflen = DEFAULT_BUFLEN;
 	//recvbuf = new char[DEFAULT_BUFLEN];
-	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = NULL;
-	for (int i = 0; i < MAX_EVENTS; i++) events_show[i] = NULL;
-	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = NULL;
-	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = NULL;
-	for (int i = 0; i < MAX_TOURNAMENTS; i++) seasons_id[i] = NULL;
-	for (int i = 0; i < MAX_TOURNAMENTS; i++) simples_id[i] = NULL;
-	for (int i = 0; i < MAX_CATEGORIES; i++) categories_id[i] = NULL;
-	for (int i = 0; i < MAX_SPORTS; i++) sports_id[i] = NULL;
-	for (int i = 0; i < MAX_COMPETITORS; i++) competitors_id[i] = NULL;
-	for (int i = 0; i < MAX_PLAYERS; i++) players_id[i] = NULL;
-	for (int i = 0; i < MAX_MARKETS; i++) markets_id[i] = NULL;
-	for (int i = 0; i < MAX_MARKETS; i++) max_markets_in[i] = 2;
-	for (int i = 0; i < MAX_BETSTOPS; i++) betstops_id[i] = NULL;
-	for (int i = 0; i < MAX_MATCHSTATUS; i++) matchstatus_id[i] = NULL;
-	for (int j = 0; j < STEP_QUEUE; j++) {
-		array_data_step_2[j] = nullptr;
-		array_data_step_1[j] = nullptr;
-		data_step_len_1[j] = 0;
-		data_step_len_2[j] = 0;
-	}
-	for (int j = 0; j < AMQP_QUEUE; j++) {
-		
-		//AMQP_message[j] = new char[AMQP_BUFLEN];
-		
-		
-		array_data_step_2[j] = nullptr;
-		array_data_step_1[j] = nullptr;
-		data_step_len_1[j] = 0;
-		data_step_len_2[j] = 0;
 
-
-
-
-	}
 
 	getSports();
 
@@ -3379,6 +3382,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 		}
+
+
 		//int p2 = timestamp();
 		//p2 = p2 - p1;
 		//printf("GenerateBigStep=%dms\r\n",p2);
@@ -3400,7 +3405,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		
 		socket_message_big[0] = 0;
 		offset = 0;
-
+		//printf("process_index=%d\r\n", process_index);
+		//printf("rabbit_index=%d\r\n", rabbit_index);
 		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
 		//printf("process_index=%d\r\n", process_index);
 		new_message_arrived = true;
@@ -10473,13 +10479,9 @@ static void run(amqp_connection_state_t conn)
 	uint64_t previous_report_time = start_time;
 	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
 	DWORD l = 0;
-	amqp_frame_t frame;
-	uint64_t now;
+	amqp_frame_t frame;	uint64_t now;
 		
-	for (int j = 0; j < AMQP_QUEUE; j++) {
-
-		AMQP_message[j] = new char[AMQP_BUFLEN];
-	}
+	
 
 	for (;;) {
 		amqp_rpc_reply_t ret;
@@ -10507,8 +10509,9 @@ static void run(amqp_connection_state_t conn)
 
 		//printf("rabbit_index=%d\r\n", rabbit_index%AMQP_QUEUE);
 		//printf("envelope.message.body.len=%dr\n" , envelope.message.body.len);
-		AMQP_message[rabbit_index%AMQP_QUEUE][0] = 0;
-		std::strncpy(AMQP_message[rabbit_index%AMQP_QUEUE], ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
+		//AMQP_message[rabbit_index%AMQP_QUEUE][0] = 0;
+		//std::strncpy(AMQP_message[rabbit_index%AMQP_QUEUE], ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
+		memcpy(AMQP_message[rabbit_index%AMQP_QUEUE], envelope.message.body.bytes, envelope.message.body.len);
 		AMQP_message[rabbit_index%AMQP_QUEUE][envelope.message.body.len] = 0;
 		rabbit_index++;
 		//printf("2rabbit_index=%d\r\n", rabbit_index);
