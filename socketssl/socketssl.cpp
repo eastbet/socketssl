@@ -2316,7 +2316,7 @@ void webSocket::startServer(int port) {
 		exit(1);
 	}
 
-	int retValue;
+	//int retValue;
 	fdmax = ListenSocket;
 	int writeopcode = 0;
 	fd_set read_fds;
@@ -2435,7 +2435,7 @@ void webSocket::startServer(int port) {
 						}
 					}
 					else {
-						retValue = 0;
+						//retValue = 0;
 
 						if (socketIDmap.find(i) != socketIDmap.end()) {
 							//std::printf("start read from socket %d\r\n", i);
@@ -2500,7 +2500,7 @@ void webSocket::startServer(int port) {
 									//continue;
 								}
 								else {
-									retValue = 1;
+									
 									std::printf("could not SSL_read (returned -1)\n");
 
 									/*long error = ERR_get_error();
@@ -2516,12 +2516,12 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
-								if(retValue == 1) std::printf("2 could not SSL_read (returned -1)\n");
+						
 								
 								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSING || wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CLOSED)
 									wsRemoveClient(socketIDmap[i]); else
 									wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
-								if (retValue == 1) std::printf("3 could not SSL_read (returned -1)\n");
+						
 								//wsRemoveClient(socketIDmap[i]);
 							}
 							else if (nbytes == 0) {
@@ -3232,9 +3232,9 @@ int main() {
 
 using namespace std;
 timestamp();
-hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
+hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
 //BetradarProcessThread();
-hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
 
 int port = 1443;
@@ -3328,7 +3328,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	bool print = false;
-	bool debug_output = true;
+	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
@@ -3406,8 +3406,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		socket_message_big[0] = 0;
 		offset = 0;
 		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
-		printf("process_index=%d\r\n", process_index);
-		printf("rabbit_index=%d\r\n", rabbit_index);
+		if(debug_output==true) printf("process_index=%d\r\n", process_index);
+		if (debug_output == true) printf("rabbit_index=%d\r\n", rabbit_index);
 
 		//printf("process_index=%d\r\n", process_index);
 		new_message_arrived = true;
@@ -3482,6 +3482,163 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				}
 				if (getEventFixture(events_id[event_id]) == -1) { std::printf("fixtur_change error. %d\r\n", event_id); continue; }
 				std::printf("fixture_change success. event_id=%d \r\n", event_id);
+
+				if (recovery_state == 0) {
+					writeInteger(buffer, offset, 1, 2);
+					writeInteger(buffer, offset, type_radar, 1);
+					writeInteger(buffer, offset, _event->id, 4);
+					writeInteger(buffer, offset, _event->home_id, 4);
+					writeInteger(buffer, offset, _event->away_id, 4);
+
+					writeInteger(buffer, offset, _event->type_radar, 1);
+					writeInteger(buffer, offset, _event->status, 1);
+					writeInteger(buffer, offset, _event->sport_id, 2);
+					writeInteger(buffer, offset, _event->category_id, 2);
+					if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
+					else writeInteger(buffer, offset, _event->simple_id, 4);
+					writeInteger(buffer, offset, _event->start_time + 4 * 3600, 4);
+					writeInteger(buffer, offset, _event->period_length, 1);
+					writeInteger(buffer, offset, _event->overtime_length, 1);
+					if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
+					writeString(buffer, offset, _event->home_name);
+					writeString(buffer, offset, _event->away_name);
+					writeString(buffer, offset, _event->tv_channels);
+					if (_event->status == 0)  writeInteger(buffer, offset, _event->booked, 1);
+					if (_event->status > 0) {
+
+						writeInteger(buffer, offset, (int)(_event->home_score * 100), 2);
+						writeInteger(buffer, offset, (int)(_event->away_score * 100), 2);
+						writeString(buffer, offset, _event->set_scores);
+						writeString(buffer, offset, _event->match_time);
+						writeString(buffer, offset, _event->remaining_time);
+						writeString(buffer, offset, _event->remaining_time_in_period);
+						writeString(buffer, offset, matchstatus_id[_event->match_status]->description);
+						writeInteger(buffer, offset, _event->stopped, 1);
+						//writeInteger(buffer, offset, _event->stopped, 1); 
+						if (_event->sport_id == 1) {
+							writeInteger(buffer, offset, _event->home_redcards, 1);
+							writeInteger(buffer, offset, _event->home_yellowcards, 1);
+							writeInteger(buffer, offset, _event->away_redcards, 1);
+							writeInteger(buffer, offset, _event->away_yellowcards, 1);
+							writeString(buffer, offset, _event->stoppage_time);
+							writeString(buffer, offset, _event->stoppage_time_announced);
+							writeInteger(buffer, offset, _event->home_corners, 1);
+							writeInteger(buffer, offset, _event->away_corners, 1);
+							writeInteger(buffer, offset, _event->home_yellow_red_cards, 1);
+							writeInteger(buffer, offset, _event->away_yellow_red_cards, 1);
+						}
+
+						if (_event->sport_id == 5) {
+							writeInteger(buffer, offset, _event->home_gamescore, 1);
+							writeInteger(buffer, offset, _event->away_gamescore, 1);
+							writeInteger(buffer, offset, _event->tiebreak, 1);
+						}
+
+						if (_event->sport_id == 20) writeInteger(buffer, offset, _event->expedite_mode, 1);
+
+
+						if (_event->sport_id == 4 || _event->sport_id == 6 || _event->sport_id == 29) {
+							writeInteger(buffer, offset, _event->home_suspend, 1); writeInteger(buffer, offset, _event->away_suspend, 1);
+						}
+
+
+						if (_event->sport_id == 5 || _event->sport_id == 20 || _event->sport_id == 34 || _event->sport_id == 19 || _event->sport_id == 23 || _event->sport_id == 22 || _event->sport_id == 31)
+							writeInteger(buffer, offset, _event->current_server, 1);
+
+
+						if (_event->sport_id == 3) {
+							writeInteger(buffer, offset, _event->home_batter, 1);
+							writeInteger(buffer, offset, _event->away_batter, 1);
+							writeInteger(buffer, offset, _event->outs, 1);
+							writeInteger(buffer, offset, _event->balls, 1);
+							writeInteger(buffer, offset, _event->strikes, 1);
+							writeString(buffer, offset, _event->bases);
+						}
+
+						if (_event->sport_id == 16) {
+							writeInteger(buffer, offset, _event->possession, 1);
+							writeInteger(buffer, offset, _event->try_num, 1);
+							writeInteger(buffer, offset, _event->yards, 1);
+						}
+
+
+
+
+						if (_event->sport_id == 19) {
+							writeInteger(buffer, offset, _event->visit, 1);
+							writeInteger(buffer, offset, _event->remaining_reds, 1);
+						}
+
+
+						if (_event->sport_id == 22) {
+							writeInteger(buffer, offset, _event->home_legscore, 1);
+							writeInteger(buffer, offset, _event->away_legscore, 1);
+							writeInteger(buffer, offset, _event->throw_num, 1);
+							writeInteger(buffer, offset, _event->visit, 1);
+						}
+
+						if (_event->sport_id == 32) {
+							writeInteger(buffer, offset, _event->delivery, 1);
+							writeInteger(buffer, offset, _event->home_remaining_bowls, 1);
+							writeInteger(buffer, offset, _event->away_remaining_bowls, 1);
+							writeInteger(buffer, offset, _event->current_end, 1);
+						}
+
+						if (_event->sport_id == 21) {
+							writeInteger(buffer, offset, _event->home_dismissals, 1);
+							writeInteger(buffer, offset, _event->away_dismissals, 1);
+							writeInteger(buffer, offset, _event->home_penalty_runs, 1);
+							writeInteger(buffer, offset, _event->away_penalty_runs, 1);
+							writeInteger(buffer, offset, _event->innings, 1);
+							writeInteger(buffer, offset, _event->over, 1);
+							writeInteger(buffer, offset, _event->delivery, 1);
+
+						}
+
+						if (_event->sport_id == 0) writeInteger(buffer, offset, _event->current_ct_team, 1);
+
+						writeInteger(buffer, offset, _event->position, 1);
+
+					}
+
+					if (event2lines.find(_event->id) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
+					else writeInteger(buffer, offset, event2lines[_event->id]->size(), 2);
+					//retry_offset = offset;
+					//offset += 2;
+					event_lines_l = 0;
+					writeInteger(buffer, offset, event_lines_l, 2);
+			
+
+					if (debug_output == true) printf("fixture radarmessagehandler\r\n");
+
+					zip_len = gzip(buffer, offset, zip_message, 2);
+					//delete[] buffer;
+					if (zip_len > 1)
+					{
+						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
+						while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
+						radarMessageHandler(encode_message, encode_message_len);
+						server.ws_clients_flag.clear(std::memory_order_release);
+						//printf("encode_message_len=%d\r\n", encode_message_len);
+						delete[] encode_message;
+						encode_message = nullptr;
+
+					}
+					delete[] zip_message;
+					zip_message = nullptr;
+					if (debug_output == true) printf("fixture end radarmessagehandler\r\n");
+
+
+
+
+	}
+
+
+
+
+
+
+
 
 			}
 
@@ -4094,8 +4251,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 							auto it = compound2line_index.find(_line[0].getCompoundKey());
-							if (debug_output == true) printf(_line[0].getCompoundKey().c_str());
-							printf("\r\n");
+							if (debug_output == true) {
+								printf(_line[0].getCompoundKey().c_str());
+								printf("\r\n");
+							}
 							if (it == compound2line_index.end()) {
 								if (debug_output == true) printf("new line add");
 								_line[0].id = lines_l;
@@ -4757,8 +4916,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 											if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 											auto it = compound2line_index.find(_line[0].getCompoundKey());
-											if (debug_output == true) printf(_line[0].getCompoundKey().c_str());
-											printf("\r\n");
+											if (debug_output == true) {
+												printf(_line[0].getCompoundKey().c_str());
+												printf("\r\n");
+											}
 											if (it == compound2line_index.end()) {
 												if (debug_output == true) printf("new line add");
 												_line[0].id = lines_l;
@@ -5809,21 +5970,24 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   }
 
 										   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-
+										   if (debug_output == true) {
+											   printf(_line[0].getCompoundKey().c_str());
+											   printf("\r\n");
+										   }
 										   auto it = compound2line_index.find(_line[0].getCompoundKey());
-										   if (debug_output == true) printf(_line[0].getCompoundKey().c_str());
-										   printf("\r\n");
+										   if (debug_output == true) printf("auto it\r\n");
+										
 										   if (it == compound2line_index.end()) {
-											   if (debug_output == true) printf("new line add");
+											   if (debug_output == true) printf("new line add ");
 											   _line[0].id = lines_l;
-											   if (debug_output == true) printf("new line add1");
+											   if (debug_output == true) printf("new line add1 ");
 											   lines[lines_l] = _line[0];
 											   lines_id[_line[0].id] = &lines[lines_l];
-											   if (debug_output == true) printf("new line add2");
+											   if (debug_output == true) printf("new line add2 ");
 											   insert_line(_line[0], lines_l);
-											   if (debug_output == true) printf("new line add3");
+											   if (debug_output == true) printf("new line add3 ");
 											   lines_l++;
-											   if (debug_output == true) printf("new line add finish");
+											   if (debug_output == true) printf("new line add finish\r\n");
 
 										   }
 										   else {
@@ -5831,7 +5995,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   _line[0].id = it->second;
 											   if (debug_output == true) printf("line update1");
 											   lines[it->second] = _line[0];
-											   if (debug_output == true) printf("line finish");
+											   if (debug_output == true) printf("line finish\r\n");
 
 											   //printf("Line Update\r\n");
 										   }
