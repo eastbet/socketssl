@@ -51,7 +51,7 @@ int GetMaxCompressedLen(int);
 int CompressData(const BYTE* , int , BYTE* , int );
 int UncompressData(const BYTE* , int , BYTE* , int);
 int gzip(char*, int, char* &, int);
-
+int64_t timestamp();
 
 
 
@@ -168,9 +168,6 @@ char** AMQP_message = new char* [AMQP_QUEUE];
 atomic_int64_t process_index = 0;
 atomic_int64_t rabbit_index = 0;
 
-//volatile atomic_int64_t AMQP_message_len = 0;
-//volatile atomic_flag amqp_lock_flag = ATOMIC_FLAG_INIT;
-//volatile bool amqp_empty_flag = true;
 volatile atomic_int64_t current_data_step_1 = -1;
 volatile atomic_int64_t current_data_step_2 = -1;
 volatile int64_t current_data_step_temp_1 = -1;
@@ -1261,7 +1258,8 @@ public:
 		step_buffer_len_1 = -1;
 		plus_create = false;
 		plus_send = false;
-
+		timestamp = 0;
+		
 		//flag = 0;
 
 	}
@@ -1298,6 +1296,9 @@ public:
 	int plus;
 	std::atomic<bool> plus_create;
 	std::atomic<bool> plus_send;
+	atomic_int64_t timestamp;
+
+
 	char* message_ping;
 	char* message_pong;
 	char* message_close;
@@ -1349,7 +1350,7 @@ public:
 	string getClientIP(int clientID);
 	vector<wsClient *> wsClients;
 	//vector<atomic_flag*> wsFlags;
-	atomic_flag ws_clients_flag = ATOMIC_FLAG_INIT;
+	//atomic_flag ws_clients_flag = ATOMIC_FLAG_INIT;
 	map<int, int> socketIDmap;
 
 private:
@@ -1365,6 +1366,7 @@ private:
 	void wsSendClientClose(int clientID, unsigned short status = -1);
 	bool wsCheckSizeClientFrame(int clientID);
 	void wsRemoveClient(int clientID);
+	void wsDeleteClient(int clientID);
 	bool wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength);
 	bool wsProcessClientFrame(int clientID);
 	bool wsBuildClientFrame(int clientID, char *buffer, int bufferLength);
@@ -1445,7 +1447,7 @@ void showAvailableIP() {
 vector<int> webSocket::getClientIDs() {
 	vector<int> clientIDs;
 	for (int i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] != NULL)
+		if (wsClients[i] != NULL && wsClients[i]->timestamp == 0)
 			clientIDs.push_back(i);
 	}
 
@@ -1457,7 +1459,7 @@ string webSocket::getClientIP(int clientID) {
 void webSocket::wsCheckIdleClients() {
 	time_t current = time(NULL);
 	for (int i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] != NULL && wsClients[i]->ready_state != WS_READY_STATE_CLOSED) {
+		if (wsClients[i] != NULL && wsClients[i]->timestamp == 0 && wsClients[i]->ready_state != WS_READY_STATE_CLOSED) {
 			if (wsClients[i]->ping_sent_time != 0) {
 				if (difftime(current, wsClients[i]->ping_sent_time) >= WS_TIMEOUT_PONG) {
 					wsSendClientClose(i, WS_STATUS_TIMEOUT);
@@ -1752,16 +1754,23 @@ void webSocket::wsRemoveClient(int clientID) {
 	//
 	//SSL_shutdown(client->ssl);
 	//SSL_CTX_free(client->ssl);
-	while (ws_clients_flag.test_and_set(std::memory_order_acquire));
+	//while (ws_clients_flag.test_and_set(std::memory_order_acquire));
+	client->timestamp = timestamp();
 	FD_CLR(client->socket, &r_fds);
 	FD_CLR(client->socket, &w_fds);
 	closesocket(client->socket);
 	SSL_set_shutdown(client->ssl, SSL_RECEIVED_SHUTDOWN);
 	SSL_free(client->ssl);
 	socketIDmap.erase(client->socket);
+	//wsClients[clientID] = NULL;
+	//delete client;
+	//ws_clients_flag.clear(std::memory_order_release);
+}
+void webSocket::wsDeleteClient(int clientID) {
+wsClient *client = wsClients[clientID];
 	wsClients[clientID] = NULL;
 	delete client;
-	ws_clients_flag.clear(std::memory_order_release);
+	//ws_clients_flag.clear(std::memory_order_release);
 }
 bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
 	wsClient *client = wsClients[clientID];
@@ -2175,7 +2184,10 @@ bool webSocket::wsProcessClient(int clientID, char *buffer, int bufferLength) {
 }
 int webSocket::wsGetNextClientID() {
 	int i;
+	int64_t current_time = timestamp();
 	for (i = 0; i < wsClients.size(); i++) {
+		if (wsClients[i] != NULL && wsClients[i]->timestamp > 0 && wsClients[i]->timestamp + 100000 < current_time)
+			wsDeleteClient(i);
 		if (wsClients[i] == NULL)
 			break;
 	}
@@ -2190,7 +2202,7 @@ void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
 
 	int clientID = wsGetNextClientID();
 	wsClient *newClient = new wsClient(socket, ssl, ip);
-	while (ws_clients_flag.test_and_set(std::memory_order_acquire));
+	//while (ws_clients_flag.test_and_set(std::memory_order_acquire));
 
 	if (clientID >= wsClients.size()) {
 
@@ -2201,7 +2213,7 @@ void webSocket::wsAddClient(int socket, SSL* ssl, in_addr ip) {
 		wsClients[clientID] = newClient;
 	}
 	socketIDmap[socket] = clientID;
-	ws_clients_flag.clear(std::memory_order_release);
+	//ws_clients_flag.clear(std::memory_order_release);
 }
 void webSocket::setOpenHandler(defaultCallback callback) {
 	callOnOpen = callback;
@@ -2889,7 +2901,6 @@ void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
 char* SendframeEncode(char*,int,int &);
-long timestamp();
 void openHandler(int);
 void closeHandler(int);
 void messageHandler(int,string );
@@ -3364,11 +3375,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		if (recovery_state == 0) {
 			
 			if (new_message_arrived == true)  GenerateBigStep(); 
-			if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
+			//if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
 				clientIDs.clear();
 				clientIDs = server.getClientIDs();
 				for (i = 0; i < clientIDs.size(); i++) {
-					if (server.wsClients[clientIDs[i]] == NULL)  continue; 
+					if (server.wsClients[clientIDs[i]] == NULL || server.wsClients[clientIDs[i]]->timestamp > 0)  continue;
 					if (server.wsClients[clientIDs[i]]->plus_create == true && server.wsClients[clientIDs[i]]->plus_send == false)
 					CreatePlus_2(server.wsClients[clientIDs[i]]);
 					if (server.wsClients[clientIDs[i]]->outright_create == true && server.wsClients[clientIDs[i]]->outright_send == false)
@@ -3377,8 +3388,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					
 				}
 			
-				server.ws_clients_flag.clear(std::memory_order_release);
-			}
+				//server.ws_clients_flag.clear(std::memory_order_release);}
 
 
 		}
@@ -3616,9 +3626,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (zip_len > 1)
 					{
 						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
-						while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
+						//while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
 						radarMessageHandler(encode_message, encode_message_len);
-						server.ws_clients_flag.clear(std::memory_order_release);
+						//server.ws_clients_flag.clear(std::memory_order_release);
 						//printf("encode_message_len=%d\r\n", encode_message_len);
 						delete[] encode_message;
 						encode_message = nullptr;
@@ -6050,9 +6060,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (zip_len > 1)
 					{
 						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
-						while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
+						//while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
 						radarMessageHandler(encode_message, encode_message_len);
-						server.ws_clients_flag.clear(std::memory_order_release);
+						//server.ws_clients_flag.clear(std::memory_order_release);
 						//printf("encode_message_len=%d\r\n", encode_message_len);
 						delete[] encode_message;
 						encode_message = nullptr;
@@ -6170,11 +6180,11 @@ if (recovery_state != 0)  return;
 	current_data_step_temp_1 = -1;
 	current_data_step_temp_2 = -1;
 	
-	if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
+	//if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
 		for (j = 0; j < STEP_QUEUE; j++) {
 			if (array_data_step_1[j] != nullptr && j != current_data_step_1) {
 				for (i = 0; i < clientIDs.size(); i++) {
-					if (server.wsClients[clientIDs[i]] == NULL) continue;
+					if (server.wsClients[clientIDs[i]] == NULL || server.wsClients[clientIDs[i]]->timestamp > 0) continue;
 					if (server.wsClients[clientIDs[i]]->step_buffer_1 == array_data_step_1[j])  break;
 				}
 
@@ -6190,8 +6200,9 @@ if (recovery_state != 0)  return;
 				if (i == clientIDs.size()) { delete[] array_data_step_2[j]; array_data_step_2[j] = nullptr; }
 			}
 		}
-		server.ws_clients_flag.clear(std::memory_order_release);
-	}
+		
+		//server.ws_clients_flag.clear(std::memory_order_release);
+	//}
 
 
 	for (j = 0; j < STEP_QUEUE; j++) {
@@ -6220,9 +6231,6 @@ if (recovery_state != 0)  return;
 	//Sleep(100);
 
 	clientIDs.clear();
-
-
-
 
 
 
@@ -10115,7 +10123,7 @@ char* SendframeEncode(char* message, int messageLen, int &totalLength) {
 
 	return buf;
 };
-long timestamp() {
+int64_t timestamp() {
 	time_t start;
 	SYSTEMTIME st;
 	struct tm tm;
@@ -10700,18 +10708,7 @@ static void run(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
-		//printf("run 1\r\n");
-		//while(amqp_empty_flag == false) Sleep(1);
-		//printf("run 2\r\n");
-		//hile (amqp_lock_flag.test_and_set(std::memory_order_acquire));
-		//printf("run 3\r\n");
-		//amqp_empty_flag = false;
-
-
-		//printf("rabbit_index=%d\r\n", rabbit_index%AMQP_QUEUE);
-		//printf("envelope.message.body.len=%dr\n" , envelope.message.body.len);
-		//AMQP_message[rabbit_index%AMQP_QUEUE][0] = 0;
-		//std::strncpy(AMQP_message[rabbit_index%AMQP_QUEUE], ((char*)(envelope.message.body.bytes)), envelope.message.body.len);
+		
 		memcpy(AMQP_message[rabbit_index%AMQP_QUEUE], envelope.message.body.bytes, envelope.message.body.len);
 		if (envelope.message.body.len >= AMQP_BUFLEN) printf("ERROR rabbit!envelope.message.body.len=%d\r\n", envelope.message.body.len);
 		AMQP_message[rabbit_index%AMQP_QUEUE][envelope.message.body.len] = 0;
