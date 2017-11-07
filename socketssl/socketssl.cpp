@@ -1457,13 +1457,14 @@ string webSocket::getClientIP(int clientID) {
 	return string(inet_ntoa(wsClients[clientID]->addr));
 }
 void webSocket::wsCheckIdleClients() {
+	
 	time_t current = time(NULL);
 	for (int i = 0; i < wsClients.size(); i++) {
-		if (wsClients[i] != NULL && wsClients[i]->timestamp == 0 && wsClients[i]->ready_state != WS_READY_STATE_CLOSED) {
+		if (wsClients[i] != NULL && wsClients[i]->timestamp == 0 && wsClients[i]->ready_state != WS_READY_STATE_CLOSED && wsClients[i]->ready_state != WS_READY_STATE_CLOSING) {
 			if (wsClients[i]->ping_sent_time != 0) {
 				if (difftime(current, wsClients[i]->ping_sent_time) >= WS_TIMEOUT_PONG) {
 					wsSendClientClose(i, WS_STATUS_TIMEOUT);
-					wsRemoveClient(i);
+					//wsRemoveClient(i);
 				}
 			}
 			else if (difftime(current, wsClients[i]->last_recv_time) != WS_TIMEOUT_RECV) {
@@ -1482,7 +1483,7 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, char* me
 	if (clientID >= wsClients.size())
 		return false;
 
-	if (wsClients[clientID]->ready_state == WS_READY_STATE_CLOSING || wsClients[clientID]->ready_state == WS_READY_STATE_CLOSED)
+	if (wsClients[clientID]->ready_state == WS_READY_STATE_CLOSING || wsClients[clientID]->ready_state == WS_READY_STATE_CLOSED || wsClients[clientID]->timestamp > 0)
 		return true;
 
 	// fetch message length
@@ -1579,7 +1580,7 @@ bool webSocket::wsSendClientMessage(int clientID, unsigned char opcode, char* me
 		wsClients[clientID]->message_queue[wsClients[clientID]->last_message_queue  % QUEUE_LENGTH] = buf;
 		wsClients[clientID]->last_message_queue++;
 
-		if (wsClients[clientID]->last_message_queue - QUEUE_LENGTH > wsClients[clientID]->last_message_queue_socket) wsSendClientClose(clientID, WS_STATUS_PROTOCOL_ERROR);
+		if (wsClients[clientID]->last_message_queue - QUEUE_LENGTH >= wsClients[clientID]->last_message_queue_socket) wsSendClientClose(clientID, WS_STATUS_PROTOCOL_ERROR);
 
 
 		//wsClients[clientID]->mutex.unlock(); 
@@ -1595,6 +1596,7 @@ bool webSocket::wsEncodeClientMessage(int clientID, unsigned char opcode, char* 
 	// check if client ready state is already closing or closed
 	if (clientID >= wsClients.size())
 		return false;
+	if (wsClients[clientID]->timestamp > 0) return false;
 
 	//opcode = WS_OPCODE_BINARY; //printf("HAHAHAHAH");
 
@@ -1678,13 +1680,12 @@ bool webSocket::wsSend(int clientID, char* message, size_t messageLen, bool bina
 	return wsSendClientMessage(clientID, binary ? WS_OPCODE_BINARY : WS_OPCODE_TEXT, message, messageLen);
 }
 void webSocket::wsSendClientClose(int clientID, unsigned short status) {
-
 	// check if client ready state is already closing or closed
-	if (wsClients[clientID]->ready_state == WS_READY_STATE_CLOSING || wsClients[clientID]->ready_state == WS_READY_STATE_CLOSED)
+	if (wsClients[clientID]->timestamp > 0 ||wsClients[clientID]->ready_state == WS_READY_STATE_CLOSING || wsClients[clientID]->ready_state == WS_READY_STATE_CLOSED)
 		return;
 
 	// store close status
-	wsClients[clientID]->ready_state = status;
+//	wsClients[clientID]->ready_state = status;
 
 	// send close frame to client
 	wsSendClientMessage(clientID, WS_OPCODE_CLOSE, "", 0);
@@ -1743,11 +1744,12 @@ bool webSocket::wsCheckSizeClientFrame(int clientID) {
 	return false;
 }
 void webSocket::wsRemoveClient(int clientID) {
-
-	if (callOnClose != NULL)
-		callOnClose(clientID);
+	
+	//if (callOnClose != NULL)
+		//callOnClose(clientID);
 
 	wsClient *client = wsClients[clientID];
+	if (client->timestamp > 0) return;
 	// fetch close status (which could be false), and call wsOnClose
 	//int64_t closeStatus = wsClients[clientID]->close_status;
 	//int64_t flag = 0;
@@ -1792,11 +1794,12 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 			// the server already sent a close frame to the client, this is the client's close frame reply
 			// (no need to send another close frame to the client)
 			client->ready_state = WS_READY_STATE_CLOSED;
+			//wsRemoveClient(clientID);
 		}
 		else {
 			// the server has not already sent a close frame to the client, send one now
-
-			wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
+			//wsRemoveClient(clientID);
+			//wsSendClientClose(clientID, WS_STATUS_NORMAL_CLOSE);
 
 		}
 		wsRemoveClient(clientID);
@@ -2408,7 +2411,7 @@ void webSocket::startServer(int port) {
 
 				//|| (socketIDmap.find(i) != socketIDmap.end() &&SSL_pending(wsClients[socketIDmap[i]]->ssl))
 				if (FD_ISSET(i, &read_fds) && recovery_state == 0) {
-
+				
 
 					if (i == ListenSocket) {
 
@@ -2478,13 +2481,13 @@ void webSocket::startServer(int port) {
 									//if(wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CLOSING && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CLOSED) 
 									//if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CONNECTING) continue;
 								}
-								else {
+						/*		else {
 
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									delete[] error_str;
 									//std::printf("could not SSL_read (returned 0): %s\n", error_str);
-								}
+								}*/
 
 							}
 							else if (nbytes < 0) {
@@ -2551,13 +2554,14 @@ void webSocket::startServer(int port) {
 							}
 						}
 					}
+				
 				}
 
 
 
 
 				if (FD_ISSET(i, &write_fds) && recovery_state == 0) {
-
+				
 					if (i == ListenSocket) {
 						/**/
 					}
@@ -2654,12 +2658,12 @@ void webSocket::startServer(int port) {
 									continue;
 								}
 
-								if (ssl_error == SSL_ERROR_SYSCALL) {
+								/*if (ssl_error == SSL_ERROR_SYSCALL) {
 									//std::printf("SSL_write syscall error (returned 0)\r\n");
 									//wsClients[socketIDmap[i]]->flag = false;
 
 								}
-								else {
+									else {
 
 
 									long error = ERR_get_error();
@@ -2667,6 +2671,7 @@ void webSocket::startServer(int port) {
 									delete[] error_str;
 								}
 								//std::printf("could not SSL_write (returned 0): %s\n", error_str);
+								*/
 
 
 							}
@@ -2686,17 +2691,19 @@ void webSocket::startServer(int port) {
 
 								if (ssl_error == SSL_ERROR_SYSCALL) {
 									//std::printf("SSL_write syscall error (returned -1)\r\n");
-									if (writeopcode == 5 || writeopcode == 6 || writeopcode == 7 || writeopcode == 8 || writeopcode == 1) continue;
+									if (writeopcode == 5 || writeopcode == 6 || writeopcode == 7 || writeopcode == 8 || writeopcode == 9 || writeopcode == 1) continue;
 
 
 								}
-
-								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8) {
+								/*
+								if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8 && writeopcode != 9) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
+									//std::printf("could not SSL_write (returned -1): %s\n", error_str);
 									delete[] error_str;
-								}
-								//std::printf("could not SSL_write (returned -1): %s\n", error_str);
+								
+								}*/
+								
 
 
 
@@ -2704,6 +2711,7 @@ void webSocket::startServer(int port) {
 
 
 							if (nbytes < 0) {
+								
 								if (writeopcode == 2)
 									wsRemoveClient(socketIDmap[i]);
 								else {
@@ -2738,6 +2746,7 @@ void webSocket::startServer(int port) {
 								if (writeopcode == 2) {
 									delete[] wsClients[socketIDmap[i]]->message_close; wsClients[socketIDmap[i]]->message_close = nullptr;
 									wsClients[socketIDmap[i]]->message_close_length = 0;
+									wsRemoveClient(socketIDmap[i]);
 
 								}
 
@@ -2818,7 +2827,8 @@ void webSocket::startServer(int port) {
 
 						}
 					}
-				}
+				
+}
 
 			}
 		}
@@ -3374,7 +3384,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		
 		if (recovery_state == 0) {
 			
-			if (new_message_arrived == true)  GenerateBigStep(); 
+			if (new_message_arrived == true) GenerateBigStep(); 		
 			//if (!server.ws_clients_flag.test_and_set(std::memory_order_acquire)) {
 				clientIDs.clear();
 				clientIDs = server.getClientIDs();
@@ -3387,6 +3397,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					
 					
 				}
+			
 			
 				//server.ws_clients_flag.clear(std::memory_order_release);}
 
@@ -3429,7 +3440,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			new_message_arrived = false; continue;
 		}
 		//new_message_arrived = true;
-
 
 
 
@@ -3628,6 +3638,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
 						//while (server.ws_clients_flag.test_and_set(std::memory_order_acquire));
 						radarMessageHandler(encode_message, encode_message_len);
+					
 						//server.ws_clients_flag.clear(std::memory_order_release);
 						//printf("encode_message_len=%d\r\n", encode_message_len);
 						delete[] encode_message;
@@ -6064,8 +6075,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						radarMessageHandler(encode_message, encode_message_len);
 						//server.ws_clients_flag.clear(std::memory_order_release);
 						//printf("encode_message_len=%d\r\n", encode_message_len);
-						delete[] encode_message;
+				    	delete[] encode_message;
 						encode_message = nullptr;
+
 
 					}
 					delete[] zip_message;
@@ -6088,7 +6100,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				if (std::strcmp("snapshot_complete", doc.first_node()->name()) == 0) { recovery_state = 0; new_message_arrived = true; }
 				printf(doc.first_node()->name()); std::printf("\r\n");
 			}
-
 
 			doc.clear();
 			
