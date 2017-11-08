@@ -155,6 +155,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID);
 HANDLE hThread3;
 DWORD dwThreadID3;
 DWORD ExitCode3;
+DWORD WINAPI MTSGetThread(LPVOID);
+
+
+HANDLE hThread4;
+DWORD dwThreadID4;
+DWORD ExitCode4;
 DWORD WINAPI startRecoveryThread(LPVOID);
 
 
@@ -1806,7 +1812,7 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 
 	}
 	else if (opcode == WS_OPCODE_TEXT || opcode == WS_OPCODE_BINARY) {
-		//if(data.substr(0, dataLength)=="recovery" ) hThread3 = CreateThread(NULL, 0, &startRecoveryThread, 0, THREAD_TERMINATE, &dwThreadID3);
+		//if(data.substr(0, dataLength)=="recovery" ) hThread4 = CreateThread(NULL, 0, &startRecoveryThread, 0, THREAD_TERMINATE, &dwThreadID4);
 		//if (callOnMessage != NULL)	callOnMessage(clientID, data.substr(0, dataLength));
 		if (data.substr(0, 7) == "rospis@") {
 			int event_id = atoi(data.substr(7, dataLength).c_str());
@@ -1820,6 +1826,7 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 
 
 		if (data.substr(0, 9) == "outright@") {
+			
 			int category_id = atoi(data.substr(9, dataLength).c_str());
 			if (category_id != 0 && category_id<MAX_CATEGORIES && categories_id[category_id] != nullptr && client->outright_send == false && client->outright_create == false) { client->outright = category_id; client->outright_create = true; }
 
@@ -2924,6 +2931,10 @@ uint64_t now_microseconds(void);
 //void microsleep(int);
 void rabbitmqssl();
 static void run(amqp_connection_state_t);
+
+void rabbitmqssl_mts();
+static void run_mts(amqp_connection_state_t);
+
 static int rows_eq(int *, int *);
 static void dump_row(long, int, int *);
 webSocket server;
@@ -3254,9 +3265,8 @@ int main() {
 using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-//BetradarProcessThread();
 hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-
+//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
 
 int port = 1443;
 
@@ -3393,7 +3403,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (server.wsClients[clientIDs[i]]->plus_create == true && server.wsClients[clientIDs[i]]->plus_send == false)
 					CreatePlus_2(server.wsClients[clientIDs[i]]);
 					if (server.wsClients[clientIDs[i]]->outright_create == true && server.wsClients[clientIDs[i]]->outright_send == false)
-						CreateOutright_2(server.wsClients[clientIDs[i]]);
+				    CreateOutright_2(server.wsClients[clientIDs[i]]);
 					
 					
 				}
@@ -3432,11 +3442,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 		//printf("process_index=%d\r\n", process_index);
 		new_message_arrived = true;
+		if (debug_output == true) printf("doc.parse<0>\r\n");
 		doc.parse<0>(AMQP_message[process_index%AMQP_QUEUE]);
+		if (debug_output == true) printf("doc.parse<0> end length=%d\r\n", AMQP_message[process_index%AMQP_QUEUE]);
 		process_index++;
 		//new_message_arrived = false;
 
 		if (doc.first_node() == NULL) {
+			if (debug_output == true) printf("doc null\r\n");
 			new_message_arrived = false; continue;
 		}
 		//new_message_arrived = true;
@@ -3445,7 +3458,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
-
+			if (debug_output == true) printf("fixture_change\r\n");
 			type_radar = 0;
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
@@ -3453,6 +3466,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
 
 			
+			if (debug_output == true) printf("fixture_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -3686,11 +3700,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					continue;
 				}
 				
-
+				if (debug_output == true) printf("odds_change type_radar=%d\r\n", type_radar);
 	
-
-				if (debug_output == true) printf("type_radar=%d\r\n", type_radar);
-
 				if (type_radar == 2) {
 				
 					if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run odds_change %d\r\n", event_id); continue; }
@@ -4286,6 +4297,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								insert_line(_line[0], lines_l);
 								if (debug_output == true) printf("new line add3");
 								lines_l++;
+								categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
 								if (debug_output == true) printf("new line add finish");
 
 							}
@@ -4951,6 +4963,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												insert_line(_line[0], lines_l);
 												if (debug_output == true) printf("new line add3");
 												lines_l++;
+												categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
 												if (debug_output == true) printf("new line add finish");
 
 											}
@@ -6173,6 +6186,14 @@ delete[] buffer;
 clientIDs.clear();
 return 0;
 	
+}
+DWORD WINAPI MTSGetThread(LPVOID lparam) {
+	rabbitmqssl_mts();
+	
+	//sdkSocket();
+	//httpsServer();
+	return 0;
+
 }
 void GenerateBigStep() {
 int i = 0;
@@ -7792,8 +7813,10 @@ int getEventFixture(Event* event) {
 		}
 	}
 	if (event->type_radar == 0 || event->type_radar == 2) {
-		std::strcpy(buf, root_node->first_node("fixture")->first_attribute("liveodds")->value());
-		if (buf[0] == 'b'&& buf[1] == 'o') event->booked = 1;
+		if (root_node->first_node("fixture")->first_attribute("liveodds")) {
+			std::strcpy(buf, root_node->first_node("fixture")->first_attribute("liveodds")->value());
+			if (buf[0] == 'b'&& buf[1] == 'o') event->booked = 1;
+		}
 
 		if (event->home_name != NULL) { delete[] event->home_name; event->home_name = NULL; }
 		if (root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_attribute("name")) {
@@ -9994,6 +10017,7 @@ void CreateOutright_2(wsClient* client) {
 	retry_offset = offset;
 	offset += 2;
 	
+
 	for (i = 0; i < categories_id[category_id]->outrights_id.size(); i++)
 	{
 		line_id = categories_id[category_id]->outrights_id[i];
@@ -10004,7 +10028,8 @@ void CreateOutright_2(wsClient* client) {
 		_line = lines_id[line_id];
          event_lines_l = 0;
 		if (_line == nullptr) { std::printf("\r\nline_id= %d not found in CreateOutright_2\r\n", line_id);  continue; }
-		if (_line->status == 0 || _line->status == -3) continue;
+		if (_line->status == 0 || _line->status == -3)  continue;
+		
 		if (_line->simple_id > 0) type_radar = 2; else type_radar = 3;
 		writeInteger(buffer, offset, type_radar, 1);
 		if (type_radar == 2) { writeInteger(buffer, offset, _line->simple_id, 4); 
@@ -10889,6 +10914,223 @@ void rabbitmqssl() {
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming");
 
 	run(conn);
+
+	die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+	die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+	die_on_error(amqp_destroy_connection(conn), "Ending connection");
+
+	return;
+}
+static void run_mts(amqp_connection_state_t conn)
+{
+	uint64_t start_time = now_microseconds();
+	int received = 0;
+	int previous_received = 0;
+	uint64_t previous_report_time = start_time;
+	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
+	DWORD l = 0;
+	amqp_frame_t frame;	uint64_t now;
+
+
+
+	for (;;) {
+		amqp_rpc_reply_t ret;
+		amqp_envelope_t envelope;
+		now = now_microseconds();
+		if (now > next_summary_time) {
+			int countOverInterval = received - previous_received;
+			double intervalRate = countOverInterval / ((now - previous_report_time) / 1000000.0);
+			//printf("%d ms: Received %d - %d since last report (%d Hz)\n",(int)(now - start_time) / 1000, received, countOverInterval, (int)intervalRate);
+
+			previous_received = received;
+			previous_report_time = now;
+			next_summary_time += SUMMARY_EVERY_US;
+		}
+
+		amqp_maybe_release_buffers(conn);
+		ret = amqp_consume_message(conn, &envelope, NULL, 0);
+		printf((char*)envelope.message.body.bytes);
+
+		//memcpy(AMQP_message[rabbit_index%AMQP_QUEUE], envelope.message.body.bytes, envelope.message.body.len);
+		//if (envelope.message.body.len >= AMQP_BUFLEN) printf("ERROR rabbit!envelope.message.body.len=%d\r\n", envelope.message.body.len);
+		//AMQP_message[rabbit_index%AMQP_QUEUE][envelope.message.body.len] = 0;
+		//rabbit_index++;
+		//printf("2rabbit_index=%d\r\n", rabbit_index);
+		//printf("run 4\r\n");
+
+		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
+			if (AMQP_RESPONSE_LIBRARY_EXCEPTION == ret.reply_type &&
+				AMQP_STATUS_UNEXPECTED_STATE == ret.library_error) {
+				if (AMQP_STATUS_OK != amqp_simple_wait_frame(conn, &frame)) {
+
+					return;
+				}
+
+				if (AMQP_FRAME_METHOD == frame.frame_type) {
+					switch (frame.payload.method.id) {
+					case AMQP_BASIC_ACK_METHOD:
+						/* if we've turned publisher confirms on, and we've published a message
+						* here is a message being confirmed
+						*/
+
+						break;
+					case AMQP_BASIC_RETURN_METHOD:
+						/* if a published message couldn't be routed and the mandatory flag was set
+						* this is what would be returned. The message then needs to be read.
+						*/
+					{
+						amqp_message_t message;
+						ret = amqp_read_message(conn, frame.channel, &message, 0);
+						if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
+							return;
+						}
+
+						amqp_destroy_message(&message);
+					}
+
+					break;
+
+					case AMQP_CHANNEL_CLOSE_METHOD:
+						/* a channel.close method happens when a channel exception occurs, this
+						* can happen by publishing to an exchange that doesn't exist for example
+						*
+						* In this case you would need to open another channel redeclare any queues
+						* that were declared auto-delete, and restart any consumers that were attached
+						* to the previous channel
+						*/
+
+
+						return;
+
+					case AMQP_CONNECTION_CLOSE_METHOD:
+						/* a connection.close method happens when a connection exception occurs,
+						* this can happen by trying to use a channel that isn't open for example.
+						*
+						* In this case the whole connection must be restarted.
+						*/
+
+						return;
+
+					default:
+						fprintf(stderr, "An unexpected method was received %u\n", frame.payload.method.id);
+
+
+						return;
+					}
+				}
+			}
+
+		}
+		else {
+			amqp_destroy_envelope(&envelope);
+		}
+
+
+		received++;
+	}
+
+}
+void rabbitmqssl_mts() {
+	char const *hostname;
+	int port, status;
+	char const *exchange;
+	char *bindingkey;
+	amqp_socket_t *socket;
+	amqp_connection_state_t conn;
+	amqp_bytes_t queuename;
+
+
+	/*	if (argc < 3) {
+	fprintf(stderr, "Usage: amqps_consumer host port "
+	"[cacert.pem [verifypeer] [verifyhostname] [key.pem cert.pem]]\n");
+	return 1;
+	}*/
+
+
+
+	hostname = "integration-mts.betradar.com";// argv[1];
+	port = 5671;//atoi(argv[2]);
+	exchange = "unifiedfeed";// "amq.direct"; /* argv[3]; */
+	bindingkey = "#"; /* argv[4]; */
+	conn = amqp_new_connection();
+	socket = amqp_ssl_socket_new(conn);
+	if (!socket) {
+		die("creating SSL/TLS socket");
+	}
+	amqp_ssl_socket_set_verify_peer(socket, 0);
+	amqp_ssl_socket_set_verify_hostname(socket, 0);
+	/*
+	if (argc > 3) {
+	int nextarg = 4;
+	status = amqp_ssl_socket_set_cacert(socket, argv[3]);
+	if (status) {
+	die("setting CA certificate");
+	}
+	if (argc > nextarg && !strcmp("verifypeer", argv[nextarg])) {
+	amqp_ssl_socket_set_verify_peer(socket, 1);
+	nextarg++;
+	}
+	if (argc > nextarg && !strcmp("verifyhostname", argv[nextarg])) {
+	amqp_ssl_socket_set_verify_hostname(socket, 1);
+	nextarg++;
+	}
+	if (argc > nextarg + 1) {
+	status =
+	amqp_ssl_socket_set_key(socket, argv[nextarg + 1], argv[nextarg]);
+	if (status) {
+	die("setting client key");
+	}
+	}
+	}
+
+	*/
+
+	status = amqp_socket_open(socket, hostname, port);
+
+
+
+	if (status) {
+		die("opening SSL/TLS connection");
+		
+	}
+
+
+
+	die_on_amqp_error(amqp_login(conn, "/passionbettest_19751", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, "passionbettest_19751","7IdKP1jwq1"),
+		"Logging in");
+
+
+
+
+
+	amqp_channel_open(conn, 1);
+	
+
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Opening channel");
+
+	{ 
+		amqp_queue_declare_ok_t *r = amqp_queue_declare(conn, 1, amqp_empty_bytes, 0, 0, 0, 1,
+			amqp_empty_table);
+		die_on_amqp_error(amqp_get_rpc_reply(conn), "Declaring queue");
+		queuename = amqp_bytes_malloc_dup(r->queue);
+
+		
+
+		if (queuename.bytes == NULL) {
+			fprintf(stderr, "Out of memory while copying queue name");
+			return;
+		}
+	}
+
+	
+	amqp_queue_bind(conn, 1, queuename, amqp_cstring_bytes(exchange), amqp_cstring_bytes(bindingkey),
+		amqp_empty_table);
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
+
+	amqp_basic_consume(conn, 1, queuename, amqp_empty_bytes, 0, 1, 0, amqp_empty_table);
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming");
+
+	run_mts(conn);
 
 	die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
 	die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
