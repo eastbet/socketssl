@@ -2934,7 +2934,7 @@ static void run(amqp_connection_state_t);
 
 void rabbitmqssl_mts();
 static void run_mts(amqp_connection_state_t);
-
+static void send_batch(amqp_connection_state_t , char const *, int, int );
 static int rows_eq(int *, int *);
 static void dump_row(long, int, int *);
 webSocket server;
@@ -3266,7 +3266,7 @@ using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
 hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
+hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
 
 int port = 1443;
 
@@ -10921,6 +10921,64 @@ void rabbitmqssl() {
 
 	return;
 }
+static void send_batch(amqp_connection_state_t conn, char const *queue_name, int rate_limit, int message_count)
+{
+	uint64_t start_time = now_microseconds();
+	int i;
+	int sent = 0;
+	int previous_sent = 0;
+	uint64_t previous_report_time = start_time;
+	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
+
+	char message[256];
+	amqp_bytes_t message_bytes;
+
+	for (i = 0; i < (int)sizeof(message); i++) {
+		message[i] = i & 0xff;
+	}
+
+	message_bytes.len = sizeof(message);
+	message_bytes.bytes = message;
+
+	for (i = 0; i < message_count; i++) {
+		uint64_t now = now_microseconds();
+
+		die_on_error(amqp_basic_publish(conn,
+			1,
+			amqp_cstring_bytes("amq.direct"),
+			amqp_cstring_bytes(queue_name),
+			0,
+			0,
+			NULL,
+			message_bytes),
+			"Publishing");
+		sent++;
+		if (now > next_summary_time) {
+			int countOverInterval = sent - previous_sent;
+			double intervalRate = countOverInterval / ((now - previous_report_time) / 1000000.0);
+			printf("%d ms: Sent %d - %d since last report (%d Hz)\n",
+				(int)(now - start_time) / 1000, sent, countOverInterval, (int)intervalRate);
+
+			previous_sent = sent;
+			previous_report_time = now;
+			next_summary_time += SUMMARY_EVERY_US;
+		}
+
+		while (((i * 1000000.0) / (now - start_time)) > rate_limit) {
+			Sleep(2000);
+			now = now_microseconds();
+		}
+	}
+
+	{
+		uint64_t stop_time = now_microseconds();
+		int total_delta = (int)(stop_time - start_time);
+
+		printf("PRODUCER - Message count: %d\n", message_count);
+		printf("Total time, milliseconds: %d\n", total_delta / 1000);
+		printf("Overall messages-per-second: %g\n", (message_count / (total_delta / 1000000.0)));
+	}
+}
 static void run_mts(amqp_connection_state_t conn)
 {
 	uint64_t start_time = now_microseconds();
@@ -10949,6 +11007,7 @@ static void run_mts(amqp_connection_state_t conn)
 
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, NULL, 0);
+		printf("run_mts");
 		printf((char*)envelope.message.body.bytes);
 
 		//memcpy(AMQP_message[rabbit_index%AMQP_QUEUE], envelope.message.body.bytes, envelope.message.body.len);
@@ -11033,25 +11092,22 @@ static void run_mts(amqp_connection_state_t conn)
 void rabbitmqssl_mts() {
 	char const *hostname;
 	int port, status;
-	char const *exchange;
-	char *bindingkey;
+	char const *queuename = "passionbettest_19751-Confirm-Node1";
+	char const *bindingkey= "Node1.ticket.confirm";
+	char const *exchangetype[] = { "fanout","topic","topic" ,"topic" ,"topic" };
 	amqp_socket_t *socket;
 	amqp_connection_state_t conn;
-	amqp_bytes_t queuename;
-
-
-	/*	if (argc < 3) {
-	fprintf(stderr, "Usage: amqps_consumer host port "
-	"[cacert.pem [verifypeer] [verifyhostname] [key.pem cert.pem]]\n");
-	return 1;
-	}*/
-
+	char*  routingkey []= { "Node1.ticket.confirm", "passionbettest_19751-Control", "passionbettest_19751-Confirm", "passionbettest_19751-Reply", "passionbettest_19751-Ack"
+	}; ;
+	amqp_bytes_t amqp_queuename;
+	char* username = "passionbettest_19751";
+	char const *exchange[] = { "passionbettest_19751-Submit", "passionbettest_19751-Control", "passionbettest_19751-Confirm", "passionbettest_19751-Reply", "passionbettest_19751-Ack"
+	};
 
 
 	hostname = "integration-mts.betradar.com";// argv[1];
 	port = 5671;//atoi(argv[2]);
-	exchange = "unifiedfeed";// "amq.direct"; /* argv[3]; */
-	bindingkey = "#"; /* argv[4]; */
+	
 	conn = amqp_new_connection();
 	socket = amqp_ssl_socket_new(conn);
 	if (!socket) {
@@ -11059,31 +11115,7 @@ void rabbitmqssl_mts() {
 	}
 	amqp_ssl_socket_set_verify_peer(socket, 0);
 	amqp_ssl_socket_set_verify_hostname(socket, 0);
-	/*
-	if (argc > 3) {
-	int nextarg = 4;
-	status = amqp_ssl_socket_set_cacert(socket, argv[3]);
-	if (status) {
-	die("setting CA certificate");
-	}
-	if (argc > nextarg && !strcmp("verifypeer", argv[nextarg])) {
-	amqp_ssl_socket_set_verify_peer(socket, 1);
-	nextarg++;
-	}
-	if (argc > nextarg && !strcmp("verifyhostname", argv[nextarg])) {
-	amqp_ssl_socket_set_verify_hostname(socket, 1);
-	nextarg++;
-	}
-	if (argc > nextarg + 1) {
-	status =
-	amqp_ssl_socket_set_key(socket, argv[nextarg + 1], argv[nextarg]);
-	if (status) {
-	die("setting client key");
-	}
-	}
-	}
-
-	*/
+	
 
 	status = amqp_socket_open(socket, hostname, port);
 
@@ -11106,6 +11138,42 @@ void rabbitmqssl_mts() {
 	amqp_channel_open(conn, 1);
 	
 
+
+
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Opening channel");
+
+	/*for (int i = 0; i < 5; i++) {
+		amqp_exchange_declare(conn, 1, amqp_cstring_bytes(exchange[i]), amqp_cstring_bytes(exchangetype[i]),
+			0, 1, 0, 0, amqp_empty_table);
+		die_on_amqp_error(amqp_get_rpc_reply(conn), "Declaring exchange");
+	}
+	*/
+
+	amqp_queue_declare_ok_t *r = amqp_queue_declare(conn, 1, amqp_cstring_bytes("passionbettest_19751-Confirm-Node1"), 0, 1, 0, 0,
+		amqp_empty_table);
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Declaring queue");
+	amqp_queuename = amqp_bytes_malloc_dup(r->queue);
+	//printf((char*)queuename.bytes);
+
+
+
+	if (amqp_queuename.bytes == NULL) {
+		fprintf(stderr, "Out of memory while copying queue name");
+		return;
+	}
+
+
+	amqp_queue_bind(conn, 1,
+		amqp_cstring_bytes(queuename),
+		amqp_cstring_bytes(exchange[2]),
+		amqp_cstring_bytes(bindingkey),
+		amqp_empty_table);
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
+	
+
+
+	/*
+	
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Opening channel");
 
 	{ 
@@ -11121,14 +11189,55 @@ void rabbitmqssl_mts() {
 			return;
 		}
 	}
-
+	*/
 	
-	amqp_queue_bind(conn, 1, queuename, amqp_cstring_bytes(exchange), amqp_cstring_bytes(bindingkey),
+/*	amqp_queue_bind(conn, 1, queuename, amqp_cstring_bytes(exchange[0]), amqp_cstring_bytes(bindingkey),
 		amqp_empty_table);
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
-
-	amqp_basic_consume(conn, 1, queuename, amqp_empty_bytes, 0, 1, 0, amqp_empty_table);
+	*/
+	
+	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename), amqp_empty_bytes, 0, 1, 0, amqp_empty_table);
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming");
+
+	
+
+
+	{
+		amqp_basic_properties_t props;
+		props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG | AMQP_BASIC_HEADERS_FLAG;;
+		props.content_type = amqp_cstring_bytes("application/json");
+		//props.headers = "replyRoutingKey:\"Node1.ticket.confirm\"";
+		//amqp_table_t *table = &props.headers;
+		//props.headers.num_entries = 1;
+		//props.headers.entries = calloc(props.headers.num_entries, sizeof(amqp_table_entry_t));
+		amqp_table_entry_t entries[1];
+		amqp_table_t table;
+
+
+		entries[0].key = amqp_cstring_bytes("replyRoutingKey");
+		entries[0].value.kind = AMQP_FIELD_KIND_UTF8;
+		entries[0].value.value.bytes = amqp_cstring_bytes("Node1.ticket.confirm");
+		
+		table.num_entries = 1;
+		table.entries = entries;
+
+		qsort(table.entries, table.num_entries, sizeof(amqp_table_entry_t),
+			&amqp_table_entry_cmp);
+		props.headers = table;
+
+
+		//amqp_cstring_bytes("replyRoutingKey:\"Node1.ticket.confirm\"");
+		props.delivery_mode = 2; /* persistent delivery mode */
+		die_on_error(amqp_basic_publish(conn,
+			1,
+			amqp_cstring_bytes(exchange[0]),
+			amqp_cstring_bytes("Node1.ticket.confirm"),
+			0,
+			0,
+			&props,
+			amqp_cstring_bytes("{ \"version\": \"2.0\", \"timestampUtc\": 1486541079460, \"ticketId\": \"MTS_Test_20171109_080435391\", \"sender\": { \"currency\": \"EUR\", \"terminalId\": \"Tallinn-1\", \"channel\": \"internet\", \"shopId\": null, \"bookmakerId\": \"19751\", \"endCustomer\": { \"ip\": \"127.0.0.1\", \"languageId\": \"EN\", \"deviceId\": \"1234test\", \"id\": \"1234test\", \"confidence\": 10000 }, \"limitId\": 903 }, \"selections\": [{ \"eventId\": 11050343, \"id\": \"lcoo:42/1/*/X\", \"odds\": 28700 }], \"bets\": [{ \"id\": \"MTS_Test_20171109_080435391_bet_0\", \"selectionRefs\": [{ \"selectionIndex\": 0, \"banker\": false }], \"selectedSystems\": [1], \"stake\": { \"value\": 10000, \"type\": \"total\" } }] }")),
+			"Publishing");
+	}
 
 	run_mts(conn);
 
