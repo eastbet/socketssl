@@ -123,7 +123,7 @@ typedef void(*messageCallback)(int, string);
 #define SUMMARY_EVERY_US 1000000
 #define MARKETS_LENGTH 3000	
 //#define MAX_EVENTS 25000000
-#define MAX_EVENTS 13000000
+#define MAX_EVENTS 20000000
 #define MAX_LINES 10000000
 
 #define MAX_TOURNAMENTS 1000000
@@ -3266,7 +3266,7 @@ using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
 hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
+//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
 
 int port = 1443;
 
@@ -3444,7 +3444,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		new_message_arrived = true;
 		if (debug_output == true) printf("doc.parse<0>\r\n");
 		doc.parse<0>(AMQP_message[process_index%AMQP_QUEUE]);
-		if (debug_output == true) printf("doc.parse<0> end length=%d\r\n", AMQP_message[process_index%AMQP_QUEUE]);
+		if (debug_output == true) printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
 		process_index++;
 		//new_message_arrived = false;
 
