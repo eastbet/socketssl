@@ -2851,8 +2851,7 @@ id2lines_index simple2lines;
 
 unordered_map<string, int> compound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
 
-
-												   // whenever a new Line is created call this function to update reverse lookup tables
+// whenever a new Line is created call this function to update reverse lookup tables
 void insert_line(Line& line, const int line_index) {
 	bool debug_output = false;
 	int cat_id;
@@ -3089,6 +3088,9 @@ void writeCategoriesDB();
 void writeMarketsDB();
 void writeTournamentsDB();
 void writeSportsDB();
+void writeCompetitorsDB();
+void writePlayersDB();
+void writeEventsDB();
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
@@ -3212,16 +3214,131 @@ void writeSportsDB() {
 	return;
 }
 
-/*
-for (i = 0; i < sports_l; i++) {
-writeInteger(buffer, offset, sports[i].id, 2);
-writeInteger(buffer, offset, sports[i].sort, 1);
-writeString(buffer, offset, sports[i].name);
+void writeCompetitorsDB() {
+	auto coll = db["competitors"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < competitors_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			string country_name = competitors[i].country_name == NULL ? "" : competitors[i].country_name;
+			builder.append(kvp("_id", competitors[i].id),
+				kvp("sport_id", competitors[i].sport_id),
+				kvp("category_id", competitors[i].category_id),
+				kvp("name", competitors[i].name),
+				kvp("country_name", country_name),
+				kvp("super_id", competitors[i].super_id)
+				);
+			docs.push_back(builder.extract());
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " competitor docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeCompetitorsDB: " << e.what() << std::endl;
+	}
+	return;
 }
+// TODO: Research if shorter field names in Mongo effects disk space used
+
+void writePlayersDB() {
+	auto coll = db["players"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < players_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			string name = players[i].name == NULL ? "" : players[i].name;
+			string full_name = players[i].full_name == NULL ? "" : players[i].full_name;
+			string type = players[i].type == NULL ? "" : players[i].type;
+			string nationality = players[i].nationality == NULL ? "" : players[i].nationality;
+			string country_code = players[i].country_code == NULL ? "" : players[i].country_code;
+			builder.append(kvp("_id", players[i].id),
+				kvp("name", name),
+				kvp("full_name", full_name),
+				kvp("type", type),
+				kvp("nationality", nationality),
+				kvp("country_code", country_code),
+				kvp("date_of_birth", players[i].date_of_birth),
+				kvp("height", players[i].height),
+				kvp("weight", players[i].weight),
+				kvp("competitor_id", players[i].competitor_id),   
+				kvp("manager", players[i].manager),
+				kvp("number", players[i].number)
+				);
+			docs.push_back(builder.extract());
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " player docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writePlayersDB: " << e.what() << std::endl;
+	}
+	return;
 }
 
+
+// for a given Event object builds a MongoDB doc representation (i.e. for saving into the DB)
+bsoncxx::document::value buildEventDoc(Event &e) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("_id", e.id),
+		kvp("type_radar", e.type_radar),
+		kvp("sport_id", e.sport_id),
+		kvp("category_id", e.category_id),
+		kvp("simple_id", e.simple_id),
+		kvp("tournament_id", e.tournament_id),
+		kvp("home_id", e.home_id),
+		kvp("away_id", e.away_id),
+		kvp("home_super_id", e.home_super_id),
+		kvp("away_super_id", e.away_super_id),
+		kvp("winner_id", e.winner_id),
+		kvp("bo", e.bo),
+		kvp("parent_id", e.parent_id),
+		kvp("start_time", e.start_time),
+		kvp("period_length", e.period_length),
+		kvp("overtime_length", e.overtime_length),
+		kvp("status", e.status),
+		kvp("timestamp", e.timestamp),
+		kvp("neutral_ground", e.neutral_ground),
+		kvp("austrian_district", e.austrian_district),
+		kvp("booked", e.booked),
+		kvp("delayed_id", e.delayed_id),
+		kvp("current_server", e.current_server),
+		kvp("next_live_time", e.next_live_time)
+	);
+	// store string valued properties after normalization
+	string normalized;
+	normalized = e.home_name == NULL ? "" : e.home_name;
+	builder.append(kvp("home_name", normalized));
+	normalized = e.away_name == NULL ? "" : e.away_name;
+	builder.append(kvp("away_name", normalized));
+	normalized = e.delayed_description == NULL ? "" : e.delayed_description;
+	builder.append(kvp("delayed_description", normalized));
+	normalized = e.venue == NULL ? "" : e.venue;
+	builder.append(kvp("venue", normalized));
+	normalized = e.tv_channels == NULL ? "" : e.tv_channels;
+	builder.append(kvp("tv_channels", normalized));
+
+	return builder.extract();
 }
-*/
+
+void writeEventsDB() {
+	auto coll = db["events"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < events_l; i++) {
+			docs.push_back(buildEventDoc(events[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " event docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeEventsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
 int main(){
 using namespace std;
 timestamp();
@@ -3286,17 +3403,21 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		//getMarkets();
 		//getEvents(0, 10);
 		//return 0;		
-		writeSportsDB();
+		/* writeSportsDB();
 		loadMarketsFromFiles();
 		writeMarketsDB();
 		loadCategoriesFromFiles();
 		writeCategoriesDB();
 		loadTournamentsFromFiles();
 		writeTournamentsDB();
+		*/
+		
 		loadEventsFromFiles();
-		// writeEventsDB();
+		writeEventsDB();
 		// loadCompetitorsFromFiles();
+		// writeCompetitorsDB();
 		// loadPlayersFromFiles();
+		// writePlayersDB();
 	}
 	// izzet: for now
 	return 0;
@@ -8539,6 +8660,7 @@ void loadEventsFromFiles() {
 		if (events[i].start_time > time(nullptr) - 24 * 60 * 60 && error_data == 0) { events_id[events[i].id] = &events[i];  i++; }
 		else DeleteFile(file_path);
 		events_l = i;
+		// if (events_l == 10) break;   // IP: Just for faster testing
 
 	} while (FindNextFile(Hd, &Fd));
 
