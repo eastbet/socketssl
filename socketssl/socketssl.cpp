@@ -3181,7 +3181,7 @@ void delete_line(Line &line) {
 }
 
 int reload_step_1 = 1;
-int booking = 0;
+int booking = 200;
 //std::mutex _mutex;
 
 
@@ -6687,10 +6687,11 @@ void getEvents(time_t sec,int days) {
 
 			if (events[i].type_radar == 0) {
 
-				strcpy(buf, event_node->first_attribute("liveodds")->value());
-				if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'd') events[i].booked = 1;
-				if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'b') events[i].booked = 2; 
-
+				if (event_node->first_attribute("liveodds")) {
+					strcpy(buf, event_node->first_attribute("liveodds")->value());
+					if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'd') events[i].booked = 1;
+					if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'b') events[i].booked = 2;
+				}
 				
 				
 	
