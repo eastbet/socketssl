@@ -2524,7 +2524,8 @@ void webSocket::startServer(int port) {
 								else {
 									
 									std::printf("could not SSL_read (returned -1)\n");
-
+									wsRemoveClient(socketIDmap[i]);
+									continue;
 									/*long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, NULL);
 									std::printf("could not SSL_read (returned -1) %s\n", error_str);
@@ -11018,6 +11019,21 @@ static void run_mts(amqp_connection_state_t conn)
 		//printf("2rabbit_index=%d\r\n", rabbit_index);
 		//printf("run 4\r\n");
 
+
+		printf("Delivery %u, exchange %.*s routingkey %.*s\n",
+			(unsigned)envelope.delivery_tag,
+			(int)envelope.exchange.len, (char *)envelope.exchange.bytes,
+			(int)envelope.routing_key.len, (char *)envelope.routing_key.bytes);
+
+		if (envelope.message.properties._flags & AMQP_BASIC_CONTENT_TYPE_FLAG) {
+			printf("Content-type: %.*s\n",
+				(int)envelope.message.properties.content_type.len,
+				(char *)envelope.message.properties.content_type.bytes);
+		}
+		printf("----\n");
+
+
+
 		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
 			if (AMQP_RESPONSE_LIBRARY_EXCEPTION == ret.reply_type &&
 				AMQP_STATUS_UNEXPECTED_STATE == ret.library_error) {
@@ -11093,7 +11109,7 @@ static void run_mts(amqp_connection_state_t conn)
 void rabbitmqssl_mts() {
 	char const *hostname;
 	int port, status;
-	char const *queuename = "passionbettest_19751-Confirm-Node1";
+	char const *queuename[] = { "passionbettest_19751-Submit-Node1", "passionbettest_19751-Control-Node1", "passionbettest_19751-Confirm-Node1", "passionbettest_19751-Reply-Node1", "passionbettest_19751-Ack-Node1"};
 	char const *bindingkey= "Node1.ticket.confirm";
 	char const *exchangetype[] = { "fanout","topic","topic" ,"topic" ,"topic" };
 	amqp_socket_t *socket;
@@ -11165,7 +11181,7 @@ void rabbitmqssl_mts() {
 
 
 	amqp_queue_bind(conn, 1,
-		amqp_cstring_bytes(queuename),
+		amqp_cstring_bytes(queuename[2]),
 		amqp_cstring_bytes(exchange[2]),
 		amqp_cstring_bytes(bindingkey),
 		amqp_empty_table);
@@ -11173,8 +11189,21 @@ void rabbitmqssl_mts() {
 	
 
 
+
+
 	/*
 	
+
+
+	amqp_queue_unbind(conn, 1,
+	amqp_cstring_bytes(queue),
+	amqp_cstring_bytes(exchange),
+	amqp_cstring_bytes(bindingkey),
+	amqp_empty_table);
+	die_on_amqp_error(amqp_get_rpc_reply(conn), "Unbinding");
+
+
+
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Opening channel");
 
 	{ 
@@ -11205,8 +11234,10 @@ void rabbitmqssl_mts() {
 
 	{
 		amqp_basic_properties_t props;
-		props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG | AMQP_BASIC_HEADERS_FLAG;;
+		props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
 		props.content_type = amqp_cstring_bytes("application/json");
+		//props.reply_to = amqp_bytes_malloc_dup(reply_to_queue);
+
 		//props.headers = "replyRoutingKey:\"Node1.ticket.confirm\"";
 		//amqp_table_t *table = &props.headers;
 		//props.headers.num_entries = 1;
@@ -11228,7 +11259,7 @@ void rabbitmqssl_mts() {
 
 
 		//amqp_cstring_bytes("replyRoutingKey:\"Node1.ticket.confirm\"");
-		props.delivery_mode = 2; /* persistent delivery mode */
+		props.delivery_mode = 1; /* persistent delivery mode */
 		die_on_error(amqp_basic_publish(conn,
 			1,
 			amqp_cstring_bytes(exchange[0]),
