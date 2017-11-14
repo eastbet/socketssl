@@ -319,7 +319,7 @@ public:
 	int category_id;
 	char *name;
 	char *country_name;
-	int super_id;
+	int reference_id;
 	void operator = (const Competitor&);
 };
 void Competitor:: operator = (const Competitor & rhs) {
@@ -327,7 +327,7 @@ void Competitor:: operator = (const Competitor & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
 	sport_id = rhs.sport_id;
-	if (rhs.super_id != 0) super_id = rhs.super_id;
+	if (rhs.reference_id != 0) reference_id = rhs.reference_id;
 
 	category_id = rhs.category_id;
 	if (name != NULL) {
@@ -353,7 +353,7 @@ Competitor::Competitor() {
 	category_id = 0;
 	sport_id = 0;
 	country_name = NULL;
-	super_id = 0;
+	reference_id = 0;
 };
 class Tournament {
 public:
@@ -467,8 +467,8 @@ public:
 	int home_id;
 	int away_id;
 	int winner_id;
-	int home_super_id = 0;
-	int away_super_id = 0;
+	int home_reference_id = 0;
+	int away_reference_id = 0;
 	int status; //0(not started) / 1(live) / 2(suspended) /	3(ended) / 4(closed) / abandoned - only one of these 6 is possible
 	int show;
 	int reporting;//
@@ -553,8 +553,8 @@ void Event:: operator = (const Event & rhs) {
 	show = rhs.show;
 	winner_id = rhs.winner_id;
 	away_id = rhs.away_id;
-	home_super_id = rhs.home_super_id;
-	away_super_id = rhs.away_super_id;
+	home_reference_id = rhs.home_reference_id;
+	away_reference_id = rhs.away_reference_id;
 	status = rhs.status; //0(not started) / 1(live) / 2(suspended) /	3(ended) / 4(closed) / abandoned - only one of these 6 is possible
 	reporting = rhs.reporting;//
 	home_score = rhs.home_score;
@@ -735,8 +735,8 @@ Event::Event() {
 	away_score = 0;
 	home_gamescore = 0;
 	away_gamescore = 0;
-	away_super_id = 0;
-	home_super_id = 0;
+	away_reference_id = 0;
+	home_reference_id = 0;
 	away_id = 0;
 	home_id = 0;
 	bases = NULL;
@@ -3182,7 +3182,7 @@ void delete_line(Line &line) {
 }
 
 int reload_step_1 = 1;
-int booking = 200;
+int booking = 0;
 //std::mutex _mutex;
 
 
@@ -6639,6 +6639,8 @@ void getEvents(time_t sec,int days) {
 		root_node = doc.first_node("schedule");
 		if (root_node == NULL) continue;
 
+	
+
 		
 		for (xml_node<> * event_node = root_node->first_node("sport_event"); event_node; event_node = event_node->next_sibling())
 		{
@@ -6686,6 +6688,8 @@ void getEvents(time_t sec,int days) {
 			events[i].start_time = (int)start;
 			events[i].booked = 0;
 
+		
+
 			if (events[i].type_radar == 0) {
 
 				if (event_node->first_attribute("liveodds")) {
@@ -6695,7 +6699,7 @@ void getEvents(time_t sec,int days) {
 				}
 				
 				
-	
+		
 
 
 
@@ -6718,14 +6722,14 @@ void getEvents(time_t sec,int days) {
 				events[i].home_id = atoi((char*)((char*)event_node->first_node("competitors")->first_node("competitor")->first_attribute("id")->value() + 14));
 				events[i].away_id = atoi((char*)((char*)event_node->first_node("competitors")->first_node("competitor")->next_sibling()->first_attribute("id")->value() + 14));
 
-				if (event_node->first_node("competitors")->first_node("competitor")->first_attribute("id")->value()[3] == 'c')
-					events[i].home_super_id = atoi((char*)event_node->first_node("competitors")->first_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
-					events[i].home_super_id = events[i].home_id; events[i].home_id = 0;
+				if (event_node->first_node("competitors")->first_node("competitor")->first_node("reference_ids") && event_node->first_node("competitors")->first_node("competitor")->first_attribute("id")->value()[3] == 'c')
+					events[i].home_reference_id = atoi((char*)event_node->first_node("competitors")->first_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
+					events[i].home_reference_id = events[i].home_id; //events[i].home_id = 0;
 				}
 
-				if (event_node->first_node("competitors")->last_node("competitor")->first_attribute("id")->value()[3] == 'c')
-					events[i].away_super_id = atoi((char*)event_node->first_node("competitors")->last_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
-					events[i].away_super_id = events[i].away_id; events[i].away_id = 0;
+				if (event_node->first_node("competitors")->last_node("competitor")->first_node("reference_ids") && event_node->first_node("competitors")->last_node("competitor")->first_attribute("id")->value()[3] == 'c')
+					events[i].away_reference_id = atoi((char*)event_node->first_node("competitors")->last_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
+					events[i].away_reference_id = events[i].away_id; //events[i].away_id = 0;
 				}
 
 				events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 14));
@@ -6945,6 +6949,7 @@ void getEvents(time_t sec,int days) {
 
 			if(events[i].id<MAX_EVENTS) events_id[events[i].id] = &events[i]; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEvents%d\r\n", events[i].id);
 			//&& events[i].start_time>time(nullptr)
+		
 		if (booking > 0 && events[i].booked == 2 &&events[i].status == 0 && booked_num < booking) {postBooked(events[i].id); booked_num++;}
 		//&& (events[i].sport_id == 1 || events[i].sport_id == 2 || events[i].sport_id == 4 || events[i].sport_id == 5 || events[i].sport_id == 12 || events[i].sport_id == 23 || events[i].sport_id == 6))
 			i++;
@@ -7838,14 +7843,14 @@ int getEventFixture(Event* event) {
 		event->home_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_attribute("id")->value() + 14));
 		event->away_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->next_sibling()->first_attribute("id")->value() + 14));
 
-		if (root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_attribute("id")->value()[3] == 'c')
-			event->home_super_id = atoi((char*)root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
-			event->home_super_id = event->home_id; event->home_id = 0;
+		if (root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_node("reference_ids") && root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_attribute("id")->value()[3] == 'c')
+			event->home_reference_id = atoi((char*)root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
+			event->home_reference_id = event->home_id; //event->home_id = 0;
 		}
 
-		if (root_node->first_node("fixture")->first_node("competitors")->last_node("competitor")->first_attribute("id")->value()[3] == 'c')
-			event->away_super_id = atoi((char*)root_node->first_node("fixture")->first_node("competitors")->last_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
-			event->away_super_id = event->away_id; event->away_id = 0;
+		if (root_node->first_node("fixture")->first_node("competitors")->last_node("competitor")->first_node("reference_ids") && root_node->first_node("fixture")->first_node("competitors")->last_node("competitor")->first_attribute("id")->value()[3] == 'c')
+			event->away_reference_id = atoi((char*)root_node->first_node("fixture")->first_node("competitors")->last_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
+			event->away_reference_id = event->away_id; //event->away_id = 0;
 		}
 
 		event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 14));
@@ -8398,10 +8403,10 @@ int getTournament(Tournament* tournament, bool extended) {
 
 						
 							if (competitor_node->first_node("reference_ids") && competitor_node->first_node("reference_ids")->first_node("reference_id") && competitor_node->first_node("reference_ids")->first_node("reference_id")->first_attribute("value"))
-							competitor->super_id = atoi(competitor_node->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value());
+							competitor->reference_id = atoi(competitor_node->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value());
 
 
-							//std::printf("competitor->super_id=%d\r\n", competitor->super_id);
+							//std::printf("competitor->reference_id=%d\r\n", competitor->reference_id);
 							
 
 							if (competitor->id >= MAX_COMPETITORS) { std::printf("ERROR DATA!\r\ncompetitors id out of MAX_COMPETITORS in getTournament%d\r\n", competitor->id); continue; }
@@ -8744,8 +8749,8 @@ void saveEventToFile(Event* event) {
 	else WriteFile(File, &event->tournament_id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->home_id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->away_id, sizeof(int), &l, NULL);
-	WriteFile(File, &event->home_super_id, sizeof(int), &l, NULL);
-	WriteFile(File, &event->away_super_id, sizeof(int), &l, NULL);
+	WriteFile(File, &event->home_reference_id, sizeof(int), &l, NULL);
+	WriteFile(File, &event->away_reference_id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->winner_id, sizeof(int), &l, NULL);
 	WriteFile(File, &event->bo, sizeof(int), &l, NULL);
 	WriteFile(File, &event->parent_id, sizeof(int), &l, NULL);
@@ -8822,8 +8827,8 @@ void loadEventsFromFiles() {
 		else ReadFile(File, &events[i].tournament_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].home_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].away_id, sizeof(int), &l, NULL);
-		ReadFile(File, &events[i].home_super_id, sizeof(int), &l, NULL);
-		ReadFile(File, &events[i].away_super_id, sizeof(int), &l, NULL);
+		ReadFile(File, &events[i].home_reference_id, sizeof(int), &l, NULL);
+		ReadFile(File, &events[i].away_reference_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].winner_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].bo, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].parent_id, sizeof(int), &l, NULL);
@@ -9387,7 +9392,7 @@ void saveCompetitorToFile(Competitor* competitor) {
 	WriteFile(File, &competitor->id, sizeof(int), &l, NULL);
 	WriteFile(File, &competitor->sport_id, sizeof(int), &l, NULL);
 	WriteFile(File, &competitor->category_id, sizeof(int), &l, NULL);
-	WriteFile(File, &competitor->super_id, sizeof(int), &l, NULL);
+	WriteFile(File, &competitor->reference_id, sizeof(int), &l, NULL);
 	if (competitor->name != NULL) i = strlen(competitor->name) + 1; else i = 0;
 	WriteFile(File, &i, sizeof(int), &l, NULL);
 	if (i>0) WriteFile(File, competitor->name, i, &l, NULL);
@@ -9431,7 +9436,7 @@ void loadCompetitorsFromFiles() {
 		ReadFile(File, &competitors[i].id, sizeof(int), &l, NULL);
 		ReadFile(File, &competitors[i].sport_id, sizeof(int), &l, NULL);
 		ReadFile(File, &competitors[i].category_id, sizeof(int), &l, NULL);
-		ReadFile(File, &competitors[i].super_id, sizeof(int), &l, NULL);
+		ReadFile(File, &competitors[i].reference_id, sizeof(int), &l, NULL);
 
 		if (competitors[i].name != NULL) { delete[] competitors[i].name; competitors[i].name = NULL; }
 		ReadFile(File, &j, sizeof(int), &l, NULL);
@@ -10725,7 +10730,6 @@ static void run(amqp_connection_state_t conn)
 	int previous_received = 0;
 	uint64_t previous_report_time = start_time;
 	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
-	DWORD l = 0;
 	amqp_frame_t frame;	uint64_t now;
 		
 	
@@ -10988,9 +10992,8 @@ static void run_mts(amqp_connection_state_t conn)
 	int previous_received = 0;
 	uint64_t previous_report_time = start_time;
 	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
-	DWORD l = 0;
 	amqp_frame_t frame;	uint64_t now;
-
+	int res;
 
 
 	for (;;) {
@@ -11032,6 +11035,11 @@ static void run_mts(amqp_connection_state_t conn)
 		}
 		printf("----\n");
 
+		
+		res = amqp_basic_ack(conn, envelope.channel, envelope.delivery_tag, 0);
+		if (AMQP_STATUS_OK != res) {
+			fprintf(stderr, "Failed: %s\n", amqp_error_string2(res));
+		}
 
 
 		if (AMQP_RESPONSE_NORMAL != ret.reply_type) {
@@ -11226,7 +11234,7 @@ void rabbitmqssl_mts() {
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
 	*/
 	
-	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename), amqp_empty_bytes, 0, 1, 0, amqp_empty_table);
+	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[2]), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming");
 
 	
