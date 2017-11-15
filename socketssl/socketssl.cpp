@@ -3359,6 +3359,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int q = 0;
 	int z = 0;
 	int u = 0;
+	int write_count_file = 0;
 	bool print = false;
 	bool debug_output = false;
 	int event_id = 0;
@@ -3445,7 +3446,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		new_message_arrived = true;
 		if (debug_output == true) printf("doc.parse<0>\r\n");
 		doc.parse<0>(AMQP_message[process_index%AMQP_QUEUE]);
-		if (debug_output == true) printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
+		//if (debug_output == true) 
+	printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
 		process_index++;
 		//new_message_arrived = false;
 
@@ -6139,10 +6141,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			//if (i < 100 && _event->sport_id == 21 && (envelope.message.body.len > 8000 || status == 1))
 
-			/*
-			if (i < 100 && status == 1 && (_event->away_yellowcards>0 || _event->away_redcards>0 || _event->home_yellowcards>0 || _event->home_redcards>0)) {
-			i++;std::strcpy(name, "C://unifeed");
-			_itoa(i, buf, 10);
+			printf("ff=%d\r\n", strlen(AMQP_message[(process_index - 1) % AMQP_QUEUE]));
+			
+			if (write_count_file < 10 && _event!=NULL && _event->sport_id == 1 && strlen(AMQP_message[(process_index-1)%AMQP_QUEUE])> 50000) {
+				
+				write_count_file++;std::strcpy(name, "D://passionbet//XML//MTS//unifeed");
+			_itoa(write_count_file, buf, 10);
 			strcat(name, buf);
 			strcat(name, ".xml");
 			DeleteFile(name);
@@ -6150,12 +6154,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 			printf(name);
 			printf("\r\n");
-			printf("message length= %d\r\n", envelope.message.body.len);
-			WriteFile(File, envelope.message.body.bytes, envelope.message.body.len, &l, NULL);
+			printf("message length= %d\r\n", strlen(AMQP_message[(process_index - 1) % AMQP_QUEUE]));
+			WriteFile(File, AMQP_message[(process_index - 1) % AMQP_QUEUE], strlen(AMQP_message[(process_index - 1) % AMQP_QUEUE]), &l, NULL);
 			CloseHandle(File);
 			}
 
-			*/
+		
 			//WriteFile(File, "<endmessage></endmessage>", strlen("<endmessage></endmessage>"), &l, NULL);
 
 			//if (i > 50) return;
@@ -11038,7 +11042,7 @@ static void run_mts(amqp_connection_state_t conn)
 		
 		res = amqp_basic_ack(conn, envelope.channel, envelope.delivery_tag, 0);
 		if (AMQP_STATUS_OK != res) {
-			fprintf(stderr, "Failed: %s\n", amqp_error_string2(res));
+			fprintf(stderr, "Failed ack: %s\n", amqp_error_string2(res));
 		}
 
 
@@ -11268,15 +11272,8 @@ void rabbitmqssl_mts() {
 
 		//amqp_cstring_bytes("replyRoutingKey:\"Node1.ticket.confirm\"");
 		props.delivery_mode = 1; /* persistent delivery mode */
-		die_on_error(amqp_basic_publish(conn,
-			1,
-			amqp_cstring_bytes(exchange[0]),
-			amqp_cstring_bytes("Node1.ticket.confirm"),
-			0,
-			0,
-			&props,
-			amqp_cstring_bytes("{ \"version\": \"2.0\", \"timestampUtc\": 1486541079460, \"ticketId\": \"MTS_Test_20171109_080435391\", \"sender\": { \"currency\": \"EUR\", \"terminalId\": \"Tallinn-1\", \"channel\": \"internet\", \"shopId\": null, \"bookmakerId\": \"19751\", \"endCustomer\": { \"ip\": \"127.0.0.1\", \"languageId\": \"EN\", \"deviceId\": \"1234test\", \"id\": \"1234test\", \"confidence\": 10000 }, \"limitId\": 903 }, \"selections\": [{ \"eventId\": 11050343, \"id\": \"lcoo:42/1/*/X\", \"odds\": 28700 }], \"bets\": [{ \"id\": \"MTS_Test_20171109_080435391_bet_0\", \"selectionRefs\": [{ \"selectionIndex\": 0, \"banker\": false }], \"selectedSystems\": [1], \"stake\": { \"value\": 10000, \"type\": \"total\" } }] }")),
-			"Publishing");
+	
+		die_on_error(amqp_basic_publish(conn, 1,  amqp_cstring_bytes(exchange[0]),amqp_cstring_bytes("Node1.ticket.confirm"), 0, 0, &props,			amqp_cstring_bytes("{ \"version\": \"2.0\", \"timestampUtc\": 1486541079460, \"ticketId\": \"MTS_Test_20171109_080435391\", \"sender\": { \"currency\": \"EUR\", \"terminalId\": \"Tallinn-1\", \"channel\": \"internet\", \"shopId\": null, \"bookmakerId\": \"19751\", \"endCustomer\": { \"ip\": \"127.0.0.1\", \"languageId\": \"EN\", \"deviceId\": \"1234test\", \"id\": \"1234test\", \"confidence\": 10000 }, \"limitId\": 903 }, \"selections\": [{ \"eventId\": 11050343, \"id\": \"lcoo:42/1/*/X\", \"odds\": 28700 }], \"bets\": [{ \"id\": \"MTS_Test_20171109_080435391_bet_0\", \"selectionRefs\": [{ \"selectionIndex\": 0, \"banker\": false }], \"selectedSystems\": [1], \"stake\": { \"value\": 10000, \"type\": \"total\" } }] }")),"Publishing");
 	}
 
 	run_mts(conn);
