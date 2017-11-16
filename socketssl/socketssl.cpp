@@ -2800,7 +2800,7 @@ char** split(char*, char*);
 void replace(char* &,char*, char*);
 void replace_substr(char* &, char*, char*);
 void saveEventToFile(Event*);
-void loadEventsFromFiles();
+void loadEventsFromFiles(bool = false);
 void saveMarketToFile(Market*);
 void loadMarketsFromFiles();
 void saveTournamentToFile(Tournament*);
@@ -2808,9 +2808,9 @@ void loadTournamentsFromFiles(bool = false);
 void saveCategoryToFile(Category*);
 void loadCategoriesFromFiles(bool = false);
 void saveCompetitorToFile(Competitor*);
-void loadCompetitorsFromFiles();
+void loadCompetitorsFromFiles(bool = false);
 void savePlayerToFile(Player*);
-void loadPlayersFromFiles();
+void loadPlayersFromFiles(bool = false);
 char* SendframeEncode(char*,int,int &);
 long timestamp();
 void openHandler(int);
@@ -3377,6 +3377,8 @@ timestamp();
 hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
 // hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
 
+getchar();
+// WaitForSingleObject(hThread1, INFINITE);
 
 int port = 1443;
 
@@ -3386,7 +3388,7 @@ int port = 1443;
 //server.setPeriodicHandler(periodicHandler);
 
 //while (port == 1443) Sleep(1);
-server.startServer(port);
+// server.startServer(port);
 
 return 0;	
 }
@@ -3419,10 +3421,10 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	}
 
 
-	getSports();
+	// getSports();
 
-	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
-	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
+	// if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
+	// if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
 
 
 	if (booking > 0) {
@@ -3437,10 +3439,10 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		//return 0;		
 		// loadMarketsFromFiles();	
 		// loadCategoriesFromFiles();		
-		loadTournamentsFromFiles();		
+		// loadTournamentsFromFiles();		
 		// loadEventsFromFiles();		
 		// loadCompetitorsFromFiles();
-		// loadPlayersFromFiles();
+		loadPlayersFromFiles();
 		
 		if (POPULATE_MONGO) {
 			writeSportsDB();
@@ -8533,7 +8535,7 @@ void replace_substr(char* &string, char* sub, char* value) {
 	string = retValue;
 }
 
-void mongo_str_to_buffer(bsoncxx::document::element str_field, char** buffer) {
+void mongo_str_to_buffer_orig(bsoncxx::document::element str_field, char** buffer) {
 	string str_value;
 	if (*buffer != NULL) { delete[] * buffer; *buffer = NULL; }
 	str_value = str_field.get_utf8().value.to_string();	
@@ -8543,6 +8545,17 @@ void mongo_str_to_buffer(bsoncxx::document::element str_field, char** buffer) {
 	sprintf(*buffer, "%s", str_value.c_str());
 	(*buffer)[str_value.length()] = '\0';   // just to be sure
 	// cout << "DEBUG" << *buffer << endl;
+}
+
+void mongo_str_to_buffer(bsoncxx::document::element str_field, char* &buffer) {
+	string str_value;
+	if (buffer != NULL) { delete[] buffer; buffer = NULL; }
+	str_value = str_field.get_utf8().value.to_string();
+	if (str_value.length() == 0) return;   // in case, field doesn't exist	
+	buffer = new char[str_value.length() + 1];
+	strncpy(buffer, str_value.c_str(), str_value.length());
+	buffer[str_value.length()] = '\0';
+	// cout << "DEBUG: " << *buffer << endl;
 }
 
 void saveEventToFile(Event* event) {
@@ -8606,7 +8619,7 @@ void saveEventToFile(Event* event) {
 	CloseHandle(File);
 
 };
-void loadEventsFromFiles() {
+void loadEventsFromFiles(bool loadFromDB) {
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -8720,6 +8733,7 @@ void loadEventsFromFiles() {
 
 
 };
+
 void saveMarketToFile(Market* market) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["markets"];
@@ -8785,7 +8799,49 @@ void saveMarketToFile(Market* market) {
 	delete[] variable_text;
 
 };
-void loadMarketsFromFiles() {
+void loadMarketsFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["markets"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		markets_l = 0;
+		int outcome_index;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			markets[i].id = doc["market_id"].get_int32();
+			markets[i].type = doc["type"].get_int32();
+			markets[i].variant = doc["variant"].get_int32();
+
+			mongo_str_to_buffer(doc["name"], markets[i].name);
+
+			// optional values
+			if (doc["variable_text"].raw() != nullptr) {
+				mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
+			}
+            // array values
+			bsoncxx::document::element outcomes_elem = doc["outcomes"];
+			bsoncxx::array::view outcomes{ outcomes_elem.get_array().value };
+			markets[i].outcome_number = outcomes.length();   // ASK: Is this always >0 ?
+			markets[i].outcome_id = new int[markets[i].outcome_number];
+			markets[i].outcome_name = new char*[markets[i].outcome_number];
+			outcome_index = 0;
+			for (auto elt : outcomes) {
+				bsoncxx::document::view subdoc = elt.get_document().value;
+				for (auto pair : subdoc) {
+					markets[i].outcome_id[outcome_index] = atoi(pair.key().to_string().c_str());
+					mongo_str_to_buffer(pair, markets[i].outcome_name[outcome_index]);
+					outcome_index++;
+				}
+			}
+
+
+		}
+		for (int i = 0; i < markets_l; i++) {
+			cout << markets[i].id << ":" << markets[i].name << endl;
+		}
+		printf("Markets loaded from Mongo succes. Number of loaded markets: %d\r\n", markets_l);
+	}
+
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -8997,6 +9053,7 @@ void loadMarketsFromFiles() {
 
 	std::printf("Markets loaded from data files succes. Number of loaded markets is %d\r\n", markets_l);
 }
+
 void saveTournamentToFile(Tournament* tournament) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["tournaments"];
@@ -9062,9 +9119,9 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 				tournaments[i].end_date = doc["end_date"].get_int32();
 			}
 			// string types
-			mongo_str_to_buffer(doc["name"], &(tournaments[i].name));
+			mongo_str_to_buffer(doc["name"], tournaments[i].name);
 			if (doc["season_name"].raw() != nullptr) {
-				mongo_str_to_buffer(doc["season_name"], &(tournaments[i].season_name));
+				mongo_str_to_buffer(doc["season_name"], tournaments[i].season_name);
 			}
 			if (tournaments[i].id > 0) tournaments_id[tournaments[i].id] = &tournaments[i];
 			if (tournaments[i].season_id > 0) seasons_id[tournaments[i].season_id] = &tournaments[i];
@@ -9072,6 +9129,9 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 
 			i++;
 			tournaments_l = i;
+		}
+		for (int i = 0; i < tournaments_l; i++) {
+			cout << tournaments[i].id << ":" << tournaments[i].name << ":" << tournaments[i].season_name << endl;
 		}
 		printf("Tournaments loaded from Mongo succes. Number of loaded tournaments: %d\r\n", tournaments_l);
 		return;
@@ -9165,6 +9225,7 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 
 	
 };;
+
 void saveCategoryToFile(Category* category) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["categories"];
@@ -9194,7 +9255,6 @@ void saveCategoryToFile(Category* category) {
 	CloseHandle(File);
 
 };
-
 void loadCategoriesFromFiles(bool loadFromDB) {
 
 	if (LOAD_FROM_MONGO || loadFromDB) {
@@ -9207,7 +9267,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 			categories[i].id = doc["cat_id"].get_int32();
 			categories[i].sport_id = doc["sport_id"].get_int32();
 			categories[i].sort = doc["sort"].get_int32();
-			mongo_str_to_buffer(doc["name"], &(categories[i].name));
+			mongo_str_to_buffer(doc["name"], categories[i].name);
 			categories_id[categories[i].id] = &categories[i];
 			i++;
 			categories_l = i;
@@ -9278,6 +9338,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 
 	
 };
+
 void saveCompetitorToFile(Competitor* competitor) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["competitors"];
@@ -9308,7 +9369,35 @@ void saveCompetitorToFile(Competitor* competitor) {
 	CloseHandle(File);
 
 };
-void loadCompetitorsFromFiles() {
+void loadCompetitorsFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["competitors"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		competitors_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			competitors[i].id = doc["_id"].get_int32();
+			competitors[i].sport_id = doc["sport_id"].get_int32();
+			competitors[i].category_id = doc["category_id"].get_int32();
+			competitors[i].super_id = doc["super_id"].get_int32();
+
+			mongo_str_to_buffer(doc["name"], competitors[i].name);
+			mongo_str_to_buffer(doc["country_name"], competitors[i].country_name);
+
+			competitors_id[competitors[i].id] = &competitors[i];
+			i++;
+			competitors_l = i;
+		}
+		/* for (int i = 0; i < competitors_l; i++) {
+			if (competitors[i].country_name == nullptr) continue;
+			cout << competitors[i].id << ":" << competitors[i].name << ":" << competitors[i].country_name << endl;
+		} */
+
+		printf("Competitors loaded from Mongo succes. Number of loaded competitors: %d\r\n", competitors_l);
+		return;
+	}
+
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -9373,6 +9462,7 @@ void loadCompetitorsFromFiles() {
 
 
 };
+
 void savePlayerToFile(Player* player) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["players"];
@@ -9422,7 +9512,40 @@ void savePlayerToFile(Player* player) {
 	CloseHandle(File);
 
 };
-void loadPlayersFromFiles() {
+void loadPlayersFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["players"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		players_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			players[i].id = doc["_id"].get_int32();
+			players[i].competitor_id = doc["competitor_id"].get_int32();
+			players[i].number = doc["number"].get_int32();
+			players[i].manager = doc["manager"].get_int32();
+			players[i].date_of_birth = doc["date_of_birth"].get_int32();
+			players[i].weight = doc["weight"].get_int32();
+			players[i].height = doc["height"].get_int32();
+
+			mongo_str_to_buffer(doc["name"], players[i].name);
+			mongo_str_to_buffer(doc["full_name"], players[i].full_name);
+			mongo_str_to_buffer(doc["nationality"], players[i].nationality);
+			mongo_str_to_buffer(doc["type"], players[i].type);
+			mongo_str_to_buffer(doc["country_code"], players[i].country_code);
+
+			players_id[players[i].id] = &players[i];
+			i++;
+			players_l = i;
+		}
+
+		for (int i = 0; i < players_l; i++) {
+			cout << players[i].id << ":" << players[i].name  << endl;
+		}
+		printf("Players loaded from Mongo succes. Number of loaded players: %d\r\n", players_l);
+		return;
+	}
+
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
