@@ -11002,7 +11002,41 @@ static void run_mts(amqp_connection_state_t conn)
 	amqp_frame_t frame;	uint64_t now;
 	int res;
 
+
+
+
 	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	for (;;) {
 		amqp_rpc_reply_t ret;
@@ -11050,11 +11084,11 @@ static void run_mts(amqp_connection_state_t conn)
 			printf((char*)envelope.message.body.bytes);
 			printf("\n");
 
-				res = amqp_basic_ack(conn, envelope.channel, envelope.delivery_tag, 0);
-				if (AMQP_STATUS_OK != res) {
-					fprintf(stderr, "Failed ack: %s\n", amqp_error_string2(res));
-				}
-			
+			res = amqp_basic_ack(conn, envelope.channel, envelope.delivery_tag, 0);
+			if (AMQP_STATUS_OK != res) {
+				fprintf(stderr, "Failed ack: %s\n", amqp_error_string2(res));
+			}
+
 
 
 			{//amqp_confirm_select(conn, 1);
@@ -11317,7 +11351,7 @@ void rabbitmqssl_mts() {
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
 	*/
 	
-	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[2]), amqp_empty_bytes, 0, 0, 1, amqp_empty_table);  //0,1,0 no_ack
+	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[2]), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming");
 
 	
