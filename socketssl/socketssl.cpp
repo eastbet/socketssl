@@ -3361,6 +3361,12 @@ bsoncxx::document::value buildEventDoc(Event &e) {
 void writeEventsDB() {
 	auto coll = db["events"];
 	coll.drop();  // clear collection
+	
+    // create index for start_time
+	bsoncxx::builder::basic::document index_doc{};
+	index_doc.append(kvp("start_time", -1));  // -1 for descending index
+	coll.create_index(std::move(index_doc.extract()));
+
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < events_l; i++) {
@@ -3379,12 +3385,13 @@ int main(){
 using namespace std;
 timestamp();
 hThread1 = CreateThread(NULL, 0, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-// hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+getchar();  // to see BetradarGetThread's output
 
-getchar();
 // WaitForSingleObject(hThread1, INFINITE);
 
-int port = 1443;
+// hThread2 = CreateThread(NULL, 0, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+
+// int port = 1443;
 
 //server.setOpenHandler(openHandler);
 //server.setCloseHandler(closeHandler);
@@ -3442,11 +3449,11 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		//getEvents(0, 10);
 		//return 0;		
 		loadMarketsFromFiles();	
-		// loadCategoriesFromFiles();		
-		// loadTournamentsFromFiles();		
-		// loadEventsFromFiles();		
-		// loadCompetitorsFromFiles();
-		// loadPlayersFromFiles();
+		loadCategoriesFromFiles();		
+		loadTournamentsFromFiles();		
+		loadEventsFromFiles();		
+		loadCompetitorsFromFiles();
+		loadPlayersFromFiles();
 		
 		if (POPULATE_MONGO) {
 			writeSportsDB();
@@ -3459,6 +3466,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		}
 	}
 	// izzet: for now
+	cout << "End of execution of thread. Press ENTER to stop.";	
 	return 0;
 
 	if (full_data == true) {
@@ -8624,6 +8632,71 @@ void saveEventToFile(Event* event) {
 
 };
 void loadEventsFromFiles(bool loadFromDB) {
+	using namespace bsoncxx::builder;
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["events"];
+		auto query_doc = stream::document{}  
+			<< "start_time" << stream::open_document << "$gte" << (time(nullptr) - 24 * 60 * 60)
+			                << stream::close_document
+			<< stream::finalize;
+		mongocxx::cursor cursor = coll.find(query_doc.view());   // query is db.events.find({ start_time: {$gte: ...}})
+		int i = 0;
+		events_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+
+			// int fields
+			events[i].id = doc["_id"].get_int32();
+			events[i].type_radar = doc["type_radar"].get_int32();
+			events[i].sport_id = doc["sport_id"].get_int32();
+			events[i].category_id = doc["category_id"].get_int32();
+			if (events[i].type_radar == 2) {
+				events[i].simple_id = doc["simple_id"].get_int32();
+			}
+			else {
+				events[i].tournament_id = doc["tournament_id"].get_int32();
+			}
+			events[i].home_super_id = doc["home_super_id"].get_int32();
+			events[i].away_id = doc["away_id"].get_int32();
+			events[i].away_super_id = doc["away_super_id"].get_int32();
+			events[i].winner_id = doc["winner_id"].get_int32();
+			events[i].parent_id = doc["parent_id"].get_int32();
+			events[i].start_time = doc["start_time"].get_int32();
+			events[i].period_length = doc["period_length"].get_int32();
+			events[i].overtime_length = doc["overtime_length"].get_int32();
+			events[i].status = doc["status"].get_int32();
+			events[i].timestamp = doc["timestamp"].get_int32();
+			events[i].neutral_ground = doc["neutral_ground"].get_int32();
+			events[i].austrian_district = doc["austrian_district"].get_int32();
+			events[i].booked = doc["booked"].get_int32();
+			events[i].delayed_id = doc["delayed_id"].get_int32();
+			events[i].current_server = doc["current_server"].get_int32();
+			events[i].next_live_time = doc["next_live_time"].get_int32();
+
+			// string fields
+			mongo_str_to_buffer(doc["home_name"], events[i].home_name);
+			mongo_str_to_buffer(doc["away_name"], events[i].away_name);
+			mongo_str_to_buffer(doc["delayed_description"], events[i].delayed_description);
+			mongo_str_to_buffer(doc["venue"], events[i].venue);
+			mongo_str_to_buffer(doc["tv_channels"], events[i].tv_channels);
+
+			if (!(events[i].type_radar == 2 && events[i].simple_id == 0)) {
+				events_id[events[i].id] = &events[i];  
+				i++;
+			}
+			events_l = i;
+		}
+		/*
+		for (int i = 0; i < events_l; i++) {
+		cout << events[i].id << ";" << events[i].home_name << "-" << events[i].away_name << ";"
+		     << endl;
+		}
+		*/
+		printf("Events loaded from Mongo succes. Number of loaded events: %d\r\n", events_l);
+		return;
+	}
+
+
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -8681,7 +8754,7 @@ void loadEventsFromFiles(bool loadFromDB) {
 		ReadFile(File, &events[i].delayed_id, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].current_server, sizeof(int), &l, NULL);
 		ReadFile(File, &events[i].next_live_time, sizeof(int), &l, NULL);
-
+		
 		if (events[i].home_name != NULL) { delete[] events[i].home_name; events[i].home_name = NULL; }
 		ReadFile(File, &j, sizeof(int), &l, NULL);
 		if (j > 0) {
@@ -8705,7 +8778,6 @@ void loadEventsFromFiles(bool loadFromDB) {
 			ReadFile(File, events[i].delayed_description, j, &l, NULL);
 		}
 
-
 		if (events[i].venue != NULL) { delete[] events[i].venue; events[i].venue = NULL; }
 		ReadFile(File, &j, sizeof(int), &l, NULL);
 		if (j > 0) {
@@ -8724,11 +8796,9 @@ void loadEventsFromFiles(bool loadFromDB) {
 		CloseHandle(File);
 
 		if (events[i].type_radar == 2 && events[i].simple_id == 0) error_data = 1;
-		
 		if (events[i].start_time > time(nullptr) - 24 * 60 * 60 && error_data == 0) { events_id[events[i].id] = &events[i];  i++; }
 		else DeleteFile(file_path);
-		events_l = i;
-		// if (events_l == 10) break;   // IP: Just for faster testing
+		events_l = i;		
 
 	} while (FindNextFile(Hd, &Fd));
 
@@ -8864,7 +8934,6 @@ void processLoadedMarkets() {
 		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
 	}
 }
-
 void saveMarketToFile(Market* market) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["markets"];
@@ -9195,9 +9264,14 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 			i++;
 			tournaments_l = i;
 		}
+		/*
 		for (int i = 0; i < tournaments_l; i++) {
-			cout << tournaments[i].id << ":" << tournaments[i].name << ":" << tournaments[i].season_name << endl;
+			cout << tournaments[i].id << ":" << tournaments[i].name; 
+			if (tournaments[i].season_name != nullptr) 
+				cout << ":" << tournaments[i].season_name;
+			cout << endl;
 		}
+		*/
 		printf("Tournaments loaded from Mongo succes. Number of loaded tournaments: %d\r\n", tournaments_l);
 		return;
 	}
@@ -9603,10 +9677,11 @@ void loadPlayersFromFiles(bool loadFromDB) {
 			i++;
 			players_l = i;
 		}
-
+		/*
 		for (int i = 0; i < players_l; i++) {
 			cout << players[i].id << ":" << players[i].name  << endl;
 		}
+		*/
 		printf("Players loaded from Mongo succes. Number of loaded players: %d\r\n", players_l);
 		return;
 	}
