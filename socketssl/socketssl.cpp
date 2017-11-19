@@ -9417,6 +9417,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 				 << categories[i].sport_id << ";" << endl;
 		}
 		*/
+		printf("Categories loaded from Mongo succes. Number of loaded categories: %d\r\n", categories_l);
 		return;
 	}
 
