@@ -4,7 +4,6 @@
 #undef UNICODE
 
 
-
 #include "stdafx.h"
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <mutex>
