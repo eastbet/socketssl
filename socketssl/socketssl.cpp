@@ -2,9 +2,19 @@
 #define WIN32_LEAN_AND_MEAN
 #undef _UNICODE
 #undef UNICODE
-
-
 #include "stdafx.h"
+
+#include <cstdint>
+#include <bsoncxx/builder/basic/document.hpp>
+#include <bsoncxx/builder/basic/kvp.hpp>
+#include <bsoncxx/types.hpp>
+#include <bsoncxx/json.hpp>
+#include <mongocxx/client.hpp>
+#include <mongocxx/exception/exception.hpp>
+#include <mongocxx/instance.hpp>
+
+
+
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
 #include <mutex>
 #include <winsock2.h>
@@ -2880,7 +2890,6 @@ void webSocket::stopServer() {
 }
 
 
-
 void writeInteger(char*, size_t &, int , int);
 void writeString(char*, size_t &, char*);
 void writeDouble(char*, size_t &, double);
@@ -2910,6 +2919,7 @@ char** split(char*, char*);
 void replace(char* &,char*, char*);
 void replace_substr(char* &, char*, char*);
 void saveEventToFile(Event*);
+/*
 void loadEventsFromFiles();
 void saveMarketToFile(Market*);
 void loadMarketsFromFiles();
@@ -2921,6 +2931,19 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles();
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles();
+*/
+void loadEventsFromFiles(bool = false);
+void saveMarketToFile(Market*);
+void loadMarketsFromFiles(bool = false);
+void saveTournamentToFile(Tournament*);
+void loadTournamentsFromFiles(bool = false);
+void saveCategoryToFile(Category*);
+void loadCategoriesFromFiles(bool = false);
+void saveCompetitorToFile(Competitor*);
+void loadCompetitorsFromFiles(bool = false);
+void savePlayerToFile(Player*);
+void loadPlayersFromFiles(bool = false);
+
 char* SendframeEncode(char*,int,int &);
 void openHandler(int);
 void closeHandler(int);
@@ -3188,7 +3211,313 @@ int reload_step_1 = 1;
 int booking = 0;
 //std::mutex _mutex;
 
+using bsoncxx::builder::basic::kvp;
+using bsoncxx::builder::basic::sub_document;
+using bsoncxx::builder::basic::sub_array;
 
+
+mongocxx::instance instance{}; // This should be done only once.
+mongocxx::uri mongo_uri("mongodb://localhost:27017");
+mongocxx::client mongo_client(mongo_uri);
+
+void writeCategoriesDB();
+void writeMarketsDB();
+void writeTournamentsDB();
+void writeSportsDB();
+void writeCompetitorsDB();
+void writePlayersDB();
+void writeEventsDB();
+
+// make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
+const bool POPULATE_MONGO = true;
+// when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
+const bool WRITE_NEW_DATA_TO_MONGO = true;
+// when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
+// this makes testing easier.
+const bool LOAD_FROM_MONGO = false;
+
+auto db = mongo_client["passion_bet"]; // SQL:  USE db
+
+bsoncxx::document::value buildCategoryDoc(Category &c) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("cat_id", c.id),
+		kvp("sport_id", c.sport_id),
+		kvp("sort", c.sort),
+		kvp("name", c.name)
+	);
+
+	return builder.extract();
+}
+
+void writeCategoriesDB() {
+	auto coll = db["categories"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < categories_l; i++) {
+			docs.push_back(buildCategoryDoc(categories[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " category docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeMarketsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+bsoncxx::document::value buildMarketDoc(Market &m) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("market_id", m.id),
+		kvp("type", m.type),
+		kvp("line_type", m.line_type),
+		kvp("name", m.name),
+		kvp("variant", m.variant)
+	);
+	if (m.variant > -1 && m.variable_text != NULL) {
+		builder.append(kvp("variable_text", m.variable_text));
+	}
+	auto outcomes = bsoncxx::builder::basic::array{};
+	for (int j = 0; j < m.outcome_number; j++) {
+		bsoncxx::document::value subdoc = bsoncxx::builder::stream::document{}
+			<< "id" << m.outcome_id[j] << "name" << m.outcome_name[j]
+			<< bsoncxx::builder::stream::finalize;
+		// cout << j << ":::" << bsoncxx::to_json(subdoc.view()) << endl;
+		outcomes.append(std::move(subdoc));
+		// cout << j << ":::" << markets[i].outcome_id[j] << "," << markets[i].outcome_name[j] << endl;
+		// cout << bsoncxx::to_json(outcomes.view()) << endl;
+	}
+	builder.append(kvp("outcomes", std::move(outcomes)));
+	auto specifiers = bsoncxx::builder::basic::array{};
+	for (int j = 0; j < m.specifier_number; j++) {
+		auto subdoc = bsoncxx::builder::stream::document{}
+		<< "name" << m.specifier_name[j] << "type" << m.specifier_type[j];
+		if (m.specifier_description[j] != NULL) {
+			subdoc = subdoc << "description" << m.specifier_description[j];
+		}
+		auto subdoc_val = subdoc << bsoncxx::builder::stream::finalize;
+		// cout << j << ":::" << bsoncxx::to_json(subdoc.view()) << endl;
+		specifiers.append(std::move(subdoc_val));
+	}
+	builder.append(kvp("specifiers", std::move(specifiers)));
+	return builder.extract();
+}
+
+void writeMarketsDB() {
+	auto coll = db["markets"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < markets_l; i++) {
+			bsoncxx::builder::basic::document builder{};
+			docs.push_back(buildMarketDoc(markets[i]));
+		}
+		// cout << docs.size() << " market docs ready to write ..." << endl;
+		coll.insert_many(docs);
+		cout << docs.size() << " market docs created ..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeMarketsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+bsoncxx::document::value buildTournamentDoc(Tournament &t) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("type_radar", t.type_radar),
+		kvp("tournament_id", t.id),
+		kvp("season_id", t.season_id),
+		kvp("simple_id", t.simple_id),
+		kvp("sport_id", t.sport_id),
+		kvp("category_id", t.category_id),
+		kvp("sort", t.sort),
+		kvp("name", t.name)
+	);
+	return builder.extract();
+}
+
+void writeTournamentsDB() {
+	auto coll = db["tournaments"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < tournaments_l; i++) {
+			docs.push_back(buildTournamentDoc(tournaments[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " tournament docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeTournamentsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+bsoncxx::document::value buildSportsDoc(Sport &s) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("_id", s.id),
+		kvp("sort", s.sort),
+		kvp("name", s.name)
+	);
+	return builder.extract();
+}
+
+
+void writeSportsDB() {
+	auto coll = db["sports"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < sports_l; i++) {
+			docs.push_back(buildSportsDoc(sports[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " sports docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeSportsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+bsoncxx::document::value buildCompetitorDoc(Competitor &c) {
+	bsoncxx::builder::basic::document builder{};
+	string country_name = c.country_name == NULL ? "" : c.country_name;
+	builder.append(kvp("_id", c.id),
+		kvp("sport_id", c.sport_id),
+		kvp("category_id", c.category_id),
+		kvp("name", c.name),
+		kvp("country_name", country_name),
+		kvp("reference_id", c.reference_id)
+	);
+	return builder.extract();
+}
+
+void writeCompetitorsDB() {
+	auto coll = db["competitors"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < competitors_l; i++) {
+			docs.push_back(buildCompetitorDoc(competitors[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " competitor docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeCompetitorsDB: " << e.what() << std::endl;
+	}
+	return;
+}
+// TODO: Research if shorter field names in Mongo effects disk space used
+
+bsoncxx::document::value buildPlayerDoc(Player &p) {
+	bsoncxx::builder::basic::document builder{};
+	string name = p.name == NULL ? "" : p.name;
+	string full_name = p.full_name == NULL ? "" : p.full_name;
+	string type = p.type == NULL ? "" : p.type;
+	string nationality = p.nationality == NULL ? "" : p.nationality;
+	string country_code = p.country_code == NULL ? "" : p.country_code;
+	builder.append(kvp("_id", p.id),
+		kvp("name", name),
+		kvp("full_name", full_name),
+		kvp("type", type),
+		kvp("nationality", nationality),
+		kvp("country_code", country_code),
+		kvp("date_of_birth", p.date_of_birth),
+		kvp("height", p.height),
+		kvp("weight", p.weight),
+		kvp("competitor_id", p.competitor_id),
+		kvp("manager", p.manager),
+		kvp("number", p.number)
+	);
+	return builder.extract();
+}
+
+void writePlayersDB() {
+	auto coll = db["players"];
+	coll.drop();  // clear collection
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < players_l; i++) {
+			docs.push_back(buildPlayerDoc(players[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " player docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writePlayersDB: " << e.what() << std::endl;
+	}
+	return;
+}
+
+
+// for a given Event object builds a MongoDB doc representation (i.e. for saving into the DB)
+bsoncxx::document::value buildEventDoc(Event &e) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("_id", e.id),
+		kvp("type_radar", e.type_radar),
+		kvp("sport_id", e.sport_id),
+		kvp("category_id", e.category_id),
+		kvp("simple_id", e.simple_id),
+		kvp("tournament_id", e.tournament_id),
+		kvp("home_id", e.home_id),
+		kvp("away_id", e.away_id),
+		kvp("home_reference_id", e.home_reference_id),
+		kvp("away_reference_id", e.away_reference_id),
+		kvp("winner_id", e.winner_id),
+		kvp("bo", e.bo),
+		kvp("parent_id", e.parent_id),
+		kvp("start_time", e.start_time),
+		kvp("period_length", e.period_length),
+		kvp("overtime_length", e.overtime_length),
+		kvp("status", e.status),
+		kvp("timestamp", e.timestamp),
+		kvp("neutral_ground", e.neutral_ground),
+		kvp("austrian_district", e.austrian_district),
+		kvp("booked", e.booked),
+		kvp("delayed_id", e.delayed_id),
+		kvp("current_server", e.current_server),
+		kvp("next_live_time", e.next_live_time)
+	);
+	// store string valued properties after normalization
+	string normalized;
+	normalized = e.home_name == NULL ? "" : e.home_name;
+	builder.append(kvp("home_name", normalized));
+	normalized = e.away_name == NULL ? "" : e.away_name;
+	builder.append(kvp("away_name", normalized));
+	normalized = e.delayed_description == NULL ? "" : e.delayed_description;
+	builder.append(kvp("delayed_description", normalized));
+	normalized = e.venue == NULL ? "" : e.venue;
+	builder.append(kvp("venue", normalized));
+	normalized = e.tv_channels == NULL ? "" : e.tv_channels;
+	builder.append(kvp("tv_channels", normalized));
+
+	return builder.extract();
+}
+
+void writeEventsDB() {
+	auto coll = db["events"];
+	coll.drop();  // clear collection
+
+				  // create index for start_time
+	bsoncxx::builder::basic::document index_doc{};
+	index_doc.append(kvp("start_time", -1));  // -1 for descending index
+	coll.create_index(std::move(index_doc.extract()));
+
+	vector<bsoncxx::document::value> docs;
+	try {
+		for (int i = 0; i < events_l; i++) {
+			docs.push_back(buildEventDoc(events[i]));
+		}
+		coll.insert_many(docs);
+		cout << docs.size() << " event docs created..." << endl;
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeEventsDB: " << e.what() << std::endl;
+	}
+	return;
+}
 
 
 
@@ -3305,7 +3634,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	}
 
 
-	if (full_data == false) {
+	if (full_data == false || POPULATE_MONGO) {
 		//getMarkets();
 		//getEvents(0, 10);
 		//return 0;
@@ -3316,6 +3645,15 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		loadCompetitorsFromFiles();
 		loadPlayersFromFiles();
 
+		if (POPULATE_MONGO) {
+			writeSportsDB();
+			writeMarketsDB();
+			writeCategoriesDB();
+			writeEventsDB();
+			writeTournamentsDB();
+			writeCompetitorsDB();
+			writePlayersDB();
+		}
 	}
 
 
@@ -8737,7 +9075,35 @@ void replace_substr(char* &string, char* sub, char* value) {
 	delete[] string;
 	string = retValue;
 }
+void mongo_str_to_buffer_orig(bsoncxx::document::element str_field, char** buffer) {
+	string str_value;
+	if (*buffer != NULL) { delete[] * buffer; *buffer = NULL; }
+	str_value = str_field.get_utf8().value.to_string();
+	if (str_value.length() == 0) return;   // in case, field doesn't exist	
+	*buffer = new char[str_value.length() + 1];
+	// *buffer = (char*)malloc(str_value.length() + 1);
+	sprintf(*buffer, "%s", str_value.c_str());
+	(*buffer)[str_value.length()] = '\0';   // just to be sure
+											// cout << "DEBUG" << *buffer << endl;
+}
+void mongo_str_to_buffer(bsoncxx::document::element str_field, char* &buffer) {
+	string str_value;
+	if (buffer != NULL) { delete[] buffer; buffer = NULL; }
+	str_value = str_field.get_utf8().value.to_string();
+	if (str_value.length() == 0) return;   // in case, field doesn't exist	
+	buffer = new char[str_value.length() + 1];
+	strncpy(buffer, str_value.c_str(), str_value.length());
+	buffer[str_value.length()] = '\0';
+	// cout << "DEBUG: " << *buffer << endl;
+}
+
+
 void saveEventToFile(Event* event) {
+	if (WRITE_NEW_DATA_TO_MONGO) {
+		auto coll = db["events"];
+		coll.insert_one(buildEventDoc(*event));
+		// return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -8793,7 +9159,70 @@ void saveEventToFile(Event* event) {
 	CloseHandle(File);
 
 };
-void loadEventsFromFiles() {
+void loadEventsFromFiles(bool loadFromDB) {
+	using namespace bsoncxx::builder;
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["events"];
+		auto query_doc = stream::document{}
+			<< "start_time" << stream::open_document << "$gte" << (time(nullptr) - 24 * 60 * 60)
+			<< stream::close_document
+			<< stream::finalize;
+		mongocxx::cursor cursor = coll.find(query_doc.view());   // query is db.events.find({ start_time: {$gte: ...}})
+		int i = 0;
+		events_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+
+			// int fields
+			events[i].id = doc["_id"].get_int32();
+			events[i].type_radar = doc["type_radar"].get_int32();
+			events[i].sport_id = doc["sport_id"].get_int32();
+			events[i].category_id = doc["category_id"].get_int32();
+			if (events[i].type_radar == 2) {
+				events[i].simple_id = doc["simple_id"].get_int32();
+			}
+			else {
+				events[i].tournament_id = doc["tournament_id"].get_int32();
+			}
+			events[i].home_reference_id = doc["home_reference_id"].get_int32();
+			events[i].away_id = doc["away_id"].get_int32();
+			events[i].away_reference_id = doc["away_reference_id"].get_int32();
+			events[i].winner_id = doc["winner_id"].get_int32();
+			events[i].parent_id = doc["parent_id"].get_int32();
+			events[i].start_time = doc["start_time"].get_int32();
+			events[i].period_length = doc["period_length"].get_int32();
+			events[i].overtime_length = doc["overtime_length"].get_int32();
+			events[i].status = doc["status"].get_int32();
+			events[i].timestamp = doc["timestamp"].get_int32();
+			events[i].neutral_ground = doc["neutral_ground"].get_int32();
+			events[i].austrian_district = doc["austrian_district"].get_int32();
+			events[i].booked = doc["booked"].get_int32();
+			events[i].delayed_id = doc["delayed_id"].get_int32();
+			events[i].current_server = doc["current_server"].get_int32();
+			events[i].next_live_time = doc["next_live_time"].get_int32();
+
+			// string fields
+			mongo_str_to_buffer(doc["home_name"], events[i].home_name);
+			mongo_str_to_buffer(doc["away_name"], events[i].away_name);
+			mongo_str_to_buffer(doc["delayed_description"], events[i].delayed_description);
+			mongo_str_to_buffer(doc["venue"], events[i].venue);
+			mongo_str_to_buffer(doc["tv_channels"], events[i].tv_channels);
+
+			if (!(events[i].type_radar == 2 && events[i].simple_id == 0)) {
+				events_id[events[i].id] = &events[i];
+				i++;
+			}
+			events_l = i;
+		}
+		/*
+		for (int i = 0; i < events_l; i++) {
+		cout << events[i].id << ";" << events[i].home_name << "-" << events[i].away_name << ";"
+		<< endl;
+		}
+		*/
+		printf("Events loaded from Mongo succes. Number of loaded events: %d\r\n", events_l);
+		return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -8906,7 +9335,136 @@ void loadEventsFromFiles() {
 
 
 };
+void processLoadedMarkets() {
+	int j = 0;
+	for (int k = 0; k < markets_l; k++) {
+		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) {
+			markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
+			for (int l = 0; l < MAX_MARKETS_IN; l++) markets_id[markets[k].id][l] = NULL;
+		}
+
+		if (markets[k].variant > -1 && markets[k].variable_text == NULL) markets_id[markets[k].id][0] = &markets[k];
+
+		if (markets[k].variant > -1 && markets[k].variable_text != NULL) {
+			for (j = 1; j < max_markets_in[markets[k].id]; j++) {
+				if (markets_id[markets[k].id][j] != NULL && std::strcmp(markets[k].variable_text, markets_id[markets[k].id][j]->variable_text) == 0) break;
+				if (markets_id[markets[k].id][j] == NULL) {
+					markets_id[markets[k].id][j] = &markets[k]; break;
+				}
+			}
+
+
+
+			if (j == max_markets_in[markets[k].id]) {
+				markets_id[markets[k].id][j] = &markets[k]; max_markets_in[markets[k].id]++;
+			}
+		}
+
+
+		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
+
+		if (markets[k].id == 219) markets[k].line_type = 1;// (Winner(incl.overtime)
+		if (markets[k].id == 16) markets[k].line_type = 3;// (Handicap)	
+		if (markets[k].id == 1) markets[k].line_type = 2;// (1x2)	
+		if (markets[k].id == 186) markets[k].line_type = 1; //Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
+		if (markets[k].id == 610) markets[k].line_type = 2;// (1x2)	Amercian Football
+		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties)
+		if (markets[k].id == 60) markets[k].line_type = 5;// 1st half - 1x2
+		if (markets[k].id == 83) markets[k].line_type = 5;// 2nd half - 1x2
+		if (markets[k].id == 113) markets[k].line_type = 5;// Overtime - 1x2
+		if (markets[k].id == 119) markets[k].line_type = 5;//Overtime 1st half - 1x2
+		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap
+		if (markets[k].id == 123) markets[k].line_type = 7;//Penalty shootout - winner
+		if (markets[k].id == 711) markets[k].line_type = 5;//{!inningnr} innings - 1x2 cricket
+		if (markets[k].id == 645) markets[k].line_type = 5;//{!inningnr} innings over {overnr} - 1x2
+		if (markets[k].id == 611) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 (incl. overtime) Amercan Football valid for quartner=4
+		if (markets[k].id == 223) markets[k].line_type = 3;//Handicap (incl. overtime) Basketball,American Football
+		if (markets[k].id == 410) markets[k].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
+		if (markets[k].id == 66) markets[k].line_type = 7;//1st half - handicap
+		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
+		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
+		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+		if (markets[k].id == 303) markets[k].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
+		if (markets[k].id == 203) markets[k].line_type = 7;//{!setnr} set - game handicap Tennis
+
+		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap  Bowls
+		if (markets[k].id == 314) markets[k].line_type = 4;//Total sets - Bowls Darts
+		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[k].id == 188) markets[k].line_type = 3;//Set handicap Bowls
+		if (markets[k].id == 493) markets[k].line_type = 3;//Frame handicap Snooker
+		if (markets[k].id == 494) markets[k].line_type = 4;//Total handicap Snooker
+		if (markets[k].id == 499) markets[k].line_type = 6;//{!framenr} frame - winner Snooker
+
+		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
+		if (markets[k].id == 746) markets[k].line_type = 7;//{!inningnr} inning - handicap Baseball
+		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
+		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap Soccer
+		if (markets[k].id == 18) markets[k].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
+		if (markets[k].id == 238) markets[k].line_type = 4;//Total points Badminton,Beach Volley,Squash,Table Tennis,Volleyball
+		if (markets[k].id == 412) markets[k].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
+		if (markets[k].id == 68) markets[k].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
+		if (markets[k].id == 90) markets[k].line_type = 8;//2nd half - total Soccer,Soccer Mythical
+		if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
+		if (markets[k].id == 236) markets[k].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
+		if (markets[k].id == 310) markets[k].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
+		if (markets[k].id == 528) markets[k].line_type = 8;//{!setnr} set - total Bowls
+		if (markets[k].id == 288) markets[k].line_type = 8;//{!inningnr} inning - total Baseball
+		if (markets[k].id == 116) markets[k].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
+		if (markets[k].id == 358) markets[k].line_type = 8;//1st over - total Cricket
+		if (markets[k].id == 395) markets[k].line_type = 6;//{!mapnr} map - winner Dota 2,League of Legends,StarCraft
+		if (markets[k].id == 330) markets[k].line_type = 6;//{!mapnr} map - winner (incl. overtime) Counter-Strike
+		if (markets[k].id == 334) markets[k].line_type = 5;//{!mapnr} map - 1x2 Counter-Strike
+
+
+		if (markets[k].id == 340) markets[k].line_type = 1;//Winner (incl. super over) Cricket
+		if (markets[k].id == 251) markets[k].line_type = 1;// Winner (incl. extra innings) Baseball
+														   //if (markets[k].id == 426) markets[k].line_type = 5;//{!periodnr} period 1x2 & winner (incl. overtime and penalties) Ice Hockey
+														   //if (markets[k].id == 429) markets[k].line_type = 5;//{!periodnr} period 1x2 & 1x2 Ice Hockey
+		if (markets[k].id == 443) markets[k].line_type = 5;//{!periodnr} period 1x2  Ice Hockey
+		if (markets[k].id == 225) markets[k].line_type = 4;// Total (incl. overtime) Basketball
+
+		if (markets[k].id == 501) markets[k].line_type = 8;//{!framenr} frame - total points Snooker
+		if (markets[k].id == 500) markets[k].line_type = 7;//{!framenr} frame - handicap points Snooker
+		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap Bowls
+		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
+		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
+		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
+														   //if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+														   //if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
+		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
+		if (markets[k].id == 247) markets[k].line_type = 8;// {!gamenr} game - total points Badminton,Squash,Table Tennis
+		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
+		if (markets[k].id == 256) markets[k].line_type = 3;//Handicap (incl. extra innings) Baseball
+		if (markets[k].id == 258) markets[k].line_type = 4;//Total (incl. extra innings) Baseball
+
+		if (markets[k].id == 605) markets[k].line_type = 8;//{!inningnr} innings - total Cricket
+
+		if (markets[k].id == 189) markets[k].line_type = 4;//Total games Tennis
+		if (markets[k].id == 237) markets[k].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
+		if (markets[k].id == 538) markets[k].line_type = 2;//Head2head (1x2) Golf,Motorsport
+		if (markets[k].id == 8) markets[k].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 62) markets[k].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 84) markets[k].line_type = 10;//2nd half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 444) markets[k].line_type = 10;//{!periodnr} period - {!goalnr} goal Ice Hockey
+															//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 210) markets[k].line_type = 10;//{!setnr} set game{ gamenr } -winner Tennis
+		if (markets[k].id == 125) markets[k].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 115) markets[k].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 202) markets[k].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
+		if (markets[k].id == 309) markets[k].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
+		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
+		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
+	}
+}
 void saveMarketToFile(Market* market) {
+	if (WRITE_NEW_DATA_TO_MONGO) {
+		auto coll = db["markets"];
+		coll.insert_one(buildMarketDoc(*market));
+		// return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -8966,7 +9524,106 @@ void saveMarketToFile(Market* market) {
 	delete[] variable_text;
 
 };
-void loadMarketsFromFiles() {
+void loadMarketsFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["markets"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		markets_l = 0;
+		int outcome_index, specifier_index;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			markets[i].id = doc["market_id"].get_int32();
+			markets[i].type = doc["type"].get_int32();
+			markets[i].variant = doc["variant"].get_int32();
+
+			mongo_str_to_buffer(doc["name"], markets[i].name);
+
+			// optional values
+			if (doc["variable_text"].raw() != nullptr) {
+				mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
+			}
+
+			// outcomes array
+			bsoncxx::document::element outcomes_elem = doc["outcomes"];
+			bsoncxx::array::view outcomes{ outcomes_elem.get_array().value };
+
+			if (outcomes.empty()) {
+				markets[i].outcome_id = nullptr;
+				markets[i].outcome_name = nullptr;
+			}
+			else {
+				auto num_outcomes = std::distance(std::begin(outcomes), std::end(outcomes));
+				markets[i].outcome_number = num_outcomes;
+				markets[i].outcome_id = new int[markets[i].outcome_number];
+				markets[i].outcome_name = new char*[markets[i].outcome_number];
+				outcome_index = 0;
+				for (auto elt : outcomes) {
+					bsoncxx::document::view subdoc = elt.get_document().value;
+					markets[i].outcome_id[outcome_index] = subdoc["id"].get_int32();
+					markets[i].outcome_name[outcome_index] = NULL;
+					mongo_str_to_buffer(subdoc["name"], markets[i].outcome_name[outcome_index]);
+					outcome_index++;
+				}
+			}
+
+			// specifiers array
+			bsoncxx::document::element specifiers_elem = doc["specifiers"];
+			bsoncxx::array::view specifiers{ specifiers_elem.get_array().value };
+
+			if (specifiers.empty()) {
+				markets[i].specifier_type = nullptr;
+				markets[i].specifier_name = nullptr;
+				markets[i].specifier_description = nullptr;
+			}
+			else {
+				auto num_specifiers = std::distance(std::begin(specifiers), std::end(specifiers));
+				markets[i].specifier_number = num_specifiers;
+				markets[i].specifier_type = new int[markets[i].specifier_number];
+				markets[i].specifier_name = new char*[markets[i].specifier_number];
+				markets[i].specifier_description = new char*[markets[i].specifier_number];
+				specifier_index = 0;
+				for (auto elt : specifiers) {
+					bsoncxx::document::view subdoc = elt.get_document().value;
+					// std::cout << bsoncxx::to_json(subdoc) << "\n";
+					markets[i].specifier_type[specifier_index] = subdoc["type"].get_int32();
+					markets[i].specifier_name[specifier_index] = NULL;
+					mongo_str_to_buffer(subdoc["name"], markets[i].specifier_name[specifier_index]);
+					if (subdoc["description"]) {
+						markets[i].specifier_description[specifier_index] = NULL;
+						mongo_str_to_buffer(subdoc["description"], markets[i].specifier_description[specifier_index]);
+					}
+					else {
+						markets[i].specifier_description[specifier_index] = nullptr;
+					}
+					specifier_index++;
+				}
+			}
+
+			i++;
+			markets_l = i;
+
+		}
+		// to test if loading was succesful. may be deleted in the future.
+		/*
+		for (int i = 0; i < markets_l; i++) {
+		cout << markets[i].id << ";" << markets[i].name << ";" << markets[i].outcome_number << ";" << markets[i].specifier_number << endl;
+		for (int k = 0; k < markets[i].outcome_number; k++) {
+		cout << "\t" << markets[i].outcome_id[k] << ": " << markets[i].outcome_name[k] << endl;
+		}
+		for (int k = 0; k < markets[i].specifier_number; k++) {
+		cout << "\t\t" << markets[i].specifier_name[k] << ": " << markets[i].specifier_type[k];
+		if (markets[i].specifier_description[k] != nullptr) {
+		cout << " :: " << markets[i].specifier_description[k];
+		}
+		cout << endl;
+		}
+		}
+		*/
+		processLoadedMarkets();
+		printf("Markets loaded from Mongo succes. Number of loaded markets: %d\r\n", markets_l);
+		return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -9043,7 +9700,7 @@ void loadMarketsFromFiles() {
 
 		};
 		
-
+/*
 		
 		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) {
 			markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
@@ -9163,7 +9820,7 @@ void loadMarketsFromFiles() {
 		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
 		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
 
-		
+		*/
 
 		k++;
 		markets_l = k;
@@ -9175,10 +9832,15 @@ void loadMarketsFromFiles() {
 	} while (FindNextFile(Hd, &Fd));
 	
 	FindClose(Hd);
-
+	processLoadedMarkets();
 	std::printf("Markets loaded from data files succes. Number of loaded markets is %d\r\n", markets_l);
 }
 void saveTournamentToFile(Tournament* tournament) {
+	if (WRITE_NEW_DATA_TO_MONGO) {
+		auto coll = db["tournaments"];
+		coll.insert_one(buildTournamentDoc(*tournament));
+		// return;
+	}
 	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
@@ -9215,7 +9877,51 @@ void saveTournamentToFile(Tournament* tournament) {
 	CloseHandle(File);
 
 };
-void loadTournamentsFromFiles() {
+void loadTournamentsFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["tournaments"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		tournaments_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			tournaments[i].id = doc["tournament_id"].get_int32();
+			tournaments[i].type_radar = doc["type_radar"].get_int32();
+			tournaments[i].simple_id = doc["simple_id"].get_int32();
+			tournaments[i].season_id = doc["season_id"].get_int32();
+			tournaments[i].sport_id = doc["sport_id"].get_int32();
+			tournaments[i].category_id = doc["category_id"].get_int32();
+			tournaments[i].sort = doc["sort"].get_int32();
+			// optional values
+			if (doc["start_date"].raw() != nullptr) {
+				tournaments[i].start_date = doc["start_date"].get_int32();
+			}
+			if (doc["end_date"].raw() != nullptr) {
+				tournaments[i].end_date = doc["end_date"].get_int32();
+			}
+			// string types
+			mongo_str_to_buffer(doc["name"], tournaments[i].name);
+			if (doc["season_name"].raw() != nullptr) {
+				mongo_str_to_buffer(doc["season_name"], tournaments[i].season_name);
+			}
+			if (tournaments[i].id > 0) tournaments_id[tournaments[i].id] = &tournaments[i];
+			if (tournaments[i].season_id > 0) seasons_id[tournaments[i].season_id] = &tournaments[i];
+			if (tournaments[i].simple_id > 0) simples_id[tournaments[i].simple_id] = &tournaments[i];
+
+			i++;
+			tournaments_l = i;
+		}
+		/*
+		for (int i = 0; i < tournaments_l; i++) {
+		cout << tournaments[i].id << ":" << tournaments[i].name;
+		if (tournaments[i].season_name != nullptr)
+		cout << ":" << tournaments[i].season_name;
+		cout << endl;
+		}
+		*/
+		printf("Tournaments loaded from Mongo succes. Number of loaded tournaments: %d\r\n", tournaments_l);
+		return;
+	}
 	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
@@ -9305,6 +10011,11 @@ void loadTournamentsFromFiles() {
 	
 };;
 void saveCategoryToFile(Category* category) {
+	if (WRITE_NEW_DATA_TO_MONGO) {
+		auto coll = db["categories"];
+		coll.insert_one(buildCategoryDoc(*category));
+		// return;
+	}
 	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
@@ -9327,7 +10038,31 @@ void saveCategoryToFile(Category* category) {
 	CloseHandle(File);
 
 };
-void loadCategoriesFromFiles() {
+void loadCategoriesFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["categories"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		categories_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			categories[i].id = doc["cat_id"].get_int32();
+			categories[i].sport_id = doc["sport_id"].get_int32();
+			categories[i].sort = doc["sort"].get_int32();
+			mongo_str_to_buffer(doc["name"], categories[i].name);
+			categories_id[categories[i].id] = &categories[i];
+			i++;
+			categories_l = i;
+		}
+		/*
+		for (int i = 0; i < categories_l; i++) {
+		cout << categories[i].id << ";" << categories[i].name << ";" << categories[i].sort << ";"
+		<< categories[i].sport_id << ";" << endl;
+		}
+		*/
+		printf("Categories loaded from Mongo succes. Number of loaded categories: %d\r\n", categories_l);
+		return;
+	}
 	reload_step_1 = 1;
 	HANDLE File;
 	DWORD l = 0;
@@ -9386,6 +10121,11 @@ void loadCategoriesFromFiles() {
 	
 };
 void saveCompetitorToFile(Competitor* competitor) {
+	if (WRITE_NEW_DATA_TO_MONGO) {
+		auto coll = db["competitors"];
+		coll.insert_one(buildCompetitorDoc(*competitor));
+		// return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -9410,7 +10150,34 @@ void saveCompetitorToFile(Competitor* competitor) {
 	CloseHandle(File);
 
 };
-void loadCompetitorsFromFiles() {
+void loadCompetitorsFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["competitors"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		competitors_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			competitors[i].id = doc["_id"].get_int32();
+			competitors[i].sport_id = doc["sport_id"].get_int32();
+			competitors[i].category_id = doc["category_id"].get_int32();
+			competitors[i].reference_id = doc["reference_id"].get_int32();
+
+			mongo_str_to_buffer(doc["name"], competitors[i].name);
+			mongo_str_to_buffer(doc["country_name"], competitors[i].country_name);
+
+			competitors_id[competitors[i].id] = &competitors[i];
+			i++;
+			competitors_l = i;
+		}
+		/* for (int i = 0; i < competitors_l; i++) {
+		if (competitors[i].country_name == nullptr) continue;
+		cout << competitors[i].id << ":" << competitors[i].name << ":" << competitors[i].country_name << endl;
+		} */
+
+		printf("Competitors loaded from Mongo succes. Number of loaded competitors: %d\r\n", competitors_l);
+		return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
@@ -9476,6 +10243,11 @@ void loadCompetitorsFromFiles() {
 
 };
 void savePlayerToFile(Player* player) {
+	if (WRITE_NEW_DATA_TO_MONGO) {
+		auto coll = db["players"];
+		coll.insert_one(buildPlayerDoc(*player));
+		// return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -9519,7 +10291,40 @@ void savePlayerToFile(Player* player) {
 	CloseHandle(File);
 
 };
-void loadPlayersFromFiles() {
+void loadPlayersFromFiles(bool loadFromDB) {
+	if (LOAD_FROM_MONGO || loadFromDB) {
+		auto coll = db["players"];
+		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+		int i = 0;
+		players_l = 0;
+		for (auto doc : cursor) {
+			// std::cout << bsoncxx::to_json(doc) << "\n";
+			players[i].id = doc["_id"].get_int32();
+			players[i].competitor_id = doc["competitor_id"].get_int32();
+			players[i].number = doc["number"].get_int32();
+			players[i].manager = doc["manager"].get_int32();
+			players[i].date_of_birth = doc["date_of_birth"].get_int32();
+			players[i].weight = doc["weight"].get_int32();
+			players[i].height = doc["height"].get_int32();
+
+			mongo_str_to_buffer(doc["name"], players[i].name);
+			mongo_str_to_buffer(doc["full_name"], players[i].full_name);
+			mongo_str_to_buffer(doc["nationality"], players[i].nationality);
+			mongo_str_to_buffer(doc["type"], players[i].type);
+			mongo_str_to_buffer(doc["country_code"], players[i].country_code);
+
+			players_id[players[i].id] = &players[i];
+			i++;
+			players_l = i;
+		}
+		/*
+		for (int i = 0; i < players_l; i++) {
+		cout << players[i].id << ":" << players[i].name  << endl;
+		}
+		*/
+		printf("Players loaded from Mongo succes. Number of loaded players: %d\r\n", players_l);
+		return;
+	}
 	HANDLE File;
 	DWORD l = 0;
 	WIN32_FIND_DATA Fd;
