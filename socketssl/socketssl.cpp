@@ -3229,12 +3229,12 @@ void writePlayersDB();
 void writeEventsDB();
 
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
-const bool POPULATE_MONGO = true;
+const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
 const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = false;
+const bool LOAD_FROM_MONGO = true;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
@@ -3364,11 +3364,14 @@ bsoncxx::document::value buildSportsDoc(Sport &s) {
 
 
 void writeSportsDB() {
+	//printf("writeSportsDB\r\n");
 	auto coll = db["sports"];
+	//printf("coll\r\n");
 	coll.drop();  // clear collection
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < sports_l; i++) {
+			//printf("i=%d\r\n", i);
 			docs.push_back(buildSportsDoc(sports[i]));
 		}
 		coll.insert_many(docs);
@@ -3653,7 +3656,11 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 			writeTournamentsDB();
 			writeCompetitorsDB();
 			writePlayersDB();
+			printf("Mongo populate finished succes");
+			return 0;
 		}
+
+		
 	}
 
 
@@ -6484,7 +6491,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			//printf("ff=%d\r\n", strlen(AMQP_message[(process_index - 1) % AMQP_QUEUE]));
 			
-			if (write_count_file < 10 && _event!=NULL && _event->sport_id == 1 && strlen(maxbuf)> 50000) {
+	/*		if (write_count_file < 10 && _event!=NULL && _event->sport_id == 1 && strlen(maxbuf)> 50000) {
 				
 				write_count_file++;std::strcpy(name, "D://passionbet//XML//MTS//unifeed");
 			_itoa(write_count_file, buf, 10);
@@ -6500,7 +6507,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			CloseHandle(File);
 			}
 
-	
+	*/
 			//WriteFile(File, "<endmessage></endmessage>", strlen("<endmessage></endmessage>"), &l, NULL);
 
 			//if (i > 50) return;
