@@ -3236,7 +3236,7 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = false;
+const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
 const bool LOAD_FROM_MONGO = true;
@@ -9130,7 +9130,7 @@ void saveEventToFile(Event* event) {
 
 		
 		catch (const mongocxx::exception& e) {
-			std::cout << "An exception occurred in update_one: " << e.what() << std::endl;
+			std::cout << "An exception occurred in update_one event: " << e.what() << std::endl;
 		}
 
 		delete update;
@@ -9498,7 +9498,31 @@ void processLoadedMarkets() {
 void saveMarketToFile(Market* market) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["markets"];
-		coll.insert_one(buildMarketDoc(market));
+	
+		//coll.insert_one(buildMarketDoc(market));
+
+
+		mongocxx::options::update* update = new mongocxx::options::update();
+		update->upsert(true);
+
+		try {
+			if (market->variant > -1 && market->variable_text != NULL) 
+				coll.update_one(bsoncxx::builder::stream::document{} << "_id" << market->id << "variable_text" << market->variable_text << bsoncxx::builder::stream::finalize,
+					bsoncxx::builder::stream::document{} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
+
+			else coll.update_one(bsoncxx::builder::stream::document{} << "_id" << market->id << bsoncxx::builder::stream::finalize,
+				bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one market: " << e.what() << std::endl;
+		}
+
+		delete update;
+
+
+
 		// return;
 	}
 	HANDLE File;
@@ -9874,7 +9898,29 @@ void loadMarketsFromFiles(bool loadFromDB) {
 void saveTournamentToFile(Tournament* tournament) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["tournaments"];
-		coll.insert_one(buildTournamentDoc(tournament));
+		//coll.insert_one(buildTournamentDoc(tournament));
+
+		mongocxx::options::update* update = new mongocxx::options::update();
+		update->upsert(true);
+
+		try {
+			if (tournament->id > 0)
+				coll.update_one(bsoncxx::builder::stream::document{} << "_id" << tournament->id << bsoncxx::builder::stream::finalize,
+					bsoncxx::builder::stream::document{} << "$set" << buildTournamentDoc(tournament) << bsoncxx::builder::stream::finalize, *update);
+
+			else coll.update_one(bsoncxx::builder::stream::document{} << "simple_id" << tournament->simple_id << bsoncxx::builder::stream::finalize,
+				bsoncxx::builder::stream::document{} << "$set" << buildTournamentDoc(tournament) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one tournament: " << e.what() << std::endl;
+		}
+
+		delete update;
+
+
+
 		// return;
 	}
 	reload_step_1 = 1;
@@ -9887,7 +9933,7 @@ void saveTournamentToFile(Tournament* tournament) {
 	if (tournament->type_radar == 2) { _itoa(tournament->simple_id, buf, 10); std::strcat(file_path, "Simple//");}
 	if (tournament->type_radar == 1) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Race//"); }
 	if (tournament->type_radar == 0) { _itoa(tournament->id, buf, 10); std::strcat(file_path, "Championships//"); }
-	strcat(file_path, buf);
+	std::strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 	WriteFile(File, &tournament->id, sizeof(int), &l, NULL);
@@ -10049,7 +10095,24 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 void saveCategoryToFile(Category* category) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["categories"];
-		coll.insert_one(buildCategoryDoc(category));
+		//coll.insert_one(buildCategoryDoc(category));
+
+		mongocxx::options::update* update = new mongocxx::options::update();
+		update->upsert(true);
+
+		try {
+			coll.update_one(bsoncxx::builder::stream::document{} << "_id" <<category->id << bsoncxx::builder::stream::finalize,
+				bsoncxx::builder::stream::document{} << "$set" << buildCategoryDoc(category) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one category: " << e.what() << std::endl;
+		}
+
+		delete update;
+
+
 		// return;
 	}
 	reload_step_1 = 1;
@@ -10060,7 +10123,7 @@ void saveCategoryToFile(Category* category) {
 	char file_path[MAX_PATH];
 	std::strcpy(file_path, "C://Betradar//Categories//");
    _itoa(category->id, buf, 10); 
-	strcat(file_path, buf);
+	std::strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 	WriteFile(File, &category->id, sizeof(int), &l, NULL);
@@ -10159,7 +10222,23 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 void saveCompetitorToFile(Competitor* competitor) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["competitors"];
-		coll.insert_one(buildCompetitorDoc(competitor));
+		//coll.insert_one(buildCompetitorDoc(competitor));
+		mongocxx::options::update* update = new mongocxx::options::update();
+		update->upsert(true);
+
+		try {
+                coll.update_one(bsoncxx::builder::stream::document{} << "_id" << competitor->id << bsoncxx::builder::stream::finalize,
+				bsoncxx::builder::stream::document{} << "$set" << buildCompetitorDoc(competitor) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one competitor: " << e.what() << std::endl;
+		}
+
+		delete update;
+
+
 		// return;
 	}
 	HANDLE File;
@@ -10169,7 +10248,7 @@ void saveCompetitorToFile(Competitor* competitor) {
 	char file_path[MAX_PATH];
 	std::strcpy(file_path, "C://Betradar//Competitors//");
 	_itoa(competitor->id, buf, 10);
-	strcat(file_path, buf);
+	std::strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 	WriteFile(File, &competitor->id, sizeof(int), &l, NULL);
@@ -10281,7 +10360,22 @@ void loadCompetitorsFromFiles(bool loadFromDB) {
 void savePlayerToFile(Player* player) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["players"];
-		coll.insert_one(buildPlayerDoc(player));
+		//coll.insert_one(buildPlayerDoc(player));
+
+		mongocxx::options::update* update = new mongocxx::options::update();
+		update->upsert(true);
+
+		try {
+			coll.update_one(bsoncxx::builder::stream::document{} << "_id" << player->id << bsoncxx::builder::stream::finalize,
+				bsoncxx::builder::stream::document{} << "$set" << buildPlayerDoc(player) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one player: " << e.what() << std::endl;
+		}
+
+		delete update;
 		// return;
 	}
 	HANDLE File;
@@ -10291,7 +10385,7 @@ void savePlayerToFile(Player* player) {
 	char file_path[MAX_PATH];
 	std::strcpy(file_path, "C://Betradar//Players//");
 	_itoa(player->id, buf, 10);
-	strcat(file_path, buf);
+	std::strcat(file_path, buf);
 	File = CreateFile(file_path, GENERIC_WRITE, 0, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
 	l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 	WriteFile(File, &player->id, sizeof(int), &l, NULL);
