@@ -12,6 +12,11 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/exception/exception.hpp>
 #include <mongocxx/instance.hpp>
+#include <mongocxx/options/index.hpp>
+#include <mongocxx/options/insert.hpp>
+#include <mongocxx/options/update.hpp>
+
+
 
 
 
@@ -3231,19 +3236,19 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = true;
+const bool WRITE_NEW_DATA_TO_MONGO = false;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
 const bool LOAD_FROM_MONGO = true;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
-bsoncxx::document::value buildCategoryDoc(Category &c) {
+bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
-	builder.append(kvp("cat_id", c.id),
-		kvp("sport_id", c.sport_id),
-		kvp("sort", c.sort),
-		kvp("name", c.name)
+	builder.append(kvp("cat_id", c->id),
+		kvp("sport_id", c->sport_id),
+		kvp("sort", c->sort),
+		kvp("name", c->name)
 	);
 
 	return builder.extract();
@@ -3255,7 +3260,7 @@ void writeCategoriesDB() {
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < categories_l; i++) {
-			docs.push_back(buildCategoryDoc(categories[i]));
+			docs.push_back(buildCategoryDoc(&categories[i]));
 		}
 		coll.insert_many(docs);
 		cout << docs.size() << " category docs created..." << endl;
@@ -3266,21 +3271,21 @@ void writeCategoriesDB() {
 	return;
 }
 
-bsoncxx::document::value buildMarketDoc(Market &m) {
+bsoncxx::document::value buildMarketDoc(Market* m) {
 	bsoncxx::builder::basic::document builder{};
-	builder.append(kvp("market_id", m.id),
-		kvp("type", m.type),
-		kvp("line_type", m.line_type),
-		kvp("name", m.name),
-		kvp("variant", m.variant)
+	builder.append(kvp("market_id", m->id),
+		kvp("type", m->type),
+		kvp("line_type", m->line_type),
+		kvp("name", m->name),
+		kvp("variant", m->variant)
 	);
-	if (m.variant > -1 && m.variable_text != NULL) {
-		builder.append(kvp("variable_text", m.variable_text));
+	if (m->variant > -1 && m->variable_text != NULL) {
+		builder.append(kvp("variable_text", m->variable_text));
 	}
 	auto outcomes = bsoncxx::builder::basic::array{};
-	for (int j = 0; j < m.outcome_number; j++) {
+	for (int j = 0; j < m->outcome_number; j++) {
 		bsoncxx::document::value subdoc = bsoncxx::builder::stream::document{}
-			<< "id" << m.outcome_id[j] << "name" << m.outcome_name[j]
+			<< "id" << m->outcome_id[j] << "name" << m->outcome_name[j]
 			<< bsoncxx::builder::stream::finalize;
 		// cout << j << ":::" << bsoncxx::to_json(subdoc.view()) << endl;
 		outcomes.append(std::move(subdoc));
@@ -3289,11 +3294,11 @@ bsoncxx::document::value buildMarketDoc(Market &m) {
 	}
 	builder.append(kvp("outcomes", std::move(outcomes)));
 	auto specifiers = bsoncxx::builder::basic::array{};
-	for (int j = 0; j < m.specifier_number; j++) {
+	for (int j = 0; j < m->specifier_number; j++) {
 		auto subdoc = bsoncxx::builder::stream::document{}
-		<< "name" << m.specifier_name[j] << "type" << m.specifier_type[j];
-		if (m.specifier_description[j] != NULL) {
-			subdoc = subdoc << "description" << m.specifier_description[j];
+		<< "name" << m->specifier_name[j] << "type" << m->specifier_type[j];
+		if (m->specifier_description[j] != NULL) {
+			subdoc = subdoc << "description" << m->specifier_description[j];
 		}
 		auto subdoc_val = subdoc << bsoncxx::builder::stream::finalize;
 		// cout << j << ":::" << bsoncxx::to_json(subdoc.view()) << endl;
@@ -3310,7 +3315,7 @@ void writeMarketsDB() {
 	try {
 		for (int i = 0; i < markets_l; i++) {
 			bsoncxx::builder::basic::document builder{};
-			docs.push_back(buildMarketDoc(markets[i]));
+			docs.push_back(buildMarketDoc(&markets[i]));
 		}
 		// cout << docs.size() << " market docs ready to write ..." << endl;
 		coll.insert_many(docs);
@@ -3322,16 +3327,16 @@ void writeMarketsDB() {
 	return;
 }
 
-bsoncxx::document::value buildTournamentDoc(Tournament &t) {
+bsoncxx::document::value buildTournamentDoc(Tournament *t) {
 	bsoncxx::builder::basic::document builder{};
-	builder.append(kvp("type_radar", t.type_radar),
-		kvp("tournament_id", t.id),
-		kvp("season_id", t.season_id),
-		kvp("simple_id", t.simple_id),
-		kvp("sport_id", t.sport_id),
-		kvp("category_id", t.category_id),
-		kvp("sort", t.sort),
-		kvp("name", t.name)
+	builder.append(kvp("type_radar", t->type_radar),
+		kvp("tournament_id", t->id),
+		kvp("season_id", t->season_id),
+		kvp("simple_id", t->simple_id),
+		kvp("sport_id", t->sport_id),
+		kvp("category_id", t->category_id),
+		kvp("sort", t->sort),
+		kvp("name", t->name)
 	);
 	return builder.extract();
 }
@@ -3342,7 +3347,7 @@ void writeTournamentsDB() {
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < tournaments_l; i++) {
-			docs.push_back(buildTournamentDoc(tournaments[i]));
+			docs.push_back(buildTournamentDoc(&tournaments[i]));
 		}
 		coll.insert_many(docs);
 		cout << docs.size() << " tournament docs created..." << endl;
@@ -3383,15 +3388,15 @@ void writeSportsDB() {
 	return;
 }
 
-bsoncxx::document::value buildCompetitorDoc(Competitor &c) {
+bsoncxx::document::value buildCompetitorDoc(Competitor *c) {
 	bsoncxx::builder::basic::document builder{};
-	string country_name = c.country_name == NULL ? "" : c.country_name;
-	builder.append(kvp("_id", c.id),
-		kvp("sport_id", c.sport_id),
-		kvp("category_id", c.category_id),
-		kvp("name", c.name),
+	string country_name = c->country_name == NULL ? "" : c->country_name;
+	builder.append(kvp("_id", c->id),
+		kvp("sport_id", c->sport_id),
+		kvp("category_id", c->category_id),
+		kvp("name", c->name),
 		kvp("country_name", country_name),
-		kvp("reference_id", c.reference_id)
+		kvp("reference_id", c->reference_id)
 	);
 	return builder.extract();
 }
@@ -3402,7 +3407,7 @@ void writeCompetitorsDB() {
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < competitors_l; i++) {
-			docs.push_back(buildCompetitorDoc(competitors[i]));
+			docs.push_back(buildCompetitorDoc(&competitors[i]));
 		}
 		coll.insert_many(docs);
 		cout << docs.size() << " competitor docs created..." << endl;
@@ -3414,25 +3419,25 @@ void writeCompetitorsDB() {
 }
 // TODO: Research if shorter field names in Mongo effects disk space used
 
-bsoncxx::document::value buildPlayerDoc(Player &p) {
+bsoncxx::document::value buildPlayerDoc(Player* p) {
 	bsoncxx::builder::basic::document builder{};
-	string name = p.name == NULL ? "" : p.name;
-	string full_name = p.full_name == NULL ? "" : p.full_name;
-	string type = p.type == NULL ? "" : p.type;
-	string nationality = p.nationality == NULL ? "" : p.nationality;
-	string country_code = p.country_code == NULL ? "" : p.country_code;
-	builder.append(kvp("_id", p.id),
+	string name = p->name == NULL ? "" : p->name;
+	string full_name = p->full_name == NULL ? "" : p->full_name;
+	string type = p->type == NULL ? "" : p->type;
+	string nationality = p->nationality == NULL ? "" : p->nationality;
+	string country_code = p->country_code == NULL ? "" : p->country_code;
+	builder.append(kvp("_id", p->id),
 		kvp("name", name),
 		kvp("full_name", full_name),
 		kvp("type", type),
 		kvp("nationality", nationality),
 		kvp("country_code", country_code),
-		kvp("date_of_birth", p.date_of_birth),
-		kvp("height", p.height),
-		kvp("weight", p.weight),
-		kvp("competitor_id", p.competitor_id),
-		kvp("manager", p.manager),
-		kvp("number", p.number)
+		kvp("date_of_birth", p->date_of_birth),
+		kvp("height", p->height),
+		kvp("weight", p->weight),
+		kvp("competitor_id", p->competitor_id),
+		kvp("manager", p->manager),
+		kvp("number", p->number)
 	);
 	return builder.extract();
 }
@@ -3443,7 +3448,7 @@ void writePlayersDB() {
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < players_l; i++) {
-			docs.push_back(buildPlayerDoc(players[i]));
+			docs.push_back(buildPlayerDoc(&players[i]));
 		}
 		coll.insert_many(docs);
 		cout << docs.size() << " player docs created..." << endl;
@@ -3456,47 +3461,62 @@ void writePlayersDB() {
 
 
 // for a given Event object builds a MongoDB doc representation (i.e. for saving into the DB)
-bsoncxx::document::value buildEventDoc(Event &e) {
+bsoncxx::document::value buildEventDoc(Event* e) {
 	bsoncxx::builder::basic::document builder{};
-	builder.append(kvp("_id", e.id),
-		kvp("type_radar", e.type_radar),
-		kvp("sport_id", e.sport_id),
-		kvp("category_id", e.category_id),
-		kvp("simple_id", e.simple_id),
-		kvp("tournament_id", e.tournament_id),
-		kvp("home_id", e.home_id),
-		kvp("away_id", e.away_id),
-		kvp("home_reference_id", e.home_reference_id),
-		kvp("away_reference_id", e.away_reference_id),
-		kvp("winner_id", e.winner_id),
-		kvp("bo", e.bo),
-		kvp("parent_id", e.parent_id),
-		kvp("start_time", e.start_time),
-		kvp("period_length", e.period_length),
-		kvp("overtime_length", e.overtime_length),
-		kvp("status", e.status),
-		kvp("timestamp", e.timestamp),
-		kvp("neutral_ground", e.neutral_ground),
-		kvp("austrian_district", e.austrian_district),
-		kvp("booked", e.booked),
-		kvp("delayed_id", e.delayed_id),
-		kvp("current_server", e.current_server),
-		kvp("next_live_time", e.next_live_time)
+	builder.append(kvp("_id", e->id),
+		kvp("type_radar", e->type_radar),
+		kvp("sport_id", e->sport_id),
+		kvp("category_id", e->category_id),
+		kvp("simple_id", e->simple_id),
+		kvp("tournament_id", e->tournament_id),
+		kvp("home_id", e->home_id),
+		kvp("away_id", e->away_id),
+		kvp("home_reference_id", e->home_reference_id),
+		kvp("away_reference_id", e->away_reference_id),
+		kvp("winner_id", e->winner_id),
+		kvp("bo", e->bo),
+		kvp("parent_id", e->parent_id),
+		kvp("start_time", e->start_time),
+		kvp("period_length", e->period_length),
+		kvp("overtime_length", e->overtime_length),
+		kvp("status", e->status),
+		kvp("timestamp", e->timestamp),
+		kvp("neutral_ground", e->neutral_ground),
+		kvp("austrian_district", e->austrian_district),
+		kvp("booked", e->booked),
+		kvp("delayed_id", e->delayed_id),
+		kvp("current_server", e->current_server),
+		kvp("next_live_time", e->next_live_time)
 	);
 	// store string valued properties after normalization
+	
+	
 	string normalized;
-	normalized = e.home_name == NULL ? "" : e.home_name;
+	normalized = e->home_name == NULL ? "" : e->home_name;
 	builder.append(kvp("home_name", normalized));
-	normalized = e.away_name == NULL ? "" : e.away_name;
+	normalized = e->away_name == NULL ? "" : e->away_name;
 	builder.append(kvp("away_name", normalized));
-	normalized = e.delayed_description == NULL ? "" : e.delayed_description;
+	normalized = e->delayed_description == NULL ? "" : e->delayed_description;
 	builder.append(kvp("delayed_description", normalized));
-	normalized = e.venue == NULL ? "" : e.venue;
+	normalized = e->venue == NULL ? "" : e->venue;
 	builder.append(kvp("venue", normalized));
-	normalized = e.tv_channels == NULL ? "" : e.tv_channels;
+	normalized = e->tv_channels == NULL ? "" : e->tv_channels;
 	builder.append(kvp("tv_channels", normalized));
+	
 
-	return builder.extract();
+	try {
+
+		return builder.extract();
+
+	}
+	catch (const mongocxx::exception& e) {
+		std::cout << "An exception occurred in writeEventsDB: " << e.what() << std::endl;
+	}
+
+
+
+
+
 }
 
 void writeEventsDB() {
@@ -3511,7 +3531,7 @@ void writeEventsDB() {
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < events_l; i++) {
-			docs.push_back(buildEventDoc(events[i]));
+			docs.push_back(buildEventDoc(&events[i]));
 		}
 		coll.insert_many(docs);
 		cout << docs.size() << " event docs created..." << endl;
@@ -9082,18 +9102,7 @@ void replace_substr(char* &string, char* sub, char* value) {
 	delete[] string;
 	string = retValue;
 }
-void mongo_str_to_buffer_orig(bsoncxx::document::element str_field, char** buffer) {
-	string str_value;
-	if (*buffer != NULL) { delete[] * buffer; *buffer = NULL; }
-	str_value = str_field.get_utf8().value.to_string();
-	if (str_value.length() == 0) return;   // in case, field doesn't exist	
-	*buffer = new char[str_value.length() + 1];
-	// *buffer = (char*)malloc(str_value.length() + 1);
-	sprintf(*buffer, "%s", str_value.c_str());
-	(*buffer)[str_value.length()] = '\0';   // just to be sure
-											// cout << "DEBUG" << *buffer << endl;
-}
-void mongo_str_to_buffer(bsoncxx::document::element str_field, char* &buffer) {
+inline void mongo_str_to_buffer(bsoncxx::document::element str_field, char* &buffer) {
 	string str_value;
 	if (buffer != NULL) { delete[] buffer; buffer = NULL; }
 	str_value = str_field.get_utf8().value.to_string();
@@ -9103,14 +9112,34 @@ void mongo_str_to_buffer(bsoncxx::document::element str_field, char* &buffer) {
 	buffer[str_value.length()] = '\0';
 	// cout << "DEBUG: " << *buffer << endl;
 }
-
-
 void saveEventToFile(Event* event) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
+		
+		//printf("WRITE_NEW_DATA_TO_MONGO\r\n");
 		auto coll = db["events"];
-		coll.insert_one(buildEventDoc(*event));
+		
+
+		mongocxx::options::update* update= new mongocxx::options::update();
+		update->upsert(true);
+
+		try {
+
+			coll.update_one(bsoncxx::builder::stream::document{} << "_id" << event->id << bsoncxx::builder::stream::finalize,
+				bsoncxx::builder::stream::document {} << "$set" << buildEventDoc(event) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+		
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one: " << e.what() << std::endl;
+		}
+
+		delete update;
+
+		
 		// return;
 	}
+
+	
 	HANDLE File;
 	DWORD l = 0;
 	char buf[20];
@@ -9469,7 +9498,7 @@ void processLoadedMarkets() {
 void saveMarketToFile(Market* market) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["markets"];
-		coll.insert_one(buildMarketDoc(*market));
+		coll.insert_one(buildMarketDoc(market));
 		// return;
 	}
 	HANDLE File;
@@ -9845,7 +9874,7 @@ void loadMarketsFromFiles(bool loadFromDB) {
 void saveTournamentToFile(Tournament* tournament) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["tournaments"];
-		coll.insert_one(buildTournamentDoc(*tournament));
+		coll.insert_one(buildTournamentDoc(tournament));
 		// return;
 	}
 	reload_step_1 = 1;
@@ -10020,7 +10049,7 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 void saveCategoryToFile(Category* category) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["categories"];
-		coll.insert_one(buildCategoryDoc(*category));
+		coll.insert_one(buildCategoryDoc(category));
 		// return;
 	}
 	reload_step_1 = 1;
@@ -10130,7 +10159,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 void saveCompetitorToFile(Competitor* competitor) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["competitors"];
-		coll.insert_one(buildCompetitorDoc(*competitor));
+		coll.insert_one(buildCompetitorDoc(competitor));
 		// return;
 	}
 	HANDLE File;
@@ -10252,7 +10281,7 @@ void loadCompetitorsFromFiles(bool loadFromDB) {
 void savePlayerToFile(Player* player) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["players"];
-		coll.insert_one(buildPlayerDoc(*player));
+		coll.insert_one(buildPlayerDoc(player));
 		// return;
 	}
 	HANDLE File;
