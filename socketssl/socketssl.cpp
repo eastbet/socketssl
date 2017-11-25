@@ -3234,12 +3234,12 @@ void writePlayersDB();
 void writeEventsDB();
 
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
-const bool POPULATE_MONGO = false;
+const bool POPULATE_MONGO = true;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
 const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = true;
+const bool LOAD_FROM_MONGO = false;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
@@ -3329,6 +3329,9 @@ void writeMarketsDB() {
 
 bsoncxx::document::value buildTournamentDoc(Tournament *t) {
 	bsoncxx::builder::basic::document builder{};
+	string name = t->name == NULL ? "" : t->name;
+	string season_name = t->season_name == NULL ? "" : t->season_name;
+
 	builder.append(kvp("type_radar", t->type_radar),
 		kvp("tournament_id", t->id),
 		kvp("season_id", t->season_id),
@@ -3336,10 +3339,15 @@ bsoncxx::document::value buildTournamentDoc(Tournament *t) {
 		kvp("sport_id", t->sport_id),
 		kvp("category_id", t->category_id),
 		kvp("sort", t->sort),
-		kvp("name", t->name)
+		kvp("start_date", t->start_date),
+		kvp("end_date", t->end_date),
+		kvp("name", name),
+		kvp("season_name", season_name)
 	);
 	return builder.extract();
 }
+
+
 
 void writeTournamentsDB() {
 	auto coll = db["tournaments"];
@@ -9975,17 +9983,19 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 			tournaments[i].category_id = doc["category_id"].get_int32();
 			tournaments[i].sort = doc["sort"].get_int32();
 			// optional values
-			if (doc["start_date"].raw() != nullptr) {
+			//if (doc["start_date"].raw() != nullptr) {
 				tournaments[i].start_date = doc["start_date"].get_int32();
-			}
-			if (doc["end_date"].raw() != nullptr) {
+			//}
+			//if (doc["end_date"].raw() != nullptr) {
+				
 				tournaments[i].end_date = doc["end_date"].get_int32();
-			}
+			//}
 			// string types
 			mongo_str_to_buffer(doc["name"], tournaments[i].name);
-			if (doc["season_name"].raw() != nullptr) {
+
+			//if (doc["season_name"].raw() != nullptr) {
 				mongo_str_to_buffer(doc["season_name"], tournaments[i].season_name);
-			}
+			//}
 			if (tournaments[i].id > 0) tournaments_id[tournaments[i].id] = &tournaments[i];
 			if (tournaments[i].season_id > 0) seasons_id[tournaments[i].season_id] = &tournaments[i];
 			if (tournaments[i].simple_id > 0) simples_id[tournaments[i].simple_id] = &tournaments[i];
