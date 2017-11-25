@@ -3234,18 +3234,18 @@ void writePlayersDB();
 void writeEventsDB();
 
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
-const bool POPULATE_MONGO = true;
+const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
 const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = false;
+const bool LOAD_FROM_MONGO = true;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
 bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
-	builder.append(kvp("cat_id", c->id),
+	builder.append(kvp("_id", c->id),
 		kvp("sport_id", c->sport_id),
 		kvp("sort", c->sort),
 		kvp("name", c->name)
@@ -3736,7 +3736,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = false;
+	bool print = true;
 	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
@@ -9515,10 +9515,10 @@ void saveMarketToFile(Market* market) {
 
 		try {
 			if (market->variant > -1 && market->variable_text != NULL) 
-				coll.update_one(bsoncxx::builder::stream::document{} << "_id" << market->id << "variable_text" << market->variable_text << bsoncxx::builder::stream::finalize,
+				coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << "variable_text" << market->variable_text << bsoncxx::builder::stream::finalize,
 					bsoncxx::builder::stream::document{} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 
-			else coll.update_one(bsoncxx::builder::stream::document{} << "_id" << market->id << bsoncxx::builder::stream::finalize,
+			else coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << bsoncxx::builder::stream::finalize,
 				bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 		}
 
@@ -9611,6 +9611,7 @@ void loadMarketsFromFiles(bool loadFromDB) {
 			if (doc["variable_text"].raw() != nullptr) {
 				mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
 			}
+			printf("markets[i].variable_text=%s\r\n", markets[i].variable_text);
 
 			// outcomes array
 			bsoncxx::document::element outcomes_elem = doc["outcomes"];
@@ -9913,7 +9914,7 @@ void saveTournamentToFile(Tournament* tournament) {
 
 		try {
 			if (tournament->id > 0)
-				coll.update_one(bsoncxx::builder::stream::document{} << "_id" << tournament->id << bsoncxx::builder::stream::finalize,
+				coll.update_one(bsoncxx::builder::stream::document{} << "tournament_id" << tournament->id << bsoncxx::builder::stream::finalize,
 					bsoncxx::builder::stream::document{} << "$set" << buildTournamentDoc(tournament) << bsoncxx::builder::stream::finalize, *update);
 
 			else coll.update_one(bsoncxx::builder::stream::document{} << "simple_id" << tournament->simple_id << bsoncxx::builder::stream::finalize,
@@ -10155,7 +10156,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 		categories_l = 0;
 		for (auto doc : cursor) {
 			// std::cout << bsoncxx::to_json(doc) << "\n";
-			categories[i].id = doc["cat_id"].get_int32();
+			categories[i].id = doc["_id"].get_int32();
 			categories[i].sport_id = doc["sport_id"].get_int32();
 			categories[i].sort = doc["sort"].get_int32();
 			mongo_str_to_buffer(doc["name"], categories[i].name);
