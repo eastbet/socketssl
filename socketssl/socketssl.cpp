@@ -3234,18 +3234,18 @@ void writePlayersDB();
 void writeEventsDB();
 
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
-const bool POPULATE_MONGO = true;
+const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
 const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = false;
+const bool LOAD_FROM_MONGO = true;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 
 bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
-	builder.append(kvp("cat_id", c->id),
+	builder.append(kvp("_id", c->id),
 		kvp("sport_id", c->sport_id),
 		kvp("sort", c->sort),
 		kvp("name", c->name)
@@ -3256,7 +3256,10 @@ bsoncxx::document::value buildCategoryDoc(Category* c) {
 
 void writeCategoriesDB() {
 	auto coll = db["categories"];
-	coll.drop();  // clear collection
+	if (db.has_collection("categories")) {
+		coll.drop();  // clear collection
+	}
+
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < categories_l; i++) {
@@ -3309,8 +3312,12 @@ bsoncxx::document::value buildMarketDoc(Market* m) {
 }
 
 void writeMarketsDB() {
+	using namespace bsoncxx::builder;
 	auto coll = db["markets"];
-	coll.drop();  // clear collection
+	if (db.has_collection("markets")) {
+		coll.drop();  // clear collection
+	}
+    
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < markets_l; i++) {
@@ -3350,8 +3357,17 @@ bsoncxx::document::value buildTournamentDoc(Tournament *t) {
 
 
 void writeTournamentsDB() {
+	using namespace bsoncxx::builder;
 	auto coll = db["tournaments"];
-	coll.drop();  // clear collection
+	if (db.has_collection("tournaments")) {
+		coll.drop();  // clear collection
+	}
+	
+	// create unique index for ids
+	mongocxx::options::index index_opt{};
+	index_opt.unique(true);
+	coll.create_index(stream::document{} << "tournament_id" << 1 << "simple_id" << 1 << stream::finalize, index_opt);
+
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < tournaments_l; i++) {
@@ -3379,8 +3395,9 @@ bsoncxx::document::value buildSportsDoc(Sport &s) {
 void writeSportsDB() {
 	//printf("writeSportsDB\r\n");
 	auto coll = db["sports"];
-	//printf("coll\r\n");
-	coll.drop();  // clear collection
+	if (db.has_collection("sports")) {
+		coll.drop();  // clear collection
+	}	
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < sports_l; i++) {
@@ -3411,7 +3428,10 @@ bsoncxx::document::value buildCompetitorDoc(Competitor *c) {
 
 void writeCompetitorsDB() {
 	auto coll = db["competitors"];
-	coll.drop();  // clear collection
+	if (db.has_collection("competitors")) {
+		coll.drop();  // clear collection
+	}
+
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < competitors_l; i++) {
@@ -3452,7 +3472,10 @@ bsoncxx::document::value buildPlayerDoc(Player* p) {
 
 void writePlayersDB() {
 	auto coll = db["players"];
-	coll.drop();  // clear collection
+	if (db.has_collection("players")) {
+		coll.drop();  // clear collection
+	}
+
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < players_l; i++) {
@@ -3529,9 +3552,11 @@ bsoncxx::document::value buildEventDoc(Event* e) {
 
 void writeEventsDB() {
 	auto coll = db["events"];
-	coll.drop();  // clear collection
+	if (db.has_collection("events")) {
+		coll.drop();  // clear collection
+	}
 
-				  // create index for start_time
+	// create index for start_time
 	bsoncxx::builder::basic::document index_doc{};
 	index_doc.append(kvp("start_time", -1));  // -1 for descending index
 	coll.create_index(std::move(index_doc.extract()));
@@ -9379,6 +9404,7 @@ void loadEventsFromFiles(bool loadFromDB) {
 
 
 };
+
 void processLoadedMarkets() {
 	int j = 0;
 	for (int k = 0; k < markets_l; k++) {
@@ -9515,10 +9541,10 @@ void saveMarketToFile(Market* market) {
 
 		try {
 			if (market->variant > -1 && market->variable_text != NULL) 
-				coll.update_one(bsoncxx::builder::stream::document{} << "_id" << market->id << "variable_text" << market->variable_text << bsoncxx::builder::stream::finalize,
+				coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << "variable_text" << market->variable_text << bsoncxx::builder::stream::finalize,
 					bsoncxx::builder::stream::document{} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 
-			else coll.update_one(bsoncxx::builder::stream::document{} << "_id" << market->id << bsoncxx::builder::stream::finalize,
+			else coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << bsoncxx::builder::stream::finalize,
 				bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 		}
 
@@ -9903,7 +9929,9 @@ void loadMarketsFromFiles(bool loadFromDB) {
 	processLoadedMarkets();
 	std::printf("Markets loaded from data files succes. Number of loaded markets is %d\r\n", markets_l);
 }
+
 void saveTournamentToFile(Tournament* tournament) {
+	using namespace bsoncxx::builder::stream;
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["tournaments"];
 		//coll.insert_one(buildTournamentDoc(tournament));
@@ -9912,12 +9940,8 @@ void saveTournamentToFile(Tournament* tournament) {
 		update->upsert(true);
 
 		try {
-			if (tournament->id > 0)
-				coll.update_one(bsoncxx::builder::stream::document{} << "_id" << tournament->id << bsoncxx::builder::stream::finalize,
-					bsoncxx::builder::stream::document{} << "$set" << buildTournamentDoc(tournament) << bsoncxx::builder::stream::finalize, *update);
-
-			else coll.update_one(bsoncxx::builder::stream::document{} << "simple_id" << tournament->simple_id << bsoncxx::builder::stream::finalize,
-				bsoncxx::builder::stream::document{} << "$set" << buildTournamentDoc(tournament) << bsoncxx::builder::stream::finalize, *update);
+			coll.update_one(document{} << "tournament_id" << tournament->id << "simple_id" << tournament->simple_id << finalize,
+				document{} << "$set" << buildTournamentDoc(tournament) << finalize, *update);
 		}
 
 
@@ -10102,6 +10126,7 @@ void loadTournamentsFromFiles(bool loadFromDB) {
 
 	
 };;
+
 void saveCategoryToFile(Category* category) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["categories"];
@@ -10155,7 +10180,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 		categories_l = 0;
 		for (auto doc : cursor) {
 			// std::cout << bsoncxx::to_json(doc) << "\n";
-			categories[i].id = doc["cat_id"].get_int32();
+			categories[i].id = doc["_id"].get_int32();
 			categories[i].sport_id = doc["sport_id"].get_int32();
 			categories[i].sort = doc["sort"].get_int32();
 			mongo_str_to_buffer(doc["name"], categories[i].name);
@@ -10229,6 +10254,7 @@ void loadCategoriesFromFiles(bool loadFromDB) {
 
 	
 };
+
 void saveCompetitorToFile(Competitor* competitor) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["competitors"];
@@ -10367,6 +10393,7 @@ void loadCompetitorsFromFiles(bool loadFromDB) {
 
 
 };
+
 void savePlayerToFile(Player* player) {
 	if (WRITE_NEW_DATA_TO_MONGO) {
 		auto coll = db["players"];
@@ -10556,6 +10583,7 @@ void loadPlayersFromFiles(bool loadFromDB) {
 
 
 };
+
 size_t calcDecodeLength(const char* b64input) { //Calculates the length of a decoded string
 	size_t len = strlen(b64input),
 		padding = 0;
