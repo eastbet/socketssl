@@ -3240,12 +3240,12 @@ void writePlayersDB();
 void writeEventsDB();
 
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
-const bool POPULATE_MONGO = false;
+const bool POPULATE_MONGO = true;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = true;
+const bool WRITE_NEW_DATA_TO_MONGO = false;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = true;
+const bool LOAD_FROM_MONGO = false;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 //auto db = mongo_client["betdb"];
