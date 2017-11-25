@@ -3212,6 +3212,8 @@ void delete_line(Line &line) {
 	return;
 }
 
+
+
 int reload_step_1 = 1;
 int booking = 0;
 //std::mutex _mutex;
@@ -3223,7 +3225,11 @@ using bsoncxx::builder::basic::sub_array;
 
 mongocxx::instance instance{}; // This should be done only once.
 mongocxx::uri mongo_uri("mongodb://localhost:27017");
+
+//mongocxx::uri mongo_uri("mongodb://bet:38998716@192.168.44.23:27017/?authSource=betdb");
 mongocxx::client mongo_client(mongo_uri);
+
+
 
 void writeCategoriesDB();
 void writeMarketsDB();
@@ -3242,6 +3248,7 @@ const bool WRITE_NEW_DATA_TO_MONGO = true;
 const bool LOAD_FROM_MONGO = true;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
+//auto db = mongo_client["betdb"];
 
 bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
@@ -3535,14 +3542,9 @@ bsoncxx::document::value buildEventDoc(Event* e) {
 	builder.append(kvp("tv_channels", normalized));
 	
 
-	try {
 
 		return builder.extract();
 
-	}
-	catch (const mongocxx::exception& e) {
-		std::cout << "An exception occurred in writeEventsDB: " << e.what() << std::endl;
-	}
 
 
 
@@ -5857,6 +5859,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						_line->simple_id = 0;
 						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 						{
+							if (debug_output == true) printf("start parse market\r\n");
 							outcomeNameError = 0;
 							if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 							if (market_node->first_node("market_metadata") && market_node->first_node("market_metadata")->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_node("market_metadata")->first_attribute("next_betstop")->value());
@@ -5990,7 +5993,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						}
 										   else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 										   outcome_number = 0;
-
+										   if (debug_output == true) printf("start parse market2\r\n");
 										   for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 
 
@@ -6027,7 +6030,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   outcome_number++;
 
 										   }
-
+										   if (debug_output == true) printf("start parse market3\r\n");
 
 
 
@@ -6040,7 +6043,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   _line->outcome_team = NULL;
 
 
-
+										   if (debug_output == true) printf("start parse market4\r\n");
 										   _line->outcome_number = outcome_number;
 										   if (_line->outcome_number > 0) {
 											   _line->outcome_name = new char*[_line->outcome_number];
@@ -6050,17 +6053,23 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   _line->outcome_probabilities = new float[_line->outcome_number];
 											   _line->outcome_odds = new float[_line->outcome_number];
 
-
+											  
 											   if (_line->name != NULL) delete[] _line->name;
 
+											   if (debug_output == true) printf("start parse market5 %d\r\n", _line->market->id);
 
 											   _line->name = new char[strlen(_line->market->name) + 1];
+											   
+											   
+
 											   std::strcpy(_line->name, _line->market->name);
+											
 											   for (int i = 0; i < _line->specifier_number; i++) {
 												   if (i == _line->variant) continue;
 
 												   replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
 											   }
+											  
 
 											   replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
 											   if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
@@ -6406,6 +6415,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 											   if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
 										   }
+										   if (debug_output == true) printf("start parse market6\r\n");
 
 										   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 										   if (debug_output == true) {
@@ -9633,10 +9643,13 @@ void loadMarketsFromFiles(bool loadFromDB) {
 
 			mongo_str_to_buffer(doc["name"], markets[i].name);
 
+			
+
 			// optional values
 			if (doc["variable_text"].raw() != nullptr) {
 				mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
 			}
+		
 
 			// outcomes array
 			bsoncxx::document::element outcomes_elem = doc["outcomes"];
@@ -9915,7 +9928,8 @@ void loadMarketsFromFiles(bool loadFromDB) {
 		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
 
 		*/
-
+ //if(markets[k].id==93) 
+	// printf("markets[k].id= %d markets[k].name=%s\r\n ", markets[k].id, markets[k].name);
 		k++;
 		markets_l = k;
 
