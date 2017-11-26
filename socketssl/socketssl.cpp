@@ -1,4 +1,3 @@
-
 #define WIN32_LEAN_AND_MEAN
 #undef _UNICODE
 #undef UNICODE
@@ -3225,7 +3224,6 @@ using bsoncxx::builder::basic::sub_array;
 
 mongocxx::instance instance{}; // This should be done only once.
 mongocxx::uri mongo_uri("mongodb://localhost:27017");
-
 //mongocxx::uri mongo_uri("mongodb://bet:38998716@192.168.44.23:27017/?authSource=betdb");
 mongocxx::client mongo_client(mongo_uri);
 
@@ -3240,12 +3238,12 @@ void writePlayersDB();
 void writeEventsDB();
 
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
-const bool POPULATE_MONGO = true;
+const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = false;
+const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = false;
+const bool LOAD_FROM_MONGO = true;
 
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 //auto db = mongo_client["betdb"];
@@ -3289,9 +3287,12 @@ bsoncxx::document::value buildMarketDoc(Market* m) {
 		kvp("name", m->name),
 		kvp("variant", m->variant)
 	);
-	if (m->variant > -1 && m->variable_text != NULL) {
-		builder.append(kvp("variable_text", m->variable_text));
-	}
+
+	string variable_text = m->variable_text == NULL ? "" : m->variable_text;
+
+	//if (m->variant > -1 && m->variable_text != NULL) {
+		builder.append(kvp("variable_text", variable_text));
+	//}
 	auto outcomes = bsoncxx::builder::basic::array{};
 	for (int j = 0; j < m->outcome_number; j++) {
 		bsoncxx::document::value subdoc = bsoncxx::builder::stream::document{}
@@ -3325,6 +3326,11 @@ void writeMarketsDB() {
 		coll.drop();  // clear collection
 	}
     
+	mongocxx::options::index index_opt{};
+	index_opt.unique(true);
+	coll.create_index(stream::document{} << "market_id" << 1 << "variable_text" << 1 << stream::finalize, index_opt);
+
+
 	vector<bsoncxx::document::value> docs;
 	try {
 		for (int i = 0; i < markets_l; i++) {
@@ -3685,7 +3691,6 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
 
-
 	if (booking > 0) {
 		getEvents(0, 10);
 		return 0;
@@ -3702,7 +3707,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		loadEventsFromFiles();
 		loadCompetitorsFromFiles();
 		loadPlayersFromFiles();
-
+		
 		if (POPULATE_MONGO) {
 			writeSportsDB();
 			writeMarketsDB();
@@ -3936,7 +3941,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					writeInteger(buffer, offset, _event->category_id, 2);
 					if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
 					else writeInteger(buffer, offset, _event->simple_id, 4);
-					writeInteger(buffer, offset, _event->start_time + 4 * 3600, 4);
+					writeInteger(buffer, offset, _event->start_time, 4);
 					writeInteger(buffer, offset, _event->period_length, 1);
 					writeInteger(buffer, offset, _event->overtime_length, 1);
 					if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
@@ -4136,7 +4141,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						writeInteger(buffer, offset, 1, 2);
 						writeInteger(buffer, offset, type_radar, 1);
 						writeInteger(buffer, offset, event_id, 4);
-						writeInteger(buffer, offset, _tournament->end_date + 4 * 3600, 4);
+						writeInteger(buffer, offset, _tournament->end_date, 4);
 						retry_offset = offset;
 						offset += 2;
 						event_lines_l = 0;
@@ -4799,7 +4804,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						writeInteger(buffer, offset, 1, 2);
 						writeInteger(buffer, offset, type_radar, 1);
 						writeInteger(buffer, offset, _tournament->id, 4);
-						writeInteger(buffer, offset, _tournament->end_date + 4 * 3600, 4);
+						writeInteger(buffer, offset, _tournament->end_date, 4);
 						retry_offset = offset;
 						offset += 2;
 						event_lines_l = 0;
@@ -5734,7 +5739,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						writeInteger(buffer, offset, _event->category_id, 2);
 						if (_event->type_radar<2) writeInteger(buffer, offset, _event->tournament_id, 4);
 						else writeInteger(buffer, offset, _event->simple_id, 4);
-						writeInteger(buffer, offset, _event->start_time + 4 * 3600, 4);
+						writeInteger(buffer, offset, _event->start_time, 4);
 						writeInteger(buffer, offset, _event->period_length, 1);
 						writeInteger(buffer, offset, _event->overtime_length, 1);
 						if (_event->sport_id == 5) writeInteger(buffer, offset, _event->bo, 1);
@@ -9550,12 +9555,12 @@ void saveMarketToFile(Market* market) {
 		update->upsert(true);
 
 		try {
-			if (market->variant > -1 && market->variable_text != NULL) 
+			//if (market->variant > -1 && market->variable_text != NULL) 
 				coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << "variable_text" << market->variable_text << bsoncxx::builder::stream::finalize,
 					bsoncxx::builder::stream::document{} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 
-			else coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << bsoncxx::builder::stream::finalize,
-				bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
+			//else coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << bsoncxx::builder::stream::finalize,
+				//bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 		}
 
 
@@ -9640,15 +9645,14 @@ void loadMarketsFromFiles(bool loadFromDB) {
 			markets[i].id = doc["market_id"].get_int32();
 			markets[i].type = doc["type"].get_int32();
 			markets[i].variant = doc["variant"].get_int32();
-
 			mongo_str_to_buffer(doc["name"], markets[i].name);
 
 			
 
 			// optional values
-			if (doc["variable_text"].raw() != nullptr) {
-				mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
-			}
+			//if (doc["variable_text"].raw() != nullptr) {
+			mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
+			//}
 		
 
 			// outcomes array
@@ -10735,7 +10739,7 @@ char* CreateStep_2(int& len) {
 		writeInteger(buffer, offset, events_show[i]->category_id, 2);
 		if (events_show[i]->type_radar<2) writeInteger(buffer, offset, events_show[i]->tournament_id, 4);
 		else writeInteger(buffer, offset, events_show[i]->simple_id, 4);
-		writeInteger(buffer, offset, events_show[i]->start_time + 4 * 3600, 4);
+		writeInteger(buffer, offset, events_show[i]->start_time , 4);
 		writeInteger(buffer, offset, events_show[i]->period_length, 1);
 		writeInteger(buffer, offset, events_show[i]->overtime_length, 1);
 		if (events_show[i]->sport_id == 5) writeInteger(buffer, offset, events_show[i]->bo, 1);
@@ -11034,10 +11038,10 @@ void CreateOutright_2(wsClient* client) {
 		if (_line->simple_id > 0) type_radar = 2; else type_radar = 3;
 		writeInteger(buffer, offset, type_radar, 1);
 		if (type_radar == 2) { writeInteger(buffer, offset, _line->simple_id, 4); 
-		writeInteger(buffer, offset, simples_id[_line->simple_id]->end_date+ 4 * 3600, 4);
+		writeInteger(buffer, offset, simples_id[_line->simple_id]->end_date, 4);
 		}
 		else { writeInteger(buffer, offset, _line->tournament_id, 4); 
-		writeInteger(buffer, offset, tournaments_id[_line->tournament_id]->end_date + 4 * 3600, 4);
+		writeInteger(buffer, offset, tournaments_id[_line->tournament_id]->end_date, 4);
 		}
 		//writeInteger(buffer, offset, _line->tournament_id, 4);
 		event_lines_l++;
