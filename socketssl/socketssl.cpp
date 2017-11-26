@@ -6188,7 +6188,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 													   if (players_id[_line->outcome_id[i]] == NULL && _line->outcome_team[i] == 1) {
 														   std::printf("Player5 id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-														   if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
+														   if (events_id[_line->event_id]->home_id >= MAX_COMPETITORS) {
 															   std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", events_id[_line->event_id]->home_id, _line->event_id);
 															   continue;
 														   }
