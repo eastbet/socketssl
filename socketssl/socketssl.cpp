@@ -3214,7 +3214,7 @@ void delete_line(Line &line) {
 
 
 int reload_step_1 = 1;
-int booking = 20;
+int booking = 0;
 //std::mutex _mutex;
 
 using bsoncxx::builder::basic::kvp;
@@ -3240,7 +3240,7 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = true;
+const bool WRITE_NEW_DATA_TO_MONGO = false;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
 const bool LOAD_FROM_MONGO = true;
@@ -3768,8 +3768,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = false;
-	bool debug_output = false;
+	bool print = true;
+	bool debug_output = true;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
