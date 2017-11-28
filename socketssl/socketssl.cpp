@@ -1192,7 +1192,7 @@ Matchstatus::Matchstatus() {
 	description = NULL;
 };
 
-enum Currency { MANAT, RUB, EUR, USD, LIRA, VIRTUAL };
+enum Currency { MANAT, RUB, EURO, USD, LIRA, VIRTUAL };
 
 class Client {
 public:
@@ -1218,7 +1218,7 @@ public:
 	float bets_amount;  // Money in the game(in bets)	
 };
 
-void Client:: operator = (const Client & rhs) {
+void Client::operator = (const Client & rhs) {
 	if (this == &rhs) return;
 	client_id = rhs.client_id;
 	name = rhs.name;
@@ -3318,10 +3318,55 @@ string registerErrorCodes[] = {
 	"Name-Surname-Date_of_Birth was registered before." // 4
 };
 
+unordered_map<int, Client*> client_hash = {};
+
 // To be implemented?
 string encryptPassword(string passwd) {
 	return passwd;
 }
+
+int generateClientID(Currency currency, mongocxx::collection clientCollection) {
+	short first_digit;
+	if (currency == Currency::MANAT) first_digit = 1;
+	else if (currency == Currency::RUB) first_digit = 2;
+	else if (currency == Currency::USD) first_digit = 3;
+	else if (currency == Currency::EURO) first_digit = 4;
+	else if (currency == Currency::LIRA) first_digit = 5;
+	else if (currency == Currency::VIRTUAL) first_digit = 6;
+	int client_id = first_digit * 1000000 + (rand() % 100000);
+	bsoncxx::stdx::optional<bsoncxx::document::value> maybe_result;
+	bsoncxx::document::view query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
+	maybe_result = clientCollection.find_one(query);
+	while (maybe_result) {  // search for a client_id that is not already used
+		client_id = first_digit * 1000000 + (rand() % 100000);
+		query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
+		maybe_result = clientCollection.find_one(query);
+	}
+	return client_id;    
+}
+
+bsoncxx::document::value buildClientDoc(Client* c) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("_id", c->client_id),
+		kvp("name", c->name),
+		kvp("surname", c->surname),
+		kvp("date_of_birth", c->date_of_birth),
+		kvp("country", c->country),
+		kvp("domain", c->domain),
+		kvp("city", c->city),
+		kvp("email", c->email),
+		kvp("phone", c->phone),
+		kvp("login", c->login),		
+		kvp("password", c->password),
+		kvp("currency", c->currency),
+		kvp("postal_code", c->postal_code),
+		kvp("address", c->address),
+		kvp("balance", c->balance),
+		kvp("bets_amount", c->bets_amount)
+	);
+	return builder.extract();
+}
+
 
 vector<int> registerClient(string name, string surname, int dob, string country, string domain, string city, string email, string phone,
 	string login, string password, Currency currency, string postal_code, string address, float balance, float bets_amount) {
@@ -3362,7 +3407,16 @@ vector<int> registerClient(string name, string surname, int dob, string country,
 		c->balance = balance;
 		c->bets_amount = bets_amount;
 		// determine client_id
-		c->client_id = 0;
+		c->client_id = generateClientID(currency, coll);
+		// insert into hash
+		client_hash[c->client_id] = c;
+		// insert into Mongo
+		try {
+			coll.insert_one(buildClientDoc(c));
+		}
+		catch (const mongocxx::exception& e) {
+			cout << "An exception occurred in inserting a new Client: " << e.what() << endl;
+		}
 	}
 	return result;
 }
