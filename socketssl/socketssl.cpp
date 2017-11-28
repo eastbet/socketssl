@@ -1192,6 +1192,52 @@ Matchstatus::Matchstatus() {
 	description = NULL;
 };
 
+enum Currency { MANAT, RUB, EUR, USD, LIRA, VIRTUAL };
+
+class Client {
+public:
+	// Client();
+	// ~Client();
+	void operator = (const Client&);
+
+	int client_id;
+	string name;
+	string surname;
+	int date_of_birth;
+	string country;
+	string domain;
+	string city;
+	string email;
+	string phone;
+	string login;
+	string password;
+	Currency currency;
+	string postal_code;
+	string address;
+	float balance;      // Money in the account(balance)
+	float bets_amount;  // Money in the game(in bets)	
+};
+
+void Client:: operator = (const Client & rhs) {
+	if (this == &rhs) return;
+	client_id = rhs.client_id;
+	name = rhs.name;
+	surname = rhs.surname;
+	date_of_birth = rhs.date_of_birth;
+	country = rhs.country;
+	domain = rhs.domain;
+	city = rhs.city;
+	email = rhs.email;
+	phone = rhs.phone;
+	login = rhs.login;
+	password = rhs.password;
+	currency = rhs.currency;
+	postal_code = rhs.postal_code;
+	address = rhs.address;
+	balance = rhs.balance;
+	bets_amount = rhs.bets_amount;
+}
+
 Event* events = new Event[EVENTS_LENTGH];
 int events_l = 0;
 Line* lines = new Line[LINES_LENTGH];
@@ -3248,6 +3294,79 @@ const bool LOAD_FROM_MONGO = true;
 auto db = mongo_client["passion_bet"]; // SQL:  USE db
 //auto db = mongo_client["betdb"];
 
+// to be called first time when creating clients collection in Mongo or to reset it
+void createClientsCollection() {
+	using namespace bsoncxx::builder;
+
+	auto coll = db["clients"];
+	coll.drop();
+
+	// create unique indexes 
+	mongocxx::options::index index_opt{};
+	index_opt.unique(true);
+	coll.create_index(stream::document{} << "name" << 1 << "surname" << 1 << "date_of_birth" << 1 << stream::finalize, index_opt);
+	coll.create_index(stream::document{} << "phone" << 1 << stream::finalize, index_opt);
+	coll.create_index(stream::document{} << "email" << 1 << stream::finalize, index_opt);
+	coll.create_index(stream::document{} << "login" << 1 << stream::finalize, index_opt);
+}
+
+string registerErrorCodes[] = {
+	"Success",                                          // 0
+	"Login is in use by another client.",               // 1
+	"Phone number was registered before.",              // 2
+	"Email was registered before.",                     // 3
+	"Name-Surname-Date_of_Birth was registered before." // 4
+};
+
+// To be implemented?
+string encryptPassword(string passwd) {
+	return passwd;
+}
+
+vector<int> registerClient(string name, string surname, int dob, string country, string domain, string city, string email, string phone,
+	string login, string password, Currency currency, string postal_code, string address, float balance, float bets_amount) {
+	using namespace bsoncxx::builder;
+
+	vector<int> result = {};
+	if (!db.has_collection("clients")) {
+		createClientsCollection();
+	}
+	auto coll = db["clients"];
+	bsoncxx::stdx::optional<bsoncxx::document::value> maybe_result;
+	// check if registration data is valid	
+	maybe_result = coll.find_one(stream::document{} << "login" << login << stream::finalize);
+	if (maybe_result) result.push_back(1);   // see registerErrorCodes
+	maybe_result = coll.find_one(stream::document{} << "phone" << phone << stream::finalize);
+	if (maybe_result) result.push_back(2);   // see registerErrorCodes
+	maybe_result = coll.find_one(stream::document{} << "email" << email << stream::finalize);
+	if (maybe_result) result.push_back(3);   // see registerErrorCodes
+	maybe_result = coll.find_one(stream::document{} << "name" << name << "surname" << surname << "date_of_birth" << dob << stream::finalize);
+	if (maybe_result) result.push_back(4);   // see registerErrorCodes
+
+	if (result.empty()) {
+		result.push_back(0); // success
+		Client* c = new Client();
+		c->name = name;
+		c->surname = surname;
+		c->date_of_birth = dob;
+		c->country = country;
+		c->domain = domain;
+		c->city = city;
+		c->email = email;
+		c->phone = phone;
+		c->login = login;
+		c->password = encryptPassword(password);
+		c->currency = currency;
+		c->postal_code = postal_code;
+		c->address = address;
+		c->balance = balance;
+		c->bets_amount = bets_amount;
+		// determine client_id
+		c->client_id = 0;
+	}
+	return result;
+}
+
 bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
 	builder.append(kvp("_id", c->id),
@@ -3255,7 +3374,6 @@ bsoncxx::document::value buildCategoryDoc(Category* c) {
 		kvp("sort", c->sort),
 		kvp("name", c->name)
 	);
-
 	return builder.extract();
 }
 
