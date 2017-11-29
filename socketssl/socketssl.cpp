@@ -3214,7 +3214,7 @@ void delete_line(Line &line) {
 
 
 int reload_step_1 = 1;
-int booking = 20;
+int booking = 0;
 //std::mutex _mutex;
 
 using bsoncxx::builder::basic::kvp;
@@ -3240,7 +3240,7 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = true;
+const bool WRITE_NEW_DATA_TO_MONGO = false;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
 const bool LOAD_FROM_MONGO = true;
@@ -4393,6 +4393,32 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							_line->outcome_team = NULL;
 
 
+							if (_line->name != NULL) delete[] _line->name;
+
+
+							_line->name = new char[strlen(_line->market->name) + 1];
+							std::strcpy(_line->name, _line->market->name);
+							for (int i = 0; i < _line->specifier_number; i++) {
+								if (i == _line->variant) continue;
+
+								replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
+							}
+							if (simples_id[_line->simple_id]->name != NULL) replace(_line->name, "$event", simples_id[_line->simple_id]->name);
+
+
+							if (print == true) {
+
+								std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
+							}
+
+							//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+							std::strcat(socket_message_big, "\r\n");
+							std::strcat(socket_message_big, _line->name);
+							std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+
+
+
+
 
 							_line->outcome_number = outcome_number;
 							if (_line->outcome_number > 0) {
@@ -4404,31 +4430,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								_line->outcome_odds = new float[_line->outcome_number];
 
 
-								if (_line->name != NULL) delete[] _line->name;
-
-
-								_line->name = new char[strlen(_line->market->name) + 1];
-								std::strcpy(_line->name, _line->market->name);
-								for (int i = 0; i < _line->specifier_number; i++) {
-									if (i == _line->variant) continue;
-
-									replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
-								}
-								if (simples_id[_line->simple_id]->name != NULL) replace(_line->name, "$event", simples_id[_line->simple_id]->name);
-
-
-								if (print == true) {
-
-									std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
-								}
-
-								//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-								std::strcat(socket_message_big, "\r\n");
-								std::strcat(socket_message_big, _line->name);
-								std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
-
-
-
+							
 
 
 
@@ -5057,6 +5059,34 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											_line->outcome_team = NULL;
 
 
+											if (_line->name != NULL) delete[] _line->name;
+
+
+											_line->name = new char[strlen(_line->market->name) + 1];
+											std::strcpy(_line->name, _line->market->name);
+											for (int i = 0; i < _line->specifier_number; i++) {
+												if (i == _line->variant) continue;
+
+												replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
+											}
+											if (tournaments_id[_line->tournament_id]->season_name != NULL) replace(_line->name, "$event", tournaments_id[_line->tournament_id]->season_name);
+
+
+											if (print == true) {
+
+												std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
+											}
+
+
+											//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+											std::strcat(socket_message_big, "\r\n");
+											std::strcat(socket_message_big, _line->name);
+											std::strcat(socket_message_big, "\r\n");
+											std::strcat(socket_message_big, "------------------------------------------------------------------------------\r\n");
+
+
+
+
 
 											_line->outcome_number = outcome_number;
 											if (_line->outcome_number > 0) {
@@ -5068,33 +5098,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												_line->outcome_odds = new float[_line->outcome_number];
 
 
-												if (_line->name != NULL) delete[] _line->name;
-
-
-												_line->name = new char[strlen(_line->market->name) + 1];
-												std::strcpy(_line->name, _line->market->name);
-												for (int i = 0; i < _line->specifier_number; i++) {
-													if (i == _line->variant) continue;
-
-													replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
-												}
-												if (tournaments_id[_line->tournament_id]->season_name != NULL) replace(_line->name, "$event", tournaments_id[_line->tournament_id]->season_name);
-
-
-												if (print == true) {
-
-													std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
-												}
-
-
-												//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
-												std::strcat(socket_message_big, "\r\n");
-												std::strcat(socket_message_big, _line->name);
-												std::strcat(socket_message_big, "\r\n");
-												std::strcat(socket_message_big, "------------------------------------------------------------------------------\r\n");
-
-
-
+											
 
 
 
@@ -6049,47 +6053,46 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 										   if (debug_output == true) printf("start parse market4\r\n");
+										   if (_line->name != NULL) delete[] _line->name;
+										   _line->name = new char[strlen(_line->market->name) + 1];
+										   std::strcpy(_line->name, _line->market->name);
+										   std::strcpy(_line->name, _line->market->name);
+
+										   for (int i = 0; i < _line->specifier_number; i++) {
+											   if (i == _line->variant) continue;
+
+											   replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
+										   }
+
+
+										   replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
+										   if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
+										   if (_event->type_radar > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
+
+										   if (print == true) {
+
+											   std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
+										   }
+
+
+										   std::strcat(socket_message_big, "\r\n");
+										   std::strcat(socket_message_big, _line->name);
+										   std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+
+
+
+
 										   _line->outcome_number = outcome_number;
-										   if (_line->outcome_number > 0) {
+										    if (_line->outcome_number > 0) {
 											   _line->outcome_name = new char*[_line->outcome_number];
 											   _line->outcome_id = new int[_line->outcome_number];
 											   _line->outcome_team = new int[_line->outcome_number];
 											   _line->outcome_active = new int[_line->outcome_number];
 											   _line->outcome_probabilities = new float[_line->outcome_number];
 											   _line->outcome_odds = new float[_line->outcome_number];
+                                              if (debug_output == true) printf("start parse market5 %d\r\n", _line->market->id);
 
-											  
-											   if (_line->name != NULL) delete[] _line->name;
-
-											   if (debug_output == true) printf("start parse market5 %d\r\n", _line->market->id);
-
-											   _line->name = new char[strlen(_line->market->name) + 1];
-											   
-											   
-
-											   std::strcpy(_line->name, _line->market->name);
-											
-											   for (int i = 0; i < _line->specifier_number; i++) {
-												   if (i == _line->variant) continue;
-
-												   replace(_line->name, _line->specifier[i], _line->specifier_value[i]);
-											   }
-											  
-
-											   replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
-											   if (_event->away_name != NULL) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
-											   if (_event->type_radar > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
-
-
-											   if (print == true) {
-
-												   std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
-											   }
-
-											   std::strcat(socket_message_big, "\r\n");
-											   std::strcat(socket_message_big, _line->name);
-											   std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
-
+										
 
 
 
@@ -6559,7 +6562,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			//printf("ff=%d\r\n", strlen(AMQP_message[(process_index - 1) % AMQP_QUEUE]));
 			
-	/*		if (write_count_file < 10 && _event!=NULL && _event->sport_id == 1 && strlen(maxbuf)> 50000) {
+			/*if (write_count_file < 10 && _event!=NULL && _event->sport_id == 1 && strlen(maxbuf)> 50000) {
 				
 				write_count_file++;std::strcpy(name, "D://passionbet//XML//MTS//unifeed");
 			_itoa(write_count_file, buf, 10);
@@ -6573,9 +6576,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			printf("message length= %d\r\n", strlen(maxbuf));
 			WriteFile(File, maxbuf, strlen(maxbuf), &l, NULL);
 			CloseHandle(File);
-			}
+			}*/
 
-	*/
+	
 			//WriteFile(File, "<endmessage></endmessage>", strlen("<endmessage></endmessage>"), &l, NULL);
 
 			//if (i > 50) return;
@@ -6797,7 +6800,7 @@ void startRecovery() {
 	if (recovery_state == 1) return;
 	recovery_state = 1;
 	char* recvbuf = new char[DEFAULT_BUFLEN];
-	while (httpsRequest("api.betradar.com", "/v1/pre/recovery/initiate_request?request_id=2", recvbuf, 1)==-1) Sleep(1000);
+	while (httpsRequest("api.betradar.com", "/v1/pre/recovery/initiate_request?request_id=0", recvbuf, 1)==-1) Sleep(1000);
 	//printf(recvbuf);
 	delete[] recvbuf;
 	std::printf("Start recovery\r\n");
