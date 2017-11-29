@@ -3240,7 +3240,7 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = false;
+const bool WRITE_NEW_DATA_TO_MONGO = true;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
 const bool LOAD_FROM_MONGO = true;
@@ -8986,7 +8986,7 @@ return split_array;
 		 
 		 if (l == 0) return;
 		 index1[l] = -1;
-		 retValue = new char[string_l + 1 + l*(value_l - sub_l)];
+		 retValue = new char[string_l + 100 + l*(value_l - sub_l)];
 		 retValue[0] = 0;
 
 		 for (i = 0; i < 20; i++) {
@@ -9028,7 +9028,10 @@ return split_array;
 						 else  players_l++;
 					 }
 
-					 if (players_id[id] != NULL) std::strcat(retValue, players_id[id]->name);
+					 if (players_id[id] != NULL) { 
+						std::strcat(retValue, players_id[id]->name); 
+					 
+					 }
 					 else return;
 					 
 
