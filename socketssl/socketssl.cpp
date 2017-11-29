@@ -3768,8 +3768,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = true;
-	bool debug_output = true;
+	bool print = false;
+	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
@@ -3785,7 +3785,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	float* outcome_odds = new float[500];
 	for (int i = 0; i < 500; i++) outcome_name[i] = NULL;
 	Line* _line = new Line();
-	char* socket_message_big = new char[145000];
+	//char* socket_message_big = new char[145000];
 	char* buffer = new char[145000];
 	size_t offset = 0;
 	size_t retry_offset = 0;
@@ -3794,7 +3794,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int zip_len = 0;
 	char* encode_message;// = SendframeEncode(zip_message, zip_len, len);
 	int encode_message_len = 0;
-	char* socket_message_little = new char[4096];
+	//char* socket_message_little = new char[4096];
 	int outcomeNameError = 0;
 	bool new_message_arrived = false;
 	vector<int> clientIDs;
@@ -3844,7 +3844,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		//new_message_arrived = true;
 		//printf("process 5\r\n");
 		
-		socket_message_big[0] = 0;
+		//socket_message_big[0] = 0;
 		offset = 0;
 		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
 		if(debug_output==true) printf("process_index=%d\r\n", process_index);
@@ -4153,14 +4153,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf("NAME:"); std::printf(_tournament->name);
 						std::printf("\r\n");
 					}
-					std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+					
+					//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+					/*
 					std::strcat(socket_message_big, socket_message_little);
 					std::sprintf(socket_message_little, "Simple id: %d\r\n", event_id);
 					std::strcat(socket_message_big, socket_message_little);
 					std::sprintf(socket_message_little, "NAME:");
 					std::strcat(socket_message_big, socket_message_little);
 					std::sprintf(socket_message_little, "\r\n");
-
+					*/
 
 
 
@@ -4168,8 +4170,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (print == true) {
 						std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
 					}
-					std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
-					std::strcat(socket_message_big, "\r\n");
+					//std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
+					//std::strcat(socket_message_big, "\r\n");
 
 
 
@@ -4183,9 +4185,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 						std::printf("\r\n***************************************************\r\n");
 					}
-					//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-					std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
-					std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
+					////std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+					//std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
+					//std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
 
 
 
@@ -4411,10 +4413,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 							}
 
-							//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
-							std::strcat(socket_message_big, "\r\n");
-							std::strcat(socket_message_big, _line->name);
-							std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
+							////std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+							//std::strcat(socket_message_big, "\r\n");
+							//std::strcat(socket_message_big, _line->name);
+							//std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
 
 
 
@@ -4479,14 +4481,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
-										//std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+										////std::sprintf(socket_message_little, "\r\n***************************************************\r\n");
+										/*
 										std::strcat(socket_message_big, _line->outcome_name[i]);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 										std::strcat(socket_message_big, socket_message_little);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, socket_message_little);*/
 
 
 
@@ -4557,14 +4560,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
-
+										/*
 										std::strcat(socket_message_big, _line->outcome_name[i]);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 										std::strcat(socket_message_big, socket_message_little);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, socket_message_little);*/
 
 
 
@@ -4619,14 +4622,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
-
+										/*
 										std::strcat(socket_message_big, _line->outcome_name[i]);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 										std::strcat(socket_message_big, socket_message_little);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, socket_message_little);*/
 
 
 
@@ -4677,13 +4680,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 											printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 										}
+										/*
 										std::strcat(socket_message_big, _line->outcome_name[i]);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 										std::strcat(socket_message_big, socket_message_little);
 										std::strcat(socket_message_big, "\t");
 										std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-										std::strcat(socket_message_big, socket_message_little);
+										std::strcat(socket_message_big, socket_message_little);*/
 									}
 								}
 
@@ -4823,7 +4827,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf("\r\n");
 					}
 
-					std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+					//std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+					/*
 					std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
 					std::strcat(socket_message_big, socket_message_little);
 					std::sprintf(socket_message_little, "Tournament id:%d\r\n", _tournament->id);
@@ -4833,15 +4838,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					std::strcat(socket_message_big, "\r\nSEASON:");
 					if (_tournament->season_name != NULL) std::strcat(socket_message_big, _tournament->season_name);
 					else std::strcat(socket_message_big, _tournament->name);
-					std::strcat(socket_message_big, "\r\n");
+					std::strcat(socket_message_big, "\r\n");*/
 
 
 
 					if (print == true) {
 						std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
 					}
-					std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
-					std::strcat(socket_message_big, "\r\n");
+					////std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
+					////std::strcat(socket_message_big, "\r\n");
 
 
 
@@ -4857,9 +4862,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf("\r\n***************************************************\r\n");
 					}
 
-					//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
-					std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
-					std::strcat(socket_message_big, "\r\n");
+					////std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+					//std::strcat(socket_message_big, categories_id[_tournament->category_id]->name);
+					//std::strcat(socket_message_big, "\r\n");
 
 
 
@@ -5078,12 +5083,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											}
 
 
-											//std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+											////std::sprintf(socket_message_little, "Season id: %d\r\n", event_id);
+											/*
 											std::strcat(socket_message_big, "\r\n");
 											std::strcat(socket_message_big, _line->name);
 											std::strcat(socket_message_big, "\r\n");
 											std::strcat(socket_message_big, "------------------------------------------------------------------------------\r\n");
-
+											*/
 
 
 
@@ -5147,7 +5153,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 															std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														}
-
+														/*
 														std::strcat(socket_message_big, _line->outcome_name[i]);
 														std::strcat(socket_message_big, "\t");
 														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
@@ -5155,7 +5161,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														std::strcat(socket_message_big, "\t");
 														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														std::strcat(socket_message_big, socket_message_little);
-
+														*/
 
 
 
@@ -5225,7 +5231,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														}
 
-														std::strcat(socket_message_big, _line->outcome_name[i]);
+														/*std::strcat(socket_message_big, _line->outcome_name[i]);
 														std::strcat(socket_message_big, "\t");
 														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 														std::strcat(socket_message_big, socket_message_little);
@@ -5233,7 +5239,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														std::strcat(socket_message_big, socket_message_little);
 
-
+														*/
 
 
 
@@ -5287,13 +5293,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														}
 
-														std::strcat(socket_message_big, _line->outcome_name[i]);
+														/*std::strcat(socket_message_big, _line->outcome_name[i]);
 														std::strcat(socket_message_big, "\t");
 														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 														std::strcat(socket_message_big, socket_message_little);
 														std::strcat(socket_message_big, "\t");
 														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-														std::strcat(socket_message_big, socket_message_little);
+														std::strcat(socket_message_big, socket_message_little);*/
 
 
 													}
@@ -5342,7 +5348,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 															printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														}
-														std::strcat(socket_message_big, _line->outcome_name[i]);
+													/*	std::strcat(socket_message_big, _line->outcome_name[i]);
 														std::strcat(socket_message_big, "\t");
 														std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 														std::strcat(socket_message_big, socket_message_little);
@@ -5350,7 +5356,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 														std::strcat(socket_message_big, socket_message_little);
 
-
+														*/
 
 
 													}
@@ -5461,23 +5467,19 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf("\r\n");
 					}
 
-					std::strcat(socket_message_big, "\r\n***************************************************\r\n");
-					std::sprintf(socket_message_little, "%d\r\n", _event->id);
-					std::strcat(socket_message_big, socket_message_little);
-					std::strcat(socket_message_big, _event->home_name);
-					if (_event->away_name != NULL) {
-						std::strcat(socket_message_big, " - ");  std::strcat(socket_message_big, _event->away_name);
+					//std::strcat(socket_message_big, "\r\n***************************************************\r\n");
+					//std::sprintf(socket_message_little, "%d\r\n", _event->id);
+					//std::strcat(socket_message_big, socket_message_little);
+					//std::strcat(socket_message_big, _event->home_name);
+					//if (_event->away_name != NULL) {std::strcat(socket_message_big, " - ");  std::strcat(socket_message_big, _event->away_name);}
 
-
-
-					}
 					if (_event->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nsevent sport_id out of MAX_SPORTS in run %d\r\n", _event->sport_id); continue; }
 					if (sports_id[_event->sport_id] == NULL) { std::printf("Sport not found. Run getSports. sport_id=%d\r\n", _event->sport_id); getSports(); }
 					if (print == true) {
 						std::printf(sports_id[_event->sport_id]->name); std::printf("\r\n");
 					}
-					std::strcat(socket_message_big, sports_id[_event->sport_id]->name);
-					std::strcat(socket_message_big, "\r\n");
+				//	std::strcat(socket_message_big, sports_id[_event->sport_id]->name);
+				//	std::strcat(socket_message_big, "\r\n");
 
 					if (_event->type_radar < 2 && _event->tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->tournament_id); continue; }
 					if (_event->type_radar == 2 && _event->simple_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nsevent tournament_id out of MAX_TOURNAMENTS in run %d\r\n", _event->simple_id); continue; }
@@ -5508,9 +5510,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf("\r\n");
 					}
 
-					if (_event->type_radar == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
-					if (_event->type_radar == 2) std::strcat(socket_message_big, simples_id[_event->simple_id]->name);
-					std::strcat(socket_message_big, "\r\n");
+					//if (_event->type_radar == 0) std::strcat(socket_message_big, tournaments_id[_event->tournament_id]->name);
+					//if (_event->type_radar == 2) std::strcat(socket_message_big, simples_id[_event->simple_id]->name);
+					//std::strcat(socket_message_big, "\r\n");
 
 
 
@@ -5534,8 +5536,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						std::printf(categories_id[_event->category_id]->name); std::printf("\r\n");
 						std::printf("\r\n***************************************************\r\n");
 					}
-					std::strcat(socket_message_big, categories_id[_event->category_id]->name);
-					std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
+					//std::strcat(socket_message_big, categories_id[_event->category_id]->name);
+					//std::strcat(socket_message_big, "\r\n\r\n***************************************************\r\n");
 
 
 
@@ -6075,10 +6077,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   }
 
 
-										   std::strcat(socket_message_big, "\r\n");
+										   /*std::strcat(socket_message_big, "\r\n");
 										   std::strcat(socket_message_big, _line->name);
 										   std::strcat(socket_message_big, "\r\n------------------------------------------------------------------------------\r\n");
-
+										   */
 
 
 
@@ -6148,14 +6150,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 														   std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 													   }
-													   std::strcat(socket_message_big, _line->outcome_name[i]);
+													   /*std::strcat(socket_message_big, _line->outcome_name[i]);
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 													   std::strcat(socket_message_big, socket_message_little);
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 													   std::strcat(socket_message_big, socket_message_little);
-
+													   */
 
 
 
@@ -6283,6 +6285,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 														   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 													   }
+/*
 													   std::strcat(socket_message_big, _line->outcome_name[i]);
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
@@ -6292,7 +6295,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   std::strcat(socket_message_big, socket_message_little);
 
 
-
+													   */
 
 												   }
 
@@ -6350,6 +6353,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 														   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 													   }
+/*
 													   std::strcat(socket_message_big, _line->outcome_name[i]);
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
@@ -6357,6 +6361,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 													   std::strcat(socket_message_big, socket_message_little);
+													   */
 
 												   }
 
@@ -6403,13 +6408,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 														   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 													   }
+/*
 													   std::strcat(socket_message_big, _line->outcome_name[i]);
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
 													   std::strcat(socket_message_big, socket_message_little);
 													   std::strcat(socket_message_big, "\t");
 													   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
-													   std::strcat(socket_message_big, socket_message_little);
+													   std::strcat(socket_message_big, socket_message_little);*/
 
 
 
@@ -6604,8 +6610,8 @@ delete[] outcome_odds;
 delete[] name;
 delete[] buf;
 //delete[] maxbuf;
-delete[] socket_message_big;
-delete[] socket_message_little;
+//delete[] socket_message_big;
+//delete[] socket_message_little;
 delete[] buffer;
 clientIDs.clear();
 return 0;
@@ -9274,6 +9280,7 @@ void loadEventsFromFiles(bool loadFromDB) {
 			else {
 				events[i].tournament_id = doc["tournament_id"].get_int32();
 			}
+			events[i].home_id = doc["home_id"].get_int32();
 			events[i].home_reference_id = doc["home_reference_id"].get_int32();
 			events[i].away_id = doc["away_id"].get_int32();
 			events[i].away_reference_id = doc["away_reference_id"].get_int32();
