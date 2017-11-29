@@ -3768,8 +3768,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = false;
-	bool debug_output = false;
+	bool print = true;
+	bool debug_output = true;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
