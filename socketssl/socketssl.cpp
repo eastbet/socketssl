@@ -55,6 +55,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <atomic>
+#include <boost/algorithm/string.hpp>  
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -1192,7 +1193,7 @@ Matchstatus::Matchstatus() {
 	description = NULL;
 };
 
-enum Currency { MANAT, RUB, EURO, USD, LIRA, VIRTUAL };
+enum Currency { MANAT=1, RUB=2, EURO=3, USD=4, LIRA=5, VIRTUAL=6 };
 
 class Client {
 public:
@@ -3326,22 +3327,22 @@ string encryptPassword(string passwd) {
 }
 
 int generateClientID(Currency currency, mongocxx::collection clientCollection) {
-	short first_digit;
-	if (currency == Currency::MANAT) first_digit = 1;
-	else if (currency == Currency::RUB) first_digit = 2;
-	else if (currency == Currency::USD) first_digit = 3;
-	else if (currency == Currency::EURO) first_digit = 4;
-	else if (currency == Currency::LIRA) first_digit = 5;
-	else if (currency == Currency::VIRTUAL) first_digit = 6;
+	short first_digit = (short) currency;
 	int client_id = first_digit * 1000000 + (rand() % 100000);
 	bsoncxx::stdx::optional<bsoncxx::document::value> maybe_result;
-	bsoncxx::document::view query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
-	maybe_result = clientCollection.find_one(query);
-	while (maybe_result) {  // search for a client_id that is not already used
-		client_id = first_digit * 1000000 + (rand() % 100000);
-		query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
+	try {
+		bsoncxx::document::view_or_value query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
 		maybe_result = clientCollection.find_one(query);
+		while (maybe_result) {  // search for a client_id that is not already used
+			client_id = first_digit * 1000000 + (rand() % 100000);
+			query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
+			maybe_result = clientCollection.find_one(query);
+		}
 	}
+	catch (const mongocxx::exception& e) {
+		cout << "A Mongo exception occurred in generateClientID: " << e.what() << endl;
+	}
+
 	return client_id;    
 }
 
@@ -3366,6 +3367,7 @@ bsoncxx::document::value buildClientDoc(Client* c) {
 	);
 	return builder.extract();
 }
+
 
 
 vector<int> registerClient(string name, string surname, int dob, string country, string domain, string city, string email, string phone,
@@ -3409,7 +3411,7 @@ vector<int> registerClient(string name, string surname, int dob, string country,
 		// determine client_id
 		c->client_id = generateClientID(currency, coll);
 		// insert into hash
-		client_hash[c->client_id] = c;
+		client_hash[c->client_id] = c;   // c kept in memory. if needs to be deleted, delete it from client_hash 
 		// insert into Mongo
 		try {
 			coll.insert_one(buildClientDoc(c));
@@ -3420,6 +3422,91 @@ vector<int> registerClient(string name, string surname, int dob, string country,
 	}
 	return result;
 }
+
+// For testing or other purposes
+vector<int> registerClient(Client &c) {
+	return registerClient(c.name, c.surname, c.date_of_birth, c.country, c.domain, c.city, c.email, c.phone, c.login, c.password,
+		c.currency, c.postal_code, c.address, c.balance, c.bets_amount);
+}
+
+void testClients() {
+	auto coll = db["clients"];
+	coll.drop();
+
+	vector<string> names = { "John", "Alice", "Jack", "Andrei", "Michael", "Mario", "Daniel", "Amelia", "Ella", "Rosa" };
+	vector<string> surnames = { "Ferguson", "Atkins", "Turner", "Watson", "Payne", "Watts", "Saunders", "Clayton", "Warner", "Caldwell" };
+	vector<string> countries = { "Russia", "Germany", "Turkmenistan", "Kazakistan", "Bahrein", "Zambia", "Mexico", "South Sudan", "Iraq", "Laos" };
+	vector<string> domains = { "fefmo.tm", "bafsik.tm", "gerebu.tm", "dibe.tm", "jer.tm", "mia.tm", "epco.tm", "nacia.tm", "tala.tm", "nawho.tm" };
+	vector<string> cities = { "Zewgeeju", "Ohecibej", "Kumaku", "Nacsige", "Repesiam", "Mobziple", "Ukpomji", "Juwsuubu", "Ituhinol", "Buthoza" };
+
+	ostringstream ss;
+	vector<int> results;
+	for (int i = 0; i < 100; i++) {
+		string domain = domains[rand() % (domains.size())];
+		string name = names[rand() % (names.size())];
+		string surname = surnames[rand() % (surnames.size())];
+		string login = boost::algorithm::to_lower_copy(name) + to_string(i);
+		string email = login + "@" + domain;
+		int dob = time(nullptr) - (40 * 365 * 24 * 3600) + 10000 - (rand() % 20000);
+		string country = countries[rand() % (countries.size())];
+		string city = cities[rand() % (cities.size())];
+		ss << "(5" << 10 + rand() % 90 << ") " << 100 + rand() % 900 << "-" << 1000 + rand() % 9000;
+		string phone = ss.str();
+		ss.clear(); 
+		ss.str("");
+		string password = "_" + login + "!123";
+		Currency currency = static_cast<Currency>(Currency::MANAT + rand() % 6);  // 6: we have 6 different Cuurency enumerations
+		string postal_code = to_string(rand() % 10000);
+		string address = "";
+		float balance = 20 + 4 * rand() % 41;
+		float bets_amount = balance * 0.25;
+		results = registerClient(name, surname, dob, country, domain, city, email, phone, login, password, currency, postal_code,
+			address, balance, bets_amount);
+		if (results[0] != 0 || results.size() != 1) {
+			cout << "Something went wrong at registerClient. Error codes are:";
+			for (auto val : results) {
+				cout << " " << val;
+			}
+			cout << endl;
+			cout << "login: " << login << "\t phone:" << phone << "\t email:" << email << endl;
+			cout << "name: " << name << "\t surname:" << surname << "\t dob:" << dob << endl;
+			return;
+		}
+		else {
+			cout << "Created: " << name << " " << surname << " " << login << " " << phone << endl;
+		}
+	}
+	cout << "All clients registered successfully" << endl;
+	
+	// some basic testing
+	assert( coll.count({}) == client_hash.size() );
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	Client c;
+	// check if Mongo versions and hash matches
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		c = *(client_hash[doc["_id"].get_int32()]);
+		assert(c.login == doc["login"].get_utf8().value.to_string());
+		assert(c.date_of_birth == doc["date_of_birth"].get_int32());
+		assert(c.balance == doc["balance"].get_double());
+	}
+	// try to register again
+	results = registerClient(c);
+	assert(results.size() == 4);
+	assert(results[0] == 1);
+	assert(results[1] == 2);
+	assert(results[2] == 3);
+	assert(results[3] == 4);
+	c.login += "_";
+	c.surname += "xxx";
+	results = registerClient(c);
+	assert(results.size() == 2);
+	assert(results[0] == 2);   // same phone
+	assert(results[1] == 3);   // same email
+	return;
+}
+
+// Betradar data to Mongo docs
 
 bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
@@ -3825,29 +3912,23 @@ int main() {
 		data_step_len_2[j] = 0;
 	}
 	for (int j = 0; j < AMQP_QUEUE; j++) AMQP_message[j] = new char[AMQP_BUFLEN];
-	
 
+	timestamp();
+	hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
+	// hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+	//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
+	getchar();
+	int port = 1443;
 
+	//server.setOpenHandler(openHandler);
+	//server.setCloseHandler(closeHandler);
+	//server.setMessageHandler(messageHandler);
+	//server.setPeriodicHandler(periodicHandler);
 
+	//while (port == 1443) Sleep(1);
+	// server.startServer(port);
 
-
-using namespace std;
-timestamp();
-hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
-
-int port = 1443;
-
-//server.setOpenHandler(openHandler);
-//server.setCloseHandler(closeHandler);
-//server.setMessageHandler(messageHandler);
-//server.setPeriodicHandler(periodicHandler);
-
-//while (port == 1443) Sleep(1);
-server.startServer(port);
-
-return 0;
+	return 0;
 
 	
 }
@@ -3857,7 +3938,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	//int recvbuflen = DEFAULT_BUFLEN;
 	//recvbuf = new char[DEFAULT_BUFLEN];
 
-
+	/*
 	getSports();
 
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
@@ -3867,7 +3948,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		getEvents(0, 10);
 		return 0;
 	}
-
+	*/
 
 	if (full_data == false || POPULATE_MONGO) {
 		//getMarkets();
@@ -3892,6 +3973,8 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 			return 0;
 		}
 
+		testClients();
+		return 0;
 		
 	}
 
@@ -9822,9 +9905,9 @@ void loadMarketsFromFiles(bool loadFromDB) {
 			
 
 			// optional values
-			//if (doc["variable_text"].raw() != nullptr) {
+			// if (doc["variable_text"].raw() != nullptr) {
 			mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
-			//}
+			// }
 		
 
 			// outcomes array
@@ -9983,129 +10066,8 @@ void loadMarketsFromFiles(bool loadFromDB) {
 
 		};
 		
-/*
-		
-		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) {
-			markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
-			for (int l = 0; l < MAX_MARKETS_IN; l++) markets_id[markets[k].id][l] = NULL;
-		}
-		
-		if (markets[k].variant > -1 && markets[k].variable_text == NULL) markets_id[markets[k].id][0] = &markets[k];
-		
-		if (markets[k].variant > -1 && markets[k].variable_text != NULL) {
-			for (j = 1; j < max_markets_in[markets[k].id]; j++) {
-				if (markets_id[markets[k].id][j] != NULL && std::strcmp(markets[k].variable_text, markets_id[markets[k].id][j]->variable_text) == 0) break;
-				if (markets_id[markets[k].id][j] == NULL) {
-					markets_id[markets[k].id][j] = &markets[k]; break;
-				} }
-
-		
-		
-			if (j == max_markets_in[markets[k].id]) {
-				markets_id[markets[k].id][j] = &markets[k]; max_markets_in[markets[k].id]++;
-			}}
-
-		
-		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
-		
-		if (markets[k].id == 219) markets[k].line_type = 1;// (Winner(incl.overtime)
-		if (markets[k].id == 16) markets[k].line_type = 3;// (Handicap)	
-		if (markets[k].id == 1) markets[k].line_type = 2;// (1x2)	
-		if (markets[k].id == 186) markets[k].line_type = 1; //Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
-		if (markets[k].id == 610) markets[k].line_type = 2;// (1x2)	Amercian Football
-		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties)
-		if (markets[k].id == 60) markets[k].line_type = 5;// 1st half - 1x2
-		if (markets[k].id == 83) markets[k].line_type = 5;// 2nd half - 1x2
-		if (markets[k].id == 113) markets[k].line_type = 5;// Overtime - 1x2
-		if (markets[k].id == 119) markets[k].line_type = 5;//Overtime 1st half - 1x2
-		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap
-		if (markets[k].id == 123) markets[k].line_type = 7;//Penalty shootout - winner
-		if (markets[k].id == 711) markets[k].line_type = 5;//{!inningnr} innings - 1x2 cricket
-		if (markets[k].id == 645) markets[k].line_type = 5;//{!inningnr} innings over {overnr} - 1x2
-		if (markets[k].id == 611) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 (incl. overtime) Amercan Football valid for quartner=4
-		if (markets[k].id == 223) markets[k].line_type = 3;//Handicap (incl. overtime) Basketball,American Football
-		if (markets[k].id == 410) markets[k].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
-		if (markets[k].id == 66) markets[k].line_type = 7;//1st half - handicap
-		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
-		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
-		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
-		if (markets[k].id == 303) markets[k].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
-		if (markets[k].id == 203) markets[k].line_type = 7;//{!setnr} set - game handicap Tennis
-
-		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap  Bowls
-		if (markets[k].id == 314) markets[k].line_type = 4;//Total sets - Bowls Darts
-		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
-		if (markets[k].id == 188) markets[k].line_type = 3;//Set handicap Bowls
-		if (markets[k].id == 493) markets[k].line_type = 3;//Frame handicap Snooker
-		if (markets[k].id == 494) markets[k].line_type = 4;//Total handicap Snooker
-		if (markets[k].id == 499) markets[k].line_type = 6;//{!framenr} frame - winner Snooker
-
-		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
-		if (markets[k].id == 746) markets[k].line_type = 7;//{!inningnr} inning - handicap Baseball
-		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
-		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap Soccer
-		if (markets[k].id == 18) markets[k].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
-		if (markets[k].id == 238) markets[k].line_type = 4;//Total points Badminton,Beach Volley,Squash,Table Tennis,Volleyball
-		if (markets[k].id == 412) markets[k].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
-		if (markets[k].id == 68) markets[k].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
-		if (markets[k].id == 90) markets[k].line_type = 8;//2nd half - total Soccer,Soccer Mythical
-		if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
-		if (markets[k].id == 236) markets[k].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
-		if (markets[k].id == 310) markets[k].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
-		if (markets[k].id == 528) markets[k].line_type = 8;//{!setnr} set - total Bowls
-		if (markets[k].id == 288) markets[k].line_type = 8;//{!inningnr} inning - total Baseball
-		if (markets[k].id == 116) markets[k].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
-		if (markets[k].id == 358) markets[k].line_type = 8;//1st over - total Cricket
-		if (markets[k].id == 395) markets[k].line_type = 6;//{!mapnr} map - winner Dota 2,League of Legends,StarCraft
-		if (markets[k].id == 330) markets[k].line_type = 6;//{!mapnr} map - winner (incl. overtime) Counter-Strike
-		if (markets[k].id == 334) markets[k].line_type = 5;//{!mapnr} map - 1x2 Counter-Strike
-
-
-		if (markets[k].id == 340) markets[k].line_type = 1;//Winner (incl. super over) Cricket
-		if (markets[k].id == 251) markets[k].line_type = 1;// Winner (incl. extra innings) Baseball
-														   //if (markets[k].id == 426) markets[k].line_type = 5;//{!periodnr} period 1x2 & winner (incl. overtime and penalties) Ice Hockey
-														   //if (markets[k].id == 429) markets[k].line_type = 5;//{!periodnr} period 1x2 & 1x2 Ice Hockey
-		if (markets[k].id == 443) markets[k].line_type = 5;//{!periodnr} period 1x2  Ice Hockey
-		if (markets[k].id == 225) markets[k].line_type = 4;// Total (incl. overtime) Basketball
-
-		if (markets[k].id == 501) markets[k].line_type = 8;//{!framenr} frame - total points Snooker
-		if (markets[k].id == 500) markets[k].line_type = 7;//{!framenr} frame - handicap points Snooker
-		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap Bowls
-		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
-		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
-		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
-		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
-		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
-		//if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
-		//if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
-		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
-		if (markets[k].id == 247) markets[k].line_type = 8;// {!gamenr} game - total points Badminton,Squash,Table Tennis
-		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
-														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
-		if (markets[k].id == 256) markets[k].line_type = 3;//Handicap (incl. extra innings) Baseball
-		if (markets[k].id == 258) markets[k].line_type = 4;//Total (incl. extra innings) Baseball
-
-		if (markets[k].id == 605) markets[k].line_type = 8;//{!inningnr} innings - total Cricket
-		
-		if (markets[k].id == 189) markets[k].line_type = 4;//Total games Tennis
-		if (markets[k].id == 237) markets[k].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
-		if (markets[k].id == 538) markets[k].line_type = 2;//Head2head (1x2) Golf,Motorsport
-		if (markets[k].id == 8) markets[k].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
-		if (markets[k].id == 62) markets[k].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
-		if (markets[k].id == 84) markets[k].line_type = 10;//2nd half - {!goalnr} goal Soccer,Futsal
-		if (markets[k].id == 444) markets[k].line_type = 10;//{!periodnr} period - {!goalnr} goal Ice Hockey
-		//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
-		if (markets[k].id == 210) markets[k].line_type = 10;//{!setnr} set game{ gamenr } -winner Tennis
-		if (markets[k].id == 125) markets[k].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
-		if (markets[k].id == 115) markets[k].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
-		if (markets[k].id == 202) markets[k].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
-		if (markets[k].id == 309) markets[k].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
-		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
-		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
-
-		*/
- //if(markets[k].id==93) 
-	// printf("markets[k].id= %d markets[k].name=%s\r\n ", markets[k].id, markets[k].name);
+        //if(markets[k].id==93) 
+	    // printf("markets[k].id= %d markets[k].name=%s\r\n ", markets[k].id, markets[k].name);
 		k++;
 		markets_l = k;
 
