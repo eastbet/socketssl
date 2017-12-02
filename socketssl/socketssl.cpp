@@ -3975,7 +3975,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 			return 0;
 		}
 
-		testClients(false);
+		testClients(true);
 		return 0;
 		
 	}
