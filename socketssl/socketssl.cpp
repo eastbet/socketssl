@@ -7684,6 +7684,7 @@ void getMarkets() {
 		if (markets[i].id == 186) markets[i].line_type = 1;//Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
 		if (markets[i].id == 610) markets[i].line_type = 2;// (1x2)	Amercian Football
 		if (markets[i].id == 406) markets[i].line_type = 1;//Winner (incl. overtime and penalties) Handball,Ice Hockey
+		if (markets[i].id == 2) markets[i].line_type = 1; //To qualify Soccer
 		if (markets[i].id == 60) markets[i].line_type = 5;// 1st half - 1x2 Soccer,Basketball,American Football,Aussie Rules,Futsal,Handball,Rugby,Soccer Mythical
 		if (markets[i].id == 83) markets[i].line_type = 5;// 2nd half - 1x2 Soccer,Basketball,American Football,Handball,Soccer Mythical
 		if (markets[i].id == 113) markets[i].line_type = 2;// Overtime - 1x2 Soccer,Futsal,Ice Hockey
@@ -9466,7 +9467,8 @@ void processLoadedMarkets() {
 		if (markets[k].id == 1) markets[k].line_type = 2;// (1x2)	
 		if (markets[k].id == 186) markets[k].line_type = 1; //Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
 		if (markets[k].id == 610) markets[k].line_type = 2;// (1x2)	Amercian Football
-		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties)
+		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties) Handball,Ice Hockey
+		if (markets[k].id == 2) markets[k].line_type = 1; //To qualify Soccer
 		if (markets[k].id == 60) markets[k].line_type = 5;// 1st half - 1x2
 		if (markets[k].id == 83) markets[k].line_type = 5;// 2nd half - 1x2
 		if (markets[k].id == 113) markets[k].line_type = 2;// Overtime - 1x2
@@ -9823,129 +9825,7 @@ void loadMarketsFromFiles(bool loadFromDB) {
 
 		};
 		
-/*
-		
-		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) {
-			markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
-			for (int l = 0; l < MAX_MARKETS_IN; l++) markets_id[markets[k].id][l] = NULL;
-		}
-		
-		if (markets[k].variant > -1 && markets[k].variable_text == NULL) markets_id[markets[k].id][0] = &markets[k];
-		
-		if (markets[k].variant > -1 && markets[k].variable_text != NULL) {
-			for (j = 1; j < max_markets_in[markets[k].id]; j++) {
-				if (markets_id[markets[k].id][j] != NULL && std::strcmp(markets[k].variable_text, markets_id[markets[k].id][j]->variable_text) == 0) break;
-				if (markets_id[markets[k].id][j] == NULL) {
-					markets_id[markets[k].id][j] = &markets[k]; break;
-				} }
 
-		
-		
-			if (j == max_markets_in[markets[k].id]) {
-				markets_id[markets[k].id][j] = &markets[k]; max_markets_in[markets[k].id]++;
-			}}
-
-		
-		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
-		
-		if (markets[k].id == 219) markets[k].line_type = 1;// (Winner(incl.overtime)
-		if (markets[k].id == 16) markets[k].line_type = 3;// (Handicap)	
-		if (markets[k].id == 1) markets[k].line_type = 2;// (1x2)	
-		if (markets[k].id == 186) markets[k].line_type = 1; //Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
-		if (markets[k].id == 610) markets[k].line_type = 2;// (1x2)	Amercian Football
-		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties)
-		if (markets[k].id == 60) markets[k].line_type = 5;// 1st half - 1x2
-		if (markets[k].id == 83) markets[k].line_type = 5;// 2nd half - 1x2
-		if (markets[k].id == 113) markets[k].line_type = 5;// Overtime - 1x2
-		if (markets[k].id == 119) markets[k].line_type = 5;//Overtime 1st half - 1x2
-		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap
-		if (markets[k].id == 123) markets[k].line_type = 7;//Penalty shootout - winner
-		if (markets[k].id == 711) markets[k].line_type = 5;//{!inningnr} innings - 1x2 cricket
-		if (markets[k].id == 645) markets[k].line_type = 5;//{!inningnr} innings over {overnr} - 1x2
-		if (markets[k].id == 611) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 (incl. overtime) Amercan Football valid for quartner=4
-		if (markets[k].id == 223) markets[k].line_type = 3;//Handicap (incl. overtime) Basketball,American Football
-		if (markets[k].id == 410) markets[k].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
-		if (markets[k].id == 66) markets[k].line_type = 7;//1st half - handicap
-		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
-		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
-		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
-		if (markets[k].id == 303) markets[k].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
-		if (markets[k].id == 203) markets[k].line_type = 7;//{!setnr} set - game handicap Tennis
-
-		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap  Bowls
-		if (markets[k].id == 314) markets[k].line_type = 4;//Total sets - Bowls Darts
-		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
-		if (markets[k].id == 188) markets[k].line_type = 3;//Set handicap Bowls
-		if (markets[k].id == 493) markets[k].line_type = 3;//Frame handicap Snooker
-		if (markets[k].id == 494) markets[k].line_type = 4;//Total handicap Snooker
-		if (markets[k].id == 499) markets[k].line_type = 6;//{!framenr} frame - winner Snooker
-
-		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
-		if (markets[k].id == 746) markets[k].line_type = 7;//{!inningnr} inning - handicap Baseball
-		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
-		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap Soccer
-		if (markets[k].id == 18) markets[k].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
-		if (markets[k].id == 238) markets[k].line_type = 4;//Total points Badminton,Beach Volley,Squash,Table Tennis,Volleyball
-		if (markets[k].id == 412) markets[k].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
-		if (markets[k].id == 68) markets[k].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
-		if (markets[k].id == 90) markets[k].line_type = 8;//2nd half - total Soccer,Soccer Mythical
-		if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
-		if (markets[k].id == 236) markets[k].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
-		if (markets[k].id == 310) markets[k].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
-		if (markets[k].id == 528) markets[k].line_type = 8;//{!setnr} set - total Bowls
-		if (markets[k].id == 288) markets[k].line_type = 8;//{!inningnr} inning - total Baseball
-		if (markets[k].id == 116) markets[k].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
-		if (markets[k].id == 358) markets[k].line_type = 8;//1st over - total Cricket
-		if (markets[k].id == 395) markets[k].line_type = 6;//{!mapnr} map - winner Dota 2,League of Legends,StarCraft
-		if (markets[k].id == 330) markets[k].line_type = 6;//{!mapnr} map - winner (incl. overtime) Counter-Strike
-		if (markets[k].id == 334) markets[k].line_type = 5;//{!mapnr} map - 1x2 Counter-Strike
-
-
-		if (markets[k].id == 340) markets[k].line_type = 1;//Winner (incl. super over) Cricket
-		if (markets[k].id == 251) markets[k].line_type = 1;// Winner (incl. extra innings) Baseball
-														   //if (markets[k].id == 426) markets[k].line_type = 5;//{!periodnr} period 1x2 & winner (incl. overtime and penalties) Ice Hockey
-														   //if (markets[k].id == 429) markets[k].line_type = 5;//{!periodnr} period 1x2 & 1x2 Ice Hockey
-		if (markets[k].id == 443) markets[k].line_type = 5;//{!periodnr} period 1x2  Ice Hockey
-		if (markets[k].id == 225) markets[k].line_type = 4;// Total (incl. overtime) Basketball
-
-		if (markets[k].id == 501) markets[k].line_type = 8;//{!framenr} frame - total points Snooker
-		if (markets[k].id == 500) markets[k].line_type = 7;//{!framenr} frame - handicap points Snooker
-		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap Bowls
-		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
-		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
-		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
-		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
-		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
-		//if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
-		//if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
-		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
-		if (markets[k].id == 247) markets[k].line_type = 8;// {!gamenr} game - total points Badminton,Squash,Table Tennis
-		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
-														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
-		if (markets[k].id == 256) markets[k].line_type = 3;//Handicap (incl. extra innings) Baseball
-		if (markets[k].id == 258) markets[k].line_type = 4;//Total (incl. extra innings) Baseball
-
-		if (markets[k].id == 605) markets[k].line_type = 8;//{!inningnr} innings - total Cricket
-		
-		if (markets[k].id == 189) markets[k].line_type = 4;//Total games Tennis
-		if (markets[k].id == 237) markets[k].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
-		if (markets[k].id == 538) markets[k].line_type = 2;//Head2head (1x2) Golf,Motorsport
-		if (markets[k].id == 8) markets[k].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
-		if (markets[k].id == 62) markets[k].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
-		if (markets[k].id == 84) markets[k].line_type = 10;//2nd half - {!goalnr} goal Soccer,Futsal
-		if (markets[k].id == 444) markets[k].line_type = 10;//{!periodnr} period - {!goalnr} goal Ice Hockey
-		//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
-		if (markets[k].id == 210) markets[k].line_type = 10;//{!setnr} set game{ gamenr } -winner Tennis
-		if (markets[k].id == 125) markets[k].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
-		if (markets[k].id == 115) markets[k].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
-		if (markets[k].id == 202) markets[k].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
-		if (markets[k].id == 309) markets[k].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
-		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
-		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
-
-		*/
- //if(markets[k].id==93) 
-	// printf("markets[k].id= %d markets[k].name=%s\r\n ", markets[k].id, markets[k].name);
 		k++;
 		markets_l = k;
 
