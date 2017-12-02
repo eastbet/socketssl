@@ -3289,7 +3289,7 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToFile() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = true;
+const bool WRITE_NEW_DATA_TO_MONGO = false;
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
 const bool LOAD_FROM_MONGO = true;
@@ -3916,9 +3916,9 @@ int main() {
 
 	timestamp();
 	hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-	// hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+	hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
 	//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
-	getchar();
+	//getchar();
 	int port = 1443;
 
 	//server.setOpenHandler(openHandler);
@@ -3927,7 +3927,7 @@ int main() {
 	//server.setPeriodicHandler(periodicHandler);
 
 	//while (port == 1443) Sleep(1);
-	// server.startServer(port);
+    server.startServer(port);
 
 	return 0;
 
@@ -3939,7 +3939,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	//int recvbuflen = DEFAULT_BUFLEN;
 	//recvbuf = new char[DEFAULT_BUFLEN];
 
-	/*
+	
 	getSports();
 
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
@@ -3949,7 +3949,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		getEvents(0, 10);
 		return 0;
 	}
-	*/
+	
 
 	if (full_data == false || POPULATE_MONGO) {
 		//getMarkets();
@@ -3961,6 +3961,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		loadEventsFromFiles();
 		loadCompetitorsFromFiles();
 		loadPlayersFromFiles();
+		loadClientsFromDB();
 		
 		if (POPULATE_MONGO) {
 			if (sports_l==0) getSports(); 
@@ -3975,8 +3976,8 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 			return 0;
 		}
 
-		testClients(true);
-		return 0;
+		//testClients(true);
+		//return 0;
 		
 	}
 
@@ -4025,7 +4026,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = false;
+	bool print = true;
 	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
