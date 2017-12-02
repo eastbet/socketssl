@@ -2994,6 +2994,8 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles(bool = false);
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles(bool = false);
+void loadClientsFromDB();
+void saveClientToDB(Client*);
 
 char* SendframeEncode(char*,int,int &);
 void openHandler(int);
@@ -3368,7 +3370,15 @@ bsoncxx::document::value buildClientDoc(Client* c) {
 	return builder.extract();
 }
 
-
+void saveClientToDB(Client* c) {
+	auto coll = db["clients"];
+	try {
+		coll.insert_one(buildClientDoc(c));
+	}
+	catch (const mongocxx::exception& e) {
+		cout << "An exception occurred in inserting a new Client into Mongo: " << e.what() << endl;
+	}
+}
 
 vector<int> registerClient(string name, string surname, int dob, string country, string domain, string city, string email, string phone,
 	string login, string password, Currency currency, string postal_code, string address, float balance, float bets_amount) {
@@ -3413,12 +3423,7 @@ vector<int> registerClient(string name, string surname, int dob, string country,
 		// insert into hash
 		client_hash[c->client_id] = c;   // c kept in memory. if needs to be deleted, delete it from client_hash 
 		// insert into Mongo
-		try {
-			coll.insert_one(buildClientDoc(c));
-		}
-		catch (const mongocxx::exception& e) {
-			cout << "An exception occurred in inserting a new Client: " << e.what() << endl;
-		}
+		saveClientToDB(c);
 	}
 	return result;
 }
@@ -3429,54 +3434,60 @@ vector<int> registerClient(Client &c) {
 		c.currency, c.postal_code, c.address, c.balance, c.bets_amount);
 }
 
-void testClients() {
-	auto coll = db["clients"];
-	coll.drop();
-
-	vector<string> names = { "John", "Alice", "Jack", "Andrei", "Michael", "Mario", "Daniel", "Amelia", "Ella", "Rosa" };
-	vector<string> surnames = { "Ferguson", "Atkins", "Turner", "Watson", "Payne", "Watts", "Saunders", "Clayton", "Warner", "Caldwell" };
-	vector<string> countries = { "Russia", "Germany", "Turkmenistan", "Kazakistan", "Bahrein", "Zambia", "Mexico", "South Sudan", "Iraq", "Laos" };
-	vector<string> domains = { "fefmo.tm", "bafsik.tm", "gerebu.tm", "dibe.tm", "jer.tm", "mia.tm", "epco.tm", "nacia.tm", "tala.tm", "nawho.tm" };
-	vector<string> cities = { "Zewgeeju", "Ohecibej", "Kumaku", "Nacsige", "Repesiam", "Mobziple", "Ukpomji", "Juwsuubu", "Ituhinol", "Buthoza" };
-
-	ostringstream ss;
+void testClients(bool createRandomClients) {
 	vector<int> results;
-	for (int i = 0; i < 100; i++) {
-		string domain = domains[rand() % (domains.size())];
-		string name = names[rand() % (names.size())];
-		string surname = surnames[rand() % (surnames.size())];
-		string login = boost::algorithm::to_lower_copy(name) + to_string(i);
-		string email = login + "@" + domain;
-		int dob = time(nullptr) - (40 * 365 * 24 * 3600) + 10000 - (rand() % 20000);
-		string country = countries[rand() % (countries.size())];
-		string city = cities[rand() % (cities.size())];
-		ss << "(5" << 10 + rand() % 90 << ") " << 100 + rand() % 900 << "-" << 1000 + rand() % 9000;
-		string phone = ss.str();
-		ss.clear(); 
-		ss.str("");
-		string password = "_" + login + "!123";
-		Currency currency = static_cast<Currency>(Currency::MANAT + rand() % 6);  // 6: we have 6 different Cuurency enumerations
-		string postal_code = to_string(rand() % 10000);
-		string address = "";
-		float balance = 20 + 4 * rand() % 41;
-		float bets_amount = balance * 0.25;
-		results = registerClient(name, surname, dob, country, domain, city, email, phone, login, password, currency, postal_code,
-			address, balance, bets_amount);
-		if (results[0] != 0 || results.size() != 1) {
-			cout << "Something went wrong at registerClient. Error codes are:";
-			for (auto val : results) {
-				cout << " " << val;
+	auto coll = db["clients"];
+
+	if (createRandomClients) {
+		coll.drop();
+
+		vector<string> names = { "John", "Alice", "Jack", "Andrei", "Michael", "Mario", "Daniel", "Amelia", "Ella", "Rosa" };
+		vector<string> surnames = { "Ferguson", "Atkins", "Turner", "Watson", "Payne", "Watts", "Saunders", "Clayton", "Warner", "Caldwell" };
+		vector<string> countries = { "Russia", "Germany", "Turkmenistan", "Kazakistan", "Bahrein", "Zambia", "Mexico", "South Sudan", "Iraq", "Laos" };
+		vector<string> domains = { "fefmo.tm", "bafsik.tm", "gerebu.tm", "dibe.tm", "jer.tm", "mia.tm", "epco.tm", "nacia.tm", "tala.tm", "nawho.tm" };
+		vector<string> cities = { "Zewgeeju", "Ohecibej", "Kumaku", "Nacsige", "Repesiam", "Mobziple", "Ukpomji", "Juwsuubu", "Ituhinol", "Buthoza" };
+
+		ostringstream ss;		
+		for (int i = 0; i < 100; i++) {
+			string domain = domains[rand() % (domains.size())];
+			string name = names[rand() % (names.size())];
+			string surname = surnames[rand() % (surnames.size())];
+			string login = boost::algorithm::to_lower_copy(name) + to_string(i);
+			string email = login + "@" + domain;
+			int dob = time(nullptr) - (40 * 365 * 24 * 3600) + 10000 - (rand() % 20000);
+			string country = countries[rand() % (countries.size())];
+			string city = cities[rand() % (cities.size())];
+			ss << "(5" << 10 + rand() % 90 << ") " << 100 + rand() % 900 << "-" << 1000 + rand() % 9000;
+			string phone = ss.str();
+			ss.clear();
+			ss.str("");
+			string password = "_" + login + "!123";
+			Currency currency = static_cast<Currency>(Currency::MANAT + rand() % 6);  // 6: we have 6 different Cuurency enumerations
+			string postal_code = to_string(rand() % 10000);
+			string address = "";
+			float balance = 20 + 4 * rand() % 41;
+			float bets_amount = balance * 0.25;
+			results = registerClient(name, surname, dob, country, domain, city, email, phone, login, password, currency, postal_code,
+				address, balance, bets_amount);
+			if (results[0] != 0 || results.size() != 1) {
+				cout << "Something went wrong at registerClient. Error codes are:";
+				for (auto val : results) {
+					cout << " " << val;
+				}
+				cout << endl;
+				cout << "login: " << login << "\t phone:" << phone << "\t email:" << email << endl;
+				cout << "name: " << name << "\t surname:" << surname << "\t dob:" << dob << endl;
+				return;
 			}
-			cout << endl;
-			cout << "login: " << login << "\t phone:" << phone << "\t email:" << email << endl;
-			cout << "name: " << name << "\t surname:" << surname << "\t dob:" << dob << endl;
-			return;
+			else {
+				cout << "Created: " << name << " " << surname << " " << login << " " << phone << endl;
+			}
 		}
-		else {
-			cout << "Created: " << name << " " << surname << " " << login << " " << phone << endl;
-		}
+		cout << "All clients created successfully" << endl;
 	}
-	cout << "All clients registered successfully" << endl;
+	else {
+		loadClientsFromDB();
+	}
 	
 	// some basic testing
 	assert( coll.count({}) == client_hash.size() );
@@ -3503,6 +3514,7 @@ void testClients() {
 	assert(results.size() == 2);
 	assert(results[0] == 2);   // same phone
 	assert(results[1] == 3);   // same email
+	// assert("Well" == "Done");   // to check if assert is working. disable NDEBUG in compile options to make asserts activated.
 	return;
 }
 
@@ -3519,13 +3531,13 @@ bsoncxx::document::value buildCategoryDoc(Category* c) {
 }
 
 void writeCategoriesDB() {
-	auto coll = db["categories"];
-	if (db.has_collection("categories")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("categories")) {
+			db["categories"].drop();  // clear collection
+		}
+		auto coll = db["categories"];
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < categories_l; i++) {
 			docs.push_back(buildCategoryDoc(&categories[i]));
 		}
@@ -3580,18 +3592,17 @@ bsoncxx::document::value buildMarketDoc(Market* m) {
 
 void writeMarketsDB() {
 	using namespace bsoncxx::builder;
-	auto coll = db["markets"];
-	if (db.has_collection("markets")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("markets")) {
+			db["markets"].drop();  // clear collection
+		}
+		auto coll = db["markets"];
     
-	mongocxx::options::index index_opt{};
-	index_opt.unique(true);
-	coll.create_index(stream::document{} << "market_id" << 1 << "variable_text" << 1 << stream::finalize, index_opt);
+		mongocxx::options::index index_opt{};
+		index_opt.unique(true);
+		coll.create_index(stream::document{} << "market_id" << 1 << "variable_text" << 1 << stream::finalize, index_opt);
 
-
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < markets_l; i++) {
 			bsoncxx::builder::basic::document builder{};
 			docs.push_back(buildMarketDoc(&markets[i]));
@@ -3630,18 +3641,18 @@ bsoncxx::document::value buildTournamentDoc(Tournament *t) {
 
 void writeTournamentsDB() {
 	using namespace bsoncxx::builder;
-	auto coll = db["tournaments"];
-	if (db.has_collection("tournaments")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("tournaments")) {
+			db["tournaments"].drop();  // clear collection
+		}
+		auto coll = db["tournaments"];
 	
-	// create unique index for ids
-	mongocxx::options::index index_opt{};
-	index_opt.unique(true);
-	coll.create_index(stream::document{} << "tournament_id" << 1 << "simple_id" << 1 << stream::finalize, index_opt);
+		// create unique index for ids
+		mongocxx::options::index index_opt{};
+		index_opt.unique(true);
+		coll.create_index(stream::document{} << "tournament_id" << 1 << "simple_id" << 1 << stream::finalize, index_opt);
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < tournaments_l; i++) {
 			docs.push_back(buildTournamentDoc(&tournaments[i]));
 		}
@@ -3664,14 +3675,13 @@ bsoncxx::document::value buildSportsDoc(Sport &s) {
 }
 
 
-void writeSportsDB() {
-	//printf("writeSportsDB\r\n");
-	auto coll = db["sports"];
-	if (db.has_collection("sports")) {
-		coll.drop();  // clear collection
-	}	
-	vector<bsoncxx::document::value> docs;
-	try {
+void writeSportsDB() {	
+	try {		
+		if (db.has_collection("sports")) {
+			db["sports"].drop();  // clear collection
+		}	
+		auto coll = db["sports"];
+		vector<bsoncxx::document::value> docs;	
 		for (int i = 0; i < sports_l; i++) {
 			//printf("i=%d\r\n", i);
 			docs.push_back(buildSportsDoc(sports[i]));
@@ -3699,13 +3709,13 @@ bsoncxx::document::value buildCompetitorDoc(Competitor *c) {
 }
 
 void writeCompetitorsDB() {
-	auto coll = db["competitors"];
-	if (db.has_collection("competitors")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("competitors")) {
+			db["competitors"].drop();  // clear collection
+		}
+		auto coll = db["competitors"];
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < competitors_l; i++) {
 			docs.push_back(buildCompetitorDoc(&competitors[i]));
 		}
@@ -3743,13 +3753,13 @@ bsoncxx::document::value buildPlayerDoc(Player* p) {
 }
 
 void writePlayersDB() {
-	auto coll = db["players"];
-	if (db.has_collection("players")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("players")) {
+			db["players"].drop();  // clear collection
+		}
+		auto coll = db["players"];
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < players_l; i++) {
 			docs.push_back(buildPlayerDoc(&players[i]));
 		}
@@ -3806,30 +3816,21 @@ bsoncxx::document::value buildEventDoc(Event* e) {
 	normalized = e->tv_channels == NULL ? "" : e->tv_channels;
 	builder.append(kvp("tv_channels", normalized));
 	
-
-
-		return builder.extract();
-
-
-
-
-
-
+	return builder.extract();
 }
 
 void writeEventsDB() {
-	auto coll = db["events"];
-	if (db.has_collection("events")) {
-		coll.drop();  // clear collection
-	}
-
-	// create index for start_time
-	bsoncxx::builder::basic::document index_doc{};
-	index_doc.append(kvp("start_time", -1));  // -1 for descending index
-	coll.create_index(std::move(index_doc.extract()));
-
-	vector<bsoncxx::document::value> docs;
 	try {
+		if (db.has_collection("events")) {
+			db["events"].drop();  // clear collection
+		}
+		auto coll = db["events"];
+		// create index for start_time
+		bsoncxx::builder::basic::document index_doc{};
+		index_doc.append(kvp("start_time", -1));  // -1 for descending index
+		coll.create_index(std::move(index_doc.extract()));
+
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < events_l; i++) {
 			docs.push_back(buildEventDoc(&events[i]));
 		}
@@ -3962,6 +3963,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		loadPlayersFromFiles();
 		
 		if (POPULATE_MONGO) {
+			if (sports_l==0) getSports(); 
 			writeSportsDB();
 			writeMarketsDB();
 			writeCategoriesDB();
@@ -3973,7 +3975,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 			return 0;
 		}
 
-		testClients();
+		testClients(false);
 		return 0;
 		
 	}
@@ -10735,6 +10737,33 @@ void loadPlayersFromFiles(bool loadFromDB) {
 
 
 };
+
+void loadClientsFromDB() {
+	auto coll = db["clients"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	for (auto doc : cursor) {		
+		Client* c = new Client();
+		c->client_id = doc["_id"].get_int32();
+		c->name = doc["name"].get_utf8().value.to_string();
+		c->surname = doc["surname"].get_utf8().value.to_string();
+		c->date_of_birth = doc["date_of_birth"].get_int32();
+		c->country = doc["country"].get_utf8().value.to_string();
+		c->domain = doc["domain"].get_utf8().value.to_string();
+		c->city = doc["city"].get_utf8().value.to_string();
+		c->email = doc["email"].get_utf8().value.to_string();
+		c->phone = doc["phone"].get_utf8().value.to_string();
+		c->login = doc["login"].get_utf8().value.to_string();
+		c->password = doc["password"].get_utf8().value.to_string();
+		c->currency = static_cast<Currency>((int)doc["currency"].get_int32());
+		c->postal_code = doc["postal_code"].get_utf8().value.to_string();
+		c->address = doc["address"].get_utf8().value.to_string();
+		c->balance = doc["balance"].get_double();
+		c->bets_amount = doc["bets_amount"].get_double();		
+		// insert into hash
+		client_hash[c->client_id] = c;   // c kept in memory. if needs to be deleted, delete it from client_hash 
+	}
+	printf("Clients loaded from Mongo succes. Number of loaded clients: %d\r\n", client_hash.size());
+}
 
 size_t calcDecodeLength(const char* b64input) { //Calculates the length of a decoded string
 	size_t len = strlen(b64input),
