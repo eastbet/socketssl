@@ -55,6 +55,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <atomic>
+#include <boost/algorithm/string.hpp>  
 
 #define ZLIB_WINAPI   // actually actually needed (for linkage)
 
@@ -1191,6 +1192,52 @@ Matchstatus::Matchstatus() {
 	id = 0;
 	description = NULL;
 };
+
+enum Currency { MANAT=1, RUB=2, EURO=3, USD=4, LIRA=5, VIRTUAL=6 };
+
+class Client {
+public:
+	// Client();
+	// ~Client();
+	void operator = (const Client&);
+
+	int client_id;
+	string name;
+	string surname;
+	int date_of_birth;
+	string country;
+	string domain;
+	string city;
+	string email;
+	string phone;
+	string login;
+	string password;
+	Currency currency;
+	string postal_code;
+	string address;
+	float balance;      // Money in the account(balance)
+	float bets_amount;  // Money in the game(in bets)	
+};
+
+void Client::operator = (const Client & rhs) {
+	if (this == &rhs) return;
+	client_id = rhs.client_id;
+	name = rhs.name;
+	surname = rhs.surname;
+	date_of_birth = rhs.date_of_birth;
+	country = rhs.country;
+	domain = rhs.domain;
+	city = rhs.city;
+	email = rhs.email;
+	phone = rhs.phone;
+	login = rhs.login;
+	password = rhs.password;
+	currency = rhs.currency;
+	postal_code = rhs.postal_code;
+	address = rhs.address;
+	balance = rhs.balance;
+	bets_amount = rhs.bets_amount;
+}
 
 Event* events = new Event[EVENTS_LENTGH];
 int events_l = 0;
@@ -2947,6 +2994,8 @@ void saveCompetitorToFile(Competitor*);
 void loadCompetitorsFromFiles(bool = false);
 void savePlayerToFile(Player*);
 void loadPlayersFromFiles(bool = false);
+void loadClientsFromDB();
+void saveClientToDB(Client*);
 
 char* SendframeEncode(char*,int,int &);
 void openHandler(int);
@@ -3248,6 +3297,229 @@ const bool LOAD_FROM_MONGO = true;
 //auto db = mongo_client["passion_bet"]; // SQL:  USE db
 auto db = mongo_client["betdb"];
 
+// to be called first time when creating clients collection in Mongo or to reset it
+void createClientsCollection() {
+	using namespace bsoncxx::builder;
+
+	auto coll = db["clients"];
+	coll.drop();
+
+	// create unique indexes 
+	mongocxx::options::index index_opt{};
+	index_opt.unique(true);
+	coll.create_index(stream::document{} << "name" << 1 << "surname" << 1 << "date_of_birth" << 1 << stream::finalize, index_opt);
+	coll.create_index(stream::document{} << "phone" << 1 << stream::finalize, index_opt);
+	coll.create_index(stream::document{} << "email" << 1 << stream::finalize, index_opt);
+	coll.create_index(stream::document{} << "login" << 1 << stream::finalize, index_opt);
+}
+
+string registerErrorCodes[] = {
+	"Success",                                          // 0
+	"Login is in use by another client.",               // 1
+	"Phone number was registered before.",              // 2
+	"Email was registered before.",                     // 3
+	"Name-Surname-Date_of_Birth was registered before." // 4
+};
+
+unordered_map<int, Client*> client_hash = {};
+
+// To be implemented?
+string encryptPassword(string passwd) {
+	return passwd;
+}
+
+int generateClientID(Currency currency, mongocxx::collection clientCollection) {
+	short first_digit = (short) currency;
+	int client_id = first_digit * 1000000 + (rand() % 100000);
+	bsoncxx::stdx::optional<bsoncxx::document::value> maybe_result;
+	try {
+		bsoncxx::document::view_or_value query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
+		maybe_result = clientCollection.find_one(query);
+		while (maybe_result) {  // search for a client_id that is not already used
+			client_id = first_digit * 1000000 + (rand() % 100000);
+			query = bsoncxx::builder::stream::document{} << "_id" << client_id << bsoncxx::builder::stream::finalize;
+			maybe_result = clientCollection.find_one(query);
+		}
+	}
+	catch (const mongocxx::exception& e) {
+		cout << "A Mongo exception occurred in generateClientID: " << e.what() << endl;
+	}
+
+	return client_id;    
+}
+
+bsoncxx::document::value buildClientDoc(Client* c) {
+	bsoncxx::builder::basic::document builder{};
+	builder.append(kvp("_id", c->client_id),
+		kvp("name", c->name),
+		kvp("surname", c->surname),
+		kvp("date_of_birth", c->date_of_birth),
+		kvp("country", c->country),
+		kvp("domain", c->domain),
+		kvp("city", c->city),
+		kvp("email", c->email),
+		kvp("phone", c->phone),
+		kvp("login", c->login),		
+		kvp("password", c->password),
+		kvp("currency", c->currency),
+		kvp("postal_code", c->postal_code),
+		kvp("address", c->address),
+		kvp("balance", c->balance),
+		kvp("bets_amount", c->bets_amount)
+	);
+	return builder.extract();
+}
+
+void saveClientToDB(Client* c) {
+	auto coll = db["clients"];
+	try {
+		coll.insert_one(buildClientDoc(c));
+	}
+	catch (const mongocxx::exception& e) {
+		cout << "An exception occurred in inserting a new Client into Mongo: " << e.what() << endl;
+	}
+}
+
+vector<int> registerClient(string name, string surname, int dob, string country, string domain, string city, string email, string phone,
+	string login, string password, Currency currency, string postal_code, string address, float balance, float bets_amount) {
+	using namespace bsoncxx::builder;
+
+	vector<int> result = {};
+	if (!db.has_collection("clients")) {
+		createClientsCollection();
+	}
+	auto coll = db["clients"];
+	bsoncxx::stdx::optional<bsoncxx::document::value> maybe_result;
+	// check if registration data is valid	
+	maybe_result = coll.find_one(stream::document{} << "login" << login << stream::finalize);
+	if (maybe_result) result.push_back(1);   // see registerErrorCodes
+	maybe_result = coll.find_one(stream::document{} << "phone" << phone << stream::finalize);
+	if (maybe_result) result.push_back(2);   // see registerErrorCodes
+	maybe_result = coll.find_one(stream::document{} << "email" << email << stream::finalize);
+	if (maybe_result) result.push_back(3);   // see registerErrorCodes
+	maybe_result = coll.find_one(stream::document{} << "name" << name << "surname" << surname << "date_of_birth" << dob << stream::finalize);
+	if (maybe_result) result.push_back(4);   // see registerErrorCodes
+
+	if (result.empty()) {
+		result.push_back(0); // success
+		Client* c = new Client();
+		c->name = name;
+		c->surname = surname;
+		c->date_of_birth = dob;
+		c->country = country;
+		c->domain = domain;
+		c->city = city;
+		c->email = email;
+		c->phone = phone;
+		c->login = login;
+		c->password = encryptPassword(password);
+		c->currency = currency;
+		c->postal_code = postal_code;
+		c->address = address;
+		c->balance = balance;
+		c->bets_amount = bets_amount;
+		// determine client_id
+		c->client_id = generateClientID(currency, coll);
+		// insert into hash
+		client_hash[c->client_id] = c;   // c kept in memory. if needs to be deleted, delete it from client_hash 
+		// insert into Mongo
+		saveClientToDB(c);
+	}
+	return result;
+}
+
+// For testing or other purposes
+vector<int> registerClient(Client &c) {
+	return registerClient(c.name, c.surname, c.date_of_birth, c.country, c.domain, c.city, c.email, c.phone, c.login, c.password,
+		c.currency, c.postal_code, c.address, c.balance, c.bets_amount);
+}
+
+void testClients(bool createRandomClients) {
+	vector<int> results;
+	auto coll = db["clients"];
+
+	if (createRandomClients) {
+		coll.drop();
+
+		vector<string> names = { "John", "Alice", "Jack", "Andrei", "Michael", "Mario", "Daniel", "Amelia", "Ella", "Rosa" };
+		vector<string> surnames = { "Ferguson", "Atkins", "Turner", "Watson", "Payne", "Watts", "Saunders", "Clayton", "Warner", "Caldwell" };
+		vector<string> countries = { "Russia", "Germany", "Turkmenistan", "Kazakistan", "Bahrein", "Zambia", "Mexico", "South Sudan", "Iraq", "Laos" };
+		vector<string> domains = { "fefmo.tm", "bafsik.tm", "gerebu.tm", "dibe.tm", "jer.tm", "mia.tm", "epco.tm", "nacia.tm", "tala.tm", "nawho.tm" };
+		vector<string> cities = { "Zewgeeju", "Ohecibej", "Kumaku", "Nacsige", "Repesiam", "Mobziple", "Ukpomji", "Juwsuubu", "Ituhinol", "Buthoza" };
+
+		ostringstream ss;		
+		for (int i = 0; i < 100; i++) {
+			string domain = domains[rand() % (domains.size())];
+			string name = names[rand() % (names.size())];
+			string surname = surnames[rand() % (surnames.size())];
+			string login = boost::algorithm::to_lower_copy(name) + to_string(i);
+			string email = login + "@" + domain;
+			int dob = time(nullptr) - (40 * 365 * 24 * 3600) + 10000 - (rand() % 20000);
+			string country = countries[rand() % (countries.size())];
+			string city = cities[rand() % (cities.size())];
+			ss << "(5" << 10 + rand() % 90 << ") " << 100 + rand() % 900 << "-" << 1000 + rand() % 9000;
+			string phone = ss.str();
+			ss.clear();
+			ss.str("");
+			string password = "_" + login + "!123";
+			Currency currency = static_cast<Currency>(Currency::MANAT + rand() % 6);  // 6: we have 6 different Cuurency enumerations
+			string postal_code = to_string(rand() % 10000);
+			string address = "";
+			float balance = 20 + 4 * rand() % 41;
+			float bets_amount = balance * 0.25;
+			results = registerClient(name, surname, dob, country, domain, city, email, phone, login, password, currency, postal_code,
+				address, balance, bets_amount);
+			if (results[0] != 0 || results.size() != 1) {
+				cout << "Something went wrong at registerClient. Error codes are:";
+				for (auto val : results) {
+					cout << " " << val;
+				}
+				cout << endl;
+				cout << "login: " << login << "\t phone:" << phone << "\t email:" << email << endl;
+				cout << "name: " << name << "\t surname:" << surname << "\t dob:" << dob << endl;
+				return;
+			}
+			else {
+				cout << "Created: " << name << " " << surname << " " << login << " " << phone << endl;
+			}
+		}
+		cout << "All clients created successfully" << endl;
+	}
+	else {
+		loadClientsFromDB();
+	}
+	
+	// some basic testing
+	assert( coll.count({}) == client_hash.size() );
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	Client c;
+	// check if Mongo versions and hash matches
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		c = *(client_hash[doc["_id"].get_int32()]);
+		assert(c.login == doc["login"].get_utf8().value.to_string());
+		assert(c.date_of_birth == doc["date_of_birth"].get_int32());
+		assert(c.balance == doc["balance"].get_double());
+	}
+	// try to register again
+	results = registerClient(c);
+	assert(results.size() == 4);
+	assert(results[0] == 1);
+	assert(results[1] == 2);
+	assert(results[2] == 3);
+	assert(results[3] == 4);
+	c.login += "_";
+	c.surname += "xxx";
+	results = registerClient(c);
+	assert(results.size() == 2);
+	assert(results[0] == 2);   // same phone
+	assert(results[1] == 3);   // same email
+	// assert("Well" == "Done");   // to check if assert is working. disable NDEBUG in compile options to make asserts activated.
+	return;
+}
+
+// Betradar data to Mongo docs
+
 bsoncxx::document::value buildCategoryDoc(Category* c) {
 	bsoncxx::builder::basic::document builder{};
 	builder.append(kvp("_id", c->id),
@@ -3255,18 +3527,17 @@ bsoncxx::document::value buildCategoryDoc(Category* c) {
 		kvp("sort", c->sort),
 		kvp("name", c->name)
 	);
-
 	return builder.extract();
 }
 
 void writeCategoriesDB() {
-	auto coll = db["categories"];
-	if (db.has_collection("categories")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("categories")) {
+			db["categories"].drop();  // clear collection
+		}
+		auto coll = db["categories"];
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < categories_l; i++) {
 			docs.push_back(buildCategoryDoc(&categories[i]));
 		}
@@ -3321,18 +3592,17 @@ bsoncxx::document::value buildMarketDoc(Market* m) {
 
 void writeMarketsDB() {
 	using namespace bsoncxx::builder;
-	auto coll = db["markets"];
-	if (db.has_collection("markets")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("markets")) {
+			db["markets"].drop();  // clear collection
+		}
+		auto coll = db["markets"];
     
-	mongocxx::options::index index_opt{};
-	index_opt.unique(true);
-	coll.create_index(stream::document{} << "market_id" << 1 << "variable_text" << 1 << stream::finalize, index_opt);
+		mongocxx::options::index index_opt{};
+		index_opt.unique(true);
+		coll.create_index(stream::document{} << "market_id" << 1 << "variable_text" << 1 << stream::finalize, index_opt);
 
-
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < markets_l; i++) {
 			bsoncxx::builder::basic::document builder{};
 			docs.push_back(buildMarketDoc(&markets[i]));
@@ -3371,18 +3641,18 @@ bsoncxx::document::value buildTournamentDoc(Tournament *t) {
 
 void writeTournamentsDB() {
 	using namespace bsoncxx::builder;
-	auto coll = db["tournaments"];
-	if (db.has_collection("tournaments")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("tournaments")) {
+			db["tournaments"].drop();  // clear collection
+		}
+		auto coll = db["tournaments"];
 	
-	// create unique index for ids
-	mongocxx::options::index index_opt{};
-	index_opt.unique(true);
-	coll.create_index(stream::document{} << "tournament_id" << 1 << "simple_id" << 1 << stream::finalize, index_opt);
+		// create unique index for ids
+		mongocxx::options::index index_opt{};
+		index_opt.unique(true);
+		coll.create_index(stream::document{} << "tournament_id" << 1 << "simple_id" << 1 << stream::finalize, index_opt);
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < tournaments_l; i++) {
 			docs.push_back(buildTournamentDoc(&tournaments[i]));
 		}
@@ -3405,14 +3675,13 @@ bsoncxx::document::value buildSportsDoc(Sport &s) {
 }
 
 
-void writeSportsDB() {
-	//printf("writeSportsDB\r\n");
-	auto coll = db["sports"];
-	if (db.has_collection("sports")) {
-		coll.drop();  // clear collection
-	}	
-	vector<bsoncxx::document::value> docs;
-	try {
+void writeSportsDB() {	
+	try {		
+		if (db.has_collection("sports")) {
+			db["sports"].drop();  // clear collection
+		}	
+		auto coll = db["sports"];
+		vector<bsoncxx::document::value> docs;	
 		for (int i = 0; i < sports_l; i++) {
 			//printf("i=%d\r\n", i);
 			docs.push_back(buildSportsDoc(sports[i]));
@@ -3440,13 +3709,13 @@ bsoncxx::document::value buildCompetitorDoc(Competitor *c) {
 }
 
 void writeCompetitorsDB() {
-	auto coll = db["competitors"];
-	if (db.has_collection("competitors")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("competitors")) {
+			db["competitors"].drop();  // clear collection
+		}
+		auto coll = db["competitors"];
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < competitors_l; i++) {
 			docs.push_back(buildCompetitorDoc(&competitors[i]));
 		}
@@ -3484,13 +3753,13 @@ bsoncxx::document::value buildPlayerDoc(Player* p) {
 }
 
 void writePlayersDB() {
-	auto coll = db["players"];
-	if (db.has_collection("players")) {
-		coll.drop();  // clear collection
-	}
+	try {		
+		if (db.has_collection("players")) {
+			db["players"].drop();  // clear collection
+		}
+		auto coll = db["players"];
 
-	vector<bsoncxx::document::value> docs;
-	try {
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < players_l; i++) {
 			docs.push_back(buildPlayerDoc(&players[i]));
 		}
@@ -3547,30 +3816,21 @@ bsoncxx::document::value buildEventDoc(Event* e) {
 	normalized = e->tv_channels == NULL ? "" : e->tv_channels;
 	builder.append(kvp("tv_channels", normalized));
 	
-
-
-		return builder.extract();
-
-
-
-
-
-
+	return builder.extract();
 }
 
 void writeEventsDB() {
-	auto coll = db["events"];
-	if (db.has_collection("events")) {
-		coll.drop();  // clear collection
-	}
-
-	// create index for start_time
-	bsoncxx::builder::basic::document index_doc{};
-	index_doc.append(kvp("start_time", -1));  // -1 for descending index
-	coll.create_index(std::move(index_doc.extract()));
-
-	vector<bsoncxx::document::value> docs;
 	try {
+		if (db.has_collection("events")) {
+			db["events"].drop();  // clear collection
+		}
+		auto coll = db["events"];
+		// create index for start_time
+		bsoncxx::builder::basic::document index_doc{};
+		index_doc.append(kvp("start_time", -1));  // -1 for descending index
+		coll.create_index(std::move(index_doc.extract()));
+
+		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < events_l; i++) {
 			docs.push_back(buildEventDoc(&events[i]));
 		}
@@ -3653,29 +3913,23 @@ int main() {
 		data_step_len_2[j] = 0;
 	}
 	for (int j = 0; j < AMQP_QUEUE; j++) AMQP_message[j] = new char[AMQP_BUFLEN];
-	
 
+	timestamp();
+	hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
+	// hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+	//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
+	getchar();
+	int port = 1443;
 
+	//server.setOpenHandler(openHandler);
+	//server.setCloseHandler(closeHandler);
+	//server.setMessageHandler(messageHandler);
+	//server.setPeriodicHandler(periodicHandler);
 
+	//while (port == 1443) Sleep(1);
+	// server.startServer(port);
 
-
-using namespace std;
-timestamp();
-hThread1 = CreateThread(NULL, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-hThread2 = CreateThread(NULL, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-//hThread3 = CreateThread(NULL, 16777216, &MTSGetThread, 0, THREAD_TERMINATE, &dwThreadID3);
-
-int port = 1443;
-
-//server.setOpenHandler(openHandler);
-//server.setCloseHandler(closeHandler);
-//server.setMessageHandler(messageHandler);
-//server.setPeriodicHandler(periodicHandler);
-
-//while (port == 1443) Sleep(1);
-server.startServer(port);
-
-return 0;
+	return 0;
 
 	
 }
@@ -3685,7 +3939,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	//int recvbuflen = DEFAULT_BUFLEN;
 	//recvbuf = new char[DEFAULT_BUFLEN];
 
-
+	/*
 	getSports();
 
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
@@ -3695,7 +3949,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		getEvents(0, 10);
 		return 0;
 	}
-
+	*/
 
 	if (full_data == false || POPULATE_MONGO) {
 		//getMarkets();
@@ -3709,6 +3963,7 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 		loadPlayersFromFiles();
 		
 		if (POPULATE_MONGO) {
+			if (sports_l==0) getSports(); 
 			writeSportsDB();
 			writeMarketsDB();
 			writeCategoriesDB();
@@ -3720,6 +3975,8 @@ DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 			return 0;
 		}
 
+		testClients(true);
+		return 0;
 		
 	}
 
@@ -9664,9 +9921,9 @@ void loadMarketsFromFiles(bool loadFromDB) {
 			
 
 			// optional values
-			//if (doc["variable_text"].raw() != nullptr) {
+			// if (doc["variable_text"].raw() != nullptr) {
 			mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
-			//}
+			// }
 		
 
 			// outcomes array
@@ -9825,7 +10082,129 @@ void loadMarketsFromFiles(bool loadFromDB) {
 
 		};
 		
+/*
+		
+		if (markets[k].variant > -1 && markets_id[markets[k].id] == NULL) {
+			markets_id[markets[k].id] = new Market*[MAX_MARKETS_IN];
+			for (int l = 0; l < MAX_MARKETS_IN; l++) markets_id[markets[k].id][l] = NULL;
+		}
+		
+		if (markets[k].variant > -1 && markets[k].variable_text == NULL) markets_id[markets[k].id][0] = &markets[k];
+		
+		if (markets[k].variant > -1 && markets[k].variable_text != NULL) {
+			for (j = 1; j < max_markets_in[markets[k].id]; j++) {
+				if (markets_id[markets[k].id][j] != NULL && std::strcmp(markets[k].variable_text, markets_id[markets[k].id][j]->variable_text) == 0) break;
+				if (markets_id[markets[k].id][j] == NULL) {
+					markets_id[markets[k].id][j] = &markets[k]; break;
+				} }
 
+		
+		
+			if (j == max_markets_in[markets[k].id]) {
+				markets_id[markets[k].id][j] = &markets[k]; max_markets_in[markets[k].id]++;
+			}}
+
+		
+		if (markets[k].variant == -1 && markets_id[markets[k].id] == NULL) { markets_id[markets[k].id] = new Market*[1]; markets_id[markets[k].id][0] = &markets[k]; }
+		
+		if (markets[k].id == 219) markets[k].line_type = 1;// (Winner(incl.overtime)
+		if (markets[k].id == 16) markets[k].line_type = 3;// (Handicap)	
+		if (markets[k].id == 1) markets[k].line_type = 2;// (1x2)	
+		if (markets[k].id == 186) markets[k].line_type = 1; //Tennis, Athletics, Aussie Rules, Badminton, Beach Volley, Bowls, Boxing, Counter - Strike, Curling, Darts, Dota 2, ESport Call of Duty, ESport Overwatch, League of Legends, MMA, Snooker, Squash, StarCraft, Table Tennis, Volleyball
+		if (markets[k].id == 610) markets[k].line_type = 2;// (1x2)	Amercian Football
+		if (markets[k].id == 406) markets[k].line_type = 1;//Winner (incl. overtime and penalties)
+		if (markets[k].id == 60) markets[k].line_type = 5;// 1st half - 1x2
+		if (markets[k].id == 83) markets[k].line_type = 5;// 2nd half - 1x2
+		if (markets[k].id == 113) markets[k].line_type = 5;// Overtime - 1x2
+		if (markets[k].id == 119) markets[k].line_type = 5;//Overtime 1st half - 1x2
+		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap
+		if (markets[k].id == 123) markets[k].line_type = 7;//Penalty shootout - winner
+		if (markets[k].id == 711) markets[k].line_type = 5;//{!inningnr} innings - 1x2 cricket
+		if (markets[k].id == 645) markets[k].line_type = 5;//{!inningnr} innings over {overnr} - 1x2
+		if (markets[k].id == 611) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 (incl. overtime) Amercan Football valid for quartner=4
+		if (markets[k].id == 223) markets[k].line_type = 3;//Handicap (incl. overtime) Basketball,American Football
+		if (markets[k].id == 410) markets[k].line_type = 3;//Handicap (incl. overtime and penalties) Ice Hockey
+		if (markets[k].id == 66) markets[k].line_type = 7;//1st half - handicap
+		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
+		if (markets[k].id == 88) markets[k].line_type = 7;//2nd half - handicap
+		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+		if (markets[k].id == 303) markets[k].line_type = 7;//{!quarternr} quarter - handicap Basketball,American Football,Aussie Rules
+		if (markets[k].id == 203) markets[k].line_type = 7;//{!setnr} set - game handicap Tennis
+
+		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap  Bowls
+		if (markets[k].id == 314) markets[k].line_type = 4;//Total sets - Bowls Darts
+		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[k].id == 188) markets[k].line_type = 3;//Set handicap Bowls
+		if (markets[k].id == 493) markets[k].line_type = 3;//Frame handicap Snooker
+		if (markets[k].id == 494) markets[k].line_type = 4;//Total handicap Snooker
+		if (markets[k].id == 499) markets[k].line_type = 6;//{!framenr} frame - winner Snooker
+
+		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
+		if (markets[k].id == 746) markets[k].line_type = 7;//{!inningnr} inning - handicap Baseball
+		if (markets[k].id == 117) markets[k].line_type = 7;//Overtime - handicap Soccer,Handball
+		if (markets[k].id == 120) markets[k].line_type = 7;//Overtime 1st half - handicap Soccer
+		if (markets[k].id == 18) markets[k].line_type = 4;//Total Soccer,Futsal,Handball,Ice Hockey,Rugby,Soccer Mythical
+		if (markets[k].id == 238) markets[k].line_type = 4;//Total points Badminton,Beach Volley,Squash,Table Tennis,Volleyball
+		if (markets[k].id == 412) markets[k].line_type = 4;//Total (incl. overtime and penalties) Ice Hockey
+		if (markets[k].id == 68) markets[k].line_type = 8;//1st half - total Soccer,Basketball,American Football,Futsal,Handball,Rugby,Soccer Mythical
+		if (markets[k].id == 90) markets[k].line_type = 8;//2nd half - total Soccer,Soccer Mythical
+		if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
+		if (markets[k].id == 236) markets[k].line_type = 8;//{!quarternr} quarter - total Basketball,American Football,Aussie Rules
+		if (markets[k].id == 310) markets[k].line_type = 8;//{!setnr} set - total points Beach Volley,Volleyball
+		if (markets[k].id == 528) markets[k].line_type = 8;//{!setnr} set - total Bowls
+		if (markets[k].id == 288) markets[k].line_type = 8;//{!inningnr} inning - total Baseball
+		if (markets[k].id == 116) markets[k].line_type = 8;//Overtime - total Soccer,Futsal,Handball,Ice Hockey
+		if (markets[k].id == 358) markets[k].line_type = 8;//1st over - total Cricket
+		if (markets[k].id == 395) markets[k].line_type = 6;//{!mapnr} map - winner Dota 2,League of Legends,StarCraft
+		if (markets[k].id == 330) markets[k].line_type = 6;//{!mapnr} map - winner (incl. overtime) Counter-Strike
+		if (markets[k].id == 334) markets[k].line_type = 5;//{!mapnr} map - 1x2 Counter-Strike
+
+
+		if (markets[k].id == 340) markets[k].line_type = 1;//Winner (incl. super over) Cricket
+		if (markets[k].id == 251) markets[k].line_type = 1;// Winner (incl. extra innings) Baseball
+														   //if (markets[k].id == 426) markets[k].line_type = 5;//{!periodnr} period 1x2 & winner (incl. overtime and penalties) Ice Hockey
+														   //if (markets[k].id == 429) markets[k].line_type = 5;//{!periodnr} period 1x2 & 1x2 Ice Hockey
+		if (markets[k].id == 443) markets[k].line_type = 5;//{!periodnr} period 1x2  Ice Hockey
+		if (markets[k].id == 225) markets[k].line_type = 4;// Total (incl. overtime) Basketball
+
+		if (markets[k].id == 501) markets[k].line_type = 8;//{!framenr} frame - total points Snooker
+		if (markets[k].id == 500) markets[k].line_type = 7;//{!framenr} frame - handicap points Snooker
+		if (markets[k].id == 527) markets[k].line_type = 7;//{!setnr} set - handicap Bowls
+		if (markets[k].id == 226) markets[k].line_type = 4;//US total (incl. overtime) Basketball,American Football
+		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
+		if (markets[k].id == 287) markets[k].line_type = 5;//{!inningnr} inning - 1x2 Baseball
+		if (markets[k].id == 245) markets[k].line_type = 6;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 235) markets[k].line_type = 5;//{!quarternr} quarter - 1x2 Basketball,American Football,Aussie Rules
+		//if (markets[k].id == 445) markets[k].line_type = 7;//{!periodnr} period - handicap {hcp} Ice Hockey
+		//if (markets[k].id == 446) markets[k].line_type = 8;//{!periodnr} period - total Ice Hockey
+		if (markets[k].id == 246) markets[k].line_type = 7;//{!gamenr} game - point handicap Badminton,Squash,Table Tennis
+		if (markets[k].id == 247) markets[k].line_type = 8;// {!gamenr} game - total points Badminton,Squash,Table Tennis
+		if (markets[k].id == 460) markets[k].line_type = 7;//{!periodnr} period - handicap Ice Hockey
+														   //if (markets[k].id == 254) markets[k].line_type = 3;//Handicap {hcp} (incl. extra innings) Baseball
+		if (markets[k].id == 256) markets[k].line_type = 3;//Handicap (incl. extra innings) Baseball
+		if (markets[k].id == 258) markets[k].line_type = 4;//Total (incl. extra innings) Baseball
+
+		if (markets[k].id == 605) markets[k].line_type = 8;//{!inningnr} innings - total Cricket
+		
+		if (markets[k].id == 189) markets[k].line_type = 4;//Total games Tennis
+		if (markets[k].id == 237) markets[k].line_type = 3;//Point handicap Badminton,Beach Volley,Squash,Table Tennis,Volleyball
+		if (markets[k].id == 538) markets[k].line_type = 2;//Head2head (1x2) Golf,Motorsport
+		if (markets[k].id == 8) markets[k].line_type = 9;//{!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 62) markets[k].line_type = 10;//1st half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 84) markets[k].line_type = 10;//2nd half - {!goalnr} goal Soccer,Futsal
+		if (markets[k].id == 444) markets[k].line_type = 10;//{!periodnr} period - {!goalnr} goal Ice Hockey
+		//if (markets[k].id == 245) markets[k].line_type = 10;//{!gamenr} game - winner Badminton,Squash,Table Tennis
+		if (markets[k].id == 210) markets[k].line_type = 10;//{!setnr} set game{ gamenr } -winner Tennis
+		if (markets[k].id == 125) markets[k].line_type = 10;//Penalty shootout - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 115) markets[k].line_type = 10;//Overtime - {!goalnr} goal Soccer,Futsal,Ice Hockey
+		if (markets[k].id == 202) markets[k].line_type = 6;// {!setnr} set - winner	Tennis Beach Volley,Darts,Volleyball
+		if (markets[k].id == 309) markets[k].line_type = 7;//{!setnr} set - point handicap Beach Volley,Volleyball
+		if (markets[k].id == 29) markets[k].line_type = 11;//Both teams to score
+		if (markets[k].id == 196) markets[k].line_type = 13;//Exact sets Tennis,Beach Volley,Volleyball
+
+		*/
+ //if(markets[k].id==93) 
+	// printf("markets[k].id= %d markets[k].name=%s\r\n ", markets[k].id, markets[k].name);
 		k++;
 		markets_l = k;
 
@@ -10493,6 +10872,33 @@ void loadPlayersFromFiles(bool loadFromDB) {
 
 
 };
+
+void loadClientsFromDB() {
+	auto coll = db["clients"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	for (auto doc : cursor) {		
+		Client* c = new Client();
+		c->client_id = doc["_id"].get_int32();
+		c->name = doc["name"].get_utf8().value.to_string();
+		c->surname = doc["surname"].get_utf8().value.to_string();
+		c->date_of_birth = doc["date_of_birth"].get_int32();
+		c->country = doc["country"].get_utf8().value.to_string();
+		c->domain = doc["domain"].get_utf8().value.to_string();
+		c->city = doc["city"].get_utf8().value.to_string();
+		c->email = doc["email"].get_utf8().value.to_string();
+		c->phone = doc["phone"].get_utf8().value.to_string();
+		c->login = doc["login"].get_utf8().value.to_string();
+		c->password = doc["password"].get_utf8().value.to_string();
+		c->currency = static_cast<Currency>((int)doc["currency"].get_int32());
+		c->postal_code = doc["postal_code"].get_utf8().value.to_string();
+		c->address = doc["address"].get_utf8().value.to_string();
+		c->balance = doc["balance"].get_double();
+		c->bets_amount = doc["bets_amount"].get_double();		
+		// insert into hash
+		client_hash[c->client_id] = c;   // c kept in memory. if needs to be deleted, delete it from client_hash 
+	}
+	printf("Clients loaded from Mongo succes. Number of loaded clients: %d\r\n", client_hash.size());
+}
 
 size_t calcDecodeLength(const char* b64input) { //Calculates the length of a decoded string
 	size_t len = strlen(b64input),
