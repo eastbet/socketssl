@@ -957,11 +957,10 @@ public:
 	
 		
 	};
-
-
 	int id;
 	int betstop_reason;
 	int tournament_id;
+	int season_id;
 	int simple_id;
 	int market_id;
 	int event_id;
@@ -969,11 +968,11 @@ public:
 	int status; //0 (inactive)// 1 (active) //-1(suspended) //- 3 (cleared, settled) //- 4 (cancelled)	//handed_over(-2)
 	int favourite;
 	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext
+	int type_radar;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season:
 	int variant;
 	char* name;
 	int outcome_number;
 	char** outcome_name;
-	Market* market;
 	int* outcome_id;
 	int* outcome_active;
 	int* outcome_team;
@@ -999,9 +998,10 @@ void Line:: operator = (const Line & rhs) {
 	status = rhs.status;
 	favourite = rhs.favourite;
 	type = rhs.type;
+	type_radar = rhs.type_radar;
 	tournament_id = rhs.tournament_id;
+	season_id = rhs.season_id;
 	variant = rhs.variant;
-	market = rhs.market;
 	simple_id = rhs.simple_id;
 	next_betstop = rhs.next_betstop;
 	for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != NULL) delete[] outcome_name[i];
@@ -1038,14 +1038,6 @@ void Line:: operator = (const Line & rhs) {
 		outcome_active[i] = rhs.outcome_active[i];
 		outcome_probabilities[i] = rhs.outcome_probabilities[i];
 		outcome_odds[i] = rhs.outcome_odds[i];
-	}
-
-	if (name != NULL) {
-		delete[] name; name = NULL;
-	}
-	if (rhs.name != NULL) {
-		name = new char[strlen(rhs.name) + 1];
-		std::strcpy(name, rhs.name);
 	}
 
 	for (int i = 0; i < specifier_number; i++) { if (specifier[i] != NULL) delete[] specifier[i]; if (specifier_value[i] != NULL) delete[] specifier_value[i]; }
@@ -1088,11 +1080,12 @@ Line::Line() {
 	id = 0;
 	betstop_reason=0;
     tournament_id = 0;
+	season_id = 0;
 	event_id = 0;
 	status = 0;
 	favourite = 0;
 	type = 0;
-	market=NULL;
+	type_radar = 0;
 	variant = -1;
 	name = NULL;
 	outcome_number = 0;
@@ -1141,7 +1134,6 @@ string Line::getCompoundKey() {
 	}
 	return key_oss.str();
 }
-
 class Betstop {
 public:
 	Betstop();
@@ -1192,9 +1184,7 @@ Matchstatus::Matchstatus() {
 	id = 0;
 	description = NULL;
 };
-
 enum Currency { MANAT=1, RUB=2, EURO=3, USD=4, LIRA=5, VIRTUAL=6 };
-
 class Client {
 public:
 	// Client();
@@ -1218,7 +1208,6 @@ public:
 	float balance;      // Money in the account(balance)
 	float bets_amount;  // Money in the game(in bets)	
 };
-
 void Client::operator = (const Client & rhs) {
 	if (this == &rhs) return;
 	client_id = rhs.client_id;
@@ -1278,6 +1267,830 @@ Market*** markets_id = new Market**[MAX_MARKETS];
 Betstop** betstops_id = new Betstop*[MAX_BETSTOPS];
 Matchstatus** matchstatus_id = new Matchstatus*[MAX_MATCHSTATUS];
 int *max_markets_in = new int[MAX_MARKETS];
+
+class Bet {
+public:
+	Bet();
+	Bet(Line* line, int client_outcome_id);
+	~Bet() {
+
+		if (name != NULL) delete[] name;  if (outcome_number > 0) { for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != NULL) delete[] outcome_name[i]; };
+
+		if (outcome_id != NULL) delete[] outcome_id; if (outcome_active != NULL) delete[] outcome_active; if (outcome_team != NULL) delete[] outcome_team; if (outcome_odds != NULL) delete[] outcome_odds;
+
+		if (outcome_probabilities != NULL) delete[] outcome_probabilities; if (outcome_name != NULL) delete[] outcome_name;
+
+		if (specifier_number > 0) { for (int i = 0; i < specifier_number; i++) { if (specifier[i] != NULL) delete[] specifier[i];  if (specifier_value[i] != NULL) delete[] specifier_value[i]; } }
+
+
+		if (extended_specifier_number > 0) { for (int i = 0; i < extended_specifier_number; i++) { if (extended_specifier[i] != NULL) delete[] extended_specifier[i];  if (extended_specifier_value[i] != NULL) delete[] extended_specifier_value[i]; } }
+
+		if (specifier != NULL) delete[] specifier; if (specifier_value != NULL) delete[] specifier_value;
+		if (extended_specifier != NULL) delete[] extended_specifier; if (extended_specifier_value != NULL) delete[] extended_specifier_value;
+		if (tournament_name != nullptr) delete[] tournament_name;
+		if (category_name != nullptr) delete[] category_name;
+		if (season_name != nullptr) delete[] season_name;
+		if (sport_name != nullptr) delete[] sport_name;
+		if (event_away_name != nullptr) delete[] event_away_name;
+		if (event_home_name != nullptr) delete[] event_home_name;
+		if (event_match_time != nullptr) delete[] event_match_time;
+		if (event_match_status_description != nullptr) delete[] event_match_status_description;
+		if (event_remaining_time != nullptr) delete[] event_remaining_time;
+		if (event_remaining_time_in_period != nullptr) delete[] event_remaining_time_in_period;
+		if (event_score != nullptr) delete[] event_score;
+		if (event_set_scores != nullptr) delete[] event_set_scores;
+		if (event_game_score != nullptr) delete[] event_game_score;
+		if (summary != nullptr) delete[] summary;
+	};
+	int id;
+	int status;
+	int language;
+	int line_id;
+	int ticket_id;
+	int selected_outcome_id;
+	float odds;
+	float odds_settlement;
+	int tournament_id;
+	int simple_id;
+	int season_id;
+	int market_id;
+	int event_id;
+	int sport_id;
+	int category_id;
+	int event_home_id;
+	int event_away_id;
+	int team;
+	int favourite;
+	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext
+	int type_radar;;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season:
+	int variant;
+	char* name;
+	int outcome_number;
+	char** outcome_name;
+	int* outcome_id;
+	int* outcome_active;
+	int* outcome_team;
+	float* outcome_probabilities;
+	float* outcome_odds;
+	char** specifier;
+	char** specifier_value;
+	char** extended_specifier;
+	char** extended_specifier_value;
+	int specifier_number;
+	int extended_specifier_number;
+	char* tournament_name;
+	char* category_name;
+	char* season_name;
+	char* sport_name;
+	char* event_away_name;
+	char* event_home_name;
+	char* event_match_time;
+	char* event_remaining_time;
+	char* event_remaining_time_in_period;
+	char* event_score;
+	char* event_set_scores;
+	char* event_game_score;
+	char* event_match_status_description;
+	char* summary;
+	int event_match_status;
+	int event_status;
+	int event_start_time;
+	int event_period_length;
+	int event_overtime_length;
+	int event_bo;
+	void operator = (const Bet&);
+	void setHistoryData();
+	string getCatKey();
+	string getCompoundKey();
+};
+void Bet:: operator = (const Bet & rhs) {
+	if (this == &rhs) return;
+	id = rhs.id;
+	status = rhs.status;
+	market_id = rhs.market_id;
+	event_id = rhs.event_id;
+	favourite = rhs.favourite;
+	type = rhs.type;
+	tournament_id = rhs.tournament_id;
+	variant = rhs.variant;
+	simple_id = rhs.simple_id;
+	outcome_number = rhs.outcome_number;
+	type_radar = rhs.type_radar;
+	line_id = rhs.line_id;
+	ticket_id = rhs.ticket_id;
+	selected_outcome_id = rhs.selected_outcome_id;
+	odds = rhs.odds;
+	odds_settlement = rhs.odds_settlement;
+	season_id = rhs.season_id;
+	sport_id = rhs.sport_id;
+	category_id = rhs.category_id;
+	event_home_id = rhs.event_home_id;
+	event_away_id = rhs.event_away_id;
+	language = rhs.language;
+	event_match_status = rhs.event_match_status;
+	event_status = rhs.event_status;
+	event_start_time = rhs.event_start_time;
+	event_period_length = rhs.event_period_length;
+	event_overtime_length = rhs.event_overtime_length;
+	event_bo = rhs.event_bo;
+
+	if (name != NULL) {
+		delete[] name; name = NULL;
+	}
+	if (rhs.name != NULL) {
+		name = new char[strlen(rhs.name) + 1];
+		std::strcpy(name, rhs.name);
+
+	}
+	if (tournament_name != NULL) {
+		delete[] tournament_name; tournament_name = NULL;
+	}
+	if (rhs.tournament_name != NULL) {
+		tournament_name = new char[strlen(rhs.tournament_name) + 1];
+		std::strcpy(tournament_name, rhs.tournament_name);
+
+	}
+	if (category_name != NULL) {
+		delete[] category_name; category_name = NULL;
+	}
+	if (rhs.category_name != NULL) {
+		category_name = new char[strlen(rhs.category_name) + 1];
+		std::strcpy(category_name, rhs.category_name);
+
+	}
+	if (season_name != NULL) {
+		delete[] season_name; season_name = NULL;
+	}
+	if (rhs.season_name != NULL) {
+		season_name = new char[strlen(rhs.season_name) + 1];
+		std::strcpy(season_name, rhs.season_name);
+
+	}
+	if (sport_name != NULL) {
+		delete[] sport_name; sport_name = NULL;
+	}
+	if (rhs.sport_name != NULL) {
+		sport_name = new char[strlen(rhs.sport_name) + 1];
+		std::strcpy(sport_name, rhs.sport_name);
+
+	}
+	if (event_away_name != NULL) {
+		delete[] event_away_name; event_away_name = NULL;
+	}
+	if (rhs.event_away_name != NULL) {
+		event_away_name = new char[strlen(rhs.event_away_name) + 1];
+		std::strcpy(event_away_name, rhs.event_away_name);
+
+	}
+	if (event_home_name != NULL) {
+		delete[] event_home_name; event_home_name = NULL;
+	}
+	if (rhs.event_home_name != NULL) {
+		event_home_name = new char[strlen(rhs.event_home_name) + 1];
+		std::strcpy(event_home_name, rhs.event_home_name);
+
+	}
+	if (event_match_time != NULL) {
+		delete[] event_match_time; event_match_time = NULL;
+	}
+	if (rhs.event_match_time != NULL) {
+		event_match_time = new char[strlen(rhs.event_match_time) + 1];
+		std::strcpy(event_match_time, rhs.event_match_time);
+
+	}
+	if (event_remaining_time != NULL) {
+		delete[] event_remaining_time; event_remaining_time = NULL;
+	}
+	if (rhs.event_remaining_time != NULL) {
+		event_remaining_time = new char[strlen(rhs.event_remaining_time) + 1];
+		std::strcpy(event_remaining_time, rhs.event_remaining_time);
+
+	}
+	if (event_remaining_time_in_period != NULL) {
+		delete[] event_remaining_time_in_period; event_remaining_time_in_period = NULL;
+	}
+	if (rhs.event_remaining_time_in_period != NULL) {
+		event_remaining_time_in_period = new char[strlen(rhs.event_remaining_time_in_period) + 1];
+		std::strcpy(event_remaining_time_in_period, rhs.event_remaining_time_in_period);
+
+	}
+	if (event_score != NULL) {
+		delete[] event_score; event_score = NULL;
+	}
+	if (rhs.event_score != NULL) {
+		event_score = new char[strlen(rhs.event_score) + 1];
+		std::strcpy(event_score, rhs.event_score);
+
+	}
+	if (event_set_scores != NULL) {
+		delete[] event_set_scores; event_set_scores = NULL;
+	}
+	if (rhs.event_set_scores != NULL) {
+		event_set_scores = new char[strlen(rhs.event_set_scores) + 1];
+		std::strcpy(event_set_scores, rhs.event_set_scores);
+
+	}
+	if (event_game_score != NULL) {
+		delete[] event_game_score; event_game_score = NULL;
+	}
+	if (rhs.event_game_score != NULL) {
+		event_game_score = new char[strlen(rhs.event_game_score) + 1];
+		std::strcpy(event_game_score, rhs.event_game_score);
+
+	}
+	if (event_match_status_description != NULL) {
+		delete[] event_match_status_description; event_match_status_description = NULL;
+	}
+	if (rhs.event_match_status_description != NULL) {
+		event_match_status_description = new char[strlen(rhs.event_match_status_description) + 1];
+		std::strcpy(event_match_status_description, rhs.event_match_status_description);
+
+	}
+	if (summary != NULL) {
+		delete[] summary; summary = NULL;
+	}
+	if (rhs.summary != NULL) {
+		summary = new char[strlen(rhs.summary) + 1];
+		std::strcpy(summary, rhs.summary);
+
+	}
+
+	for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != NULL) delete[] outcome_name[i];
+	if (outcome_name != NULL) { delete[] outcome_name; outcome_name = NULL; }
+	if (outcome_id != NULL) { delete[] outcome_id; outcome_id = NULL; }
+	if (outcome_active != NULL) { delete[] outcome_active; outcome_active = NULL; }
+	if (outcome_team != NULL) { delete[] outcome_team; outcome_team = NULL; }
+	if (outcome_probabilities != NULL) { delete[] outcome_probabilities; outcome_probabilities = NULL; }
+	if (outcome_odds != NULL) { delete[] outcome_odds; outcome_odds = NULL; }
+
+
+	outcome_name = new char*[outcome_number];
+	outcome_id = new int[outcome_number];
+	outcome_active = new int[outcome_number];
+	outcome_team = new int[outcome_number];
+	outcome_odds = new float[outcome_number];
+	outcome_probabilities = new float[outcome_number];
+
+	for (int i = 0; i < outcome_number; i++) {
+		outcome_name[i] = new char[strlen(rhs.outcome_name[i]) + 1];
+		std::strcpy(outcome_name[i], rhs.outcome_name[i]);
+		outcome_id[i] = rhs.outcome_id[i];
+		outcome_team[i] = rhs.outcome_team[i];
+		outcome_active[i] = rhs.outcome_active[i];
+		outcome_probabilities[i] = rhs.outcome_probabilities[i];
+		outcome_odds[i] = rhs.outcome_odds[i];
+	}
+
+
+	for (int i = 0; i < specifier_number; i++) { if (specifier[i] != NULL) delete[] specifier[i]; if (specifier_value[i] != NULL) delete[] specifier_value[i]; }
+	if (specifier != NULL) { delete[] specifier; specifier = NULL; }
+	if (specifier_value != NULL) { delete[] specifier_value; specifier_value = NULL; }
+
+
+
+	specifier_number = rhs.specifier_number;
+	std::strcpy(name, rhs.name);
+	specifier = new char*[specifier_number];
+	specifier_value = new char*[specifier_number];
+
+	for (int i = 0; i < specifier_number; i++) {
+		if (rhs.specifier[i] != NULL) {
+			specifier[i] = new char[strlen(rhs.specifier[i]) + 1]; std::strcpy(specifier[i], rhs.specifier[i]);
+		}
+		else specifier[i] = NULL;
+		if (rhs.specifier_value[i] != NULL) { specifier_value[i] = new char[strlen(rhs.specifier_value[i]) + 1]; std::strcpy(specifier_value[i], rhs.specifier_value[i]); }
+		else specifier_value[i] = NULL;
+	}
+
+
+	extended_specifier_number = rhs.extended_specifier_number;
+	std::strcpy(name, rhs.name);
+	extended_specifier = new char*[extended_specifier_number];
+	extended_specifier_value = new char*[extended_specifier_number];
+
+	for (int i = 0; i < extended_specifier_number; i++) {
+		if (rhs.extended_specifier[i] != NULL) {
+			extended_specifier[i] = new char[strlen(rhs.extended_specifier[i]) + 1]; std::strcpy(extended_specifier[i], rhs.extended_specifier[i]);
+		}
+		else extended_specifier[i] = NULL;
+		if (rhs.extended_specifier_value[i] != NULL) { extended_specifier_value[i] = new char[strlen(rhs.extended_specifier_value[i]) + 1]; std::strcpy(extended_specifier_value[i], rhs.extended_specifier_value[i]); }
+		else extended_specifier_value[i] = NULL;
+	}
+
+
+}
+void Bet::setHistoryData() {
+	Event* _event = nullptr;
+	char buff[MAX_PATH];
+	char buff_[MAX_PATH];
+
+	switch (type_radar) {
+
+	case 0://sr:match
+	case 1://sr:race_event
+	case 3://sr:season
+
+		if (type_radar != 3) {
+			if (event_id >= MAX_EVENTS) {
+				printf("event_id=%d out of MAX_EVENTS in in applyData\r\n", event_id); break;
+			}
+			if (events_id[event_id] == nullptr) {
+				printf("event_id=%d  not found in  applyData\r\n", event_id); break;
+			}
+			if (events_id[event_id]->home_name != nullptr) {
+				if (event_home_name != nullptr) { delete[] event_home_name; event_home_name = nullptr; }
+				event_home_name = new char[strlen(events_id[event_id]->home_name) + 1];
+				std::strcpy(event_home_name, events_id[event_id]->home_name);
+			}
+			if (events_id[event_id]->away_name != nullptr) {
+				if (event_away_name != nullptr) { delete[] event_away_name; event_away_name = nullptr; }
+				event_away_name = new char[strlen(events_id[event_id]->away_name) + 1];
+				std::strcpy(event_away_name, events_id[event_id]->away_name);
+			}
+			event_home_id = events_id[event_id]->home_id;
+			event_away_id = events_id[event_id]->away_id;
+			if (event_home_id >= MAX_COMPETITORS) printf("event_home_id out of MAX_COMPETITORS in applyData/r/n", event_home_id);
+			else if (competitors_id[event_home_id] == nullptr) printf("event_home_id not found in competitors in applyData/r/n", event_home_id);
+			else {
+
+				if (competitors_id[event_home_id]->name != nullptr) {
+					if (event_home_name != nullptr) { delete[] event_home_name; event_home_name = nullptr; }
+					event_home_name = new char[strlen(competitors_id[event_home_id]->name) + 1];
+					std::strcpy(event_home_name, competitors_id[event_home_id]->name);
+				}
+
+
+			}
+			if (event_away_id >= MAX_COMPETITORS) printf("event_away_id out of MAX_COMPETITORS in applyData/r/n", event_away_id);
+			else if (competitors_id[event_away_id] == nullptr) printf("event_away_id not found in competitors in applyData/r/n", event_away_id);
+			else {
+
+				if (competitors_id[event_away_id]->name != nullptr) {
+					if (event_away_name != nullptr) { delete[] event_away_name; event_away_name = nullptr; }
+					event_away_name = new char[strlen(competitors_id[event_away_id]->name) + 1];
+					std::strcpy(event_away_name, competitors_id[event_away_id]->name);
+				}
+
+
+			}
+			_event = events_id[event_id];
+			tournament_id = _event->tournament_id;
+			event_status = _event->status;
+			event_start_time = _event->start_time;
+			event_period_length = _event->period_length;
+			event_overtime_length = _event->overtime_length;
+			event_bo = _event->bo;
+			if (event_status > 0) {
+				event_match_status = _event->match_status;
+				if (matchstatus_id[event_match_status] == nullptr) printf("match_status=%d not found in matchstatus_id\r\n", event_match_status); else {
+					if (matchstatus_id[event_match_status]->description != nullptr) {
+						if (event_match_status_description != nullptr) {
+							delete[] event_match_status_description; event_match_status_description = nullptr;
+						}
+						event_match_status_description = new char[strlen(matchstatus_id[event_match_status]->description) + 1];
+						std::strcpy(event_match_status_description, matchstatus_id[event_match_status]->description);
+					}
+				}
+
+
+				if (_event->match_time != nullptr) {
+					if (event_match_time != nullptr) {
+						delete[] event_match_time; event_match_time = nullptr;
+					}
+					event_match_time = new char[strlen(_event->match_time) + 1];
+					std::strcpy(event_match_time, _event->match_time);
+				}
+
+
+				if (_event->remaining_time != nullptr) {
+					if (event_remaining_time != nullptr) {
+						delete[] event_remaining_time; event_remaining_time = nullptr;
+					}
+					event_remaining_time = new char[strlen(_event->remaining_time) + 1];
+					std::strcpy(event_remaining_time, _event->remaining_time);
+				}
+
+				if (_event->remaining_time_in_period != nullptr) {
+					if (event_remaining_time_in_period != nullptr) {
+						delete[] event_remaining_time_in_period; event_remaining_time_in_period = nullptr;
+					}
+					event_remaining_time_in_period = new char[strlen(_event->remaining_time_in_period) + 1];
+					std::strcpy(event_remaining_time_in_period, _event->remaining_time_in_period);
+				}
+
+
+				_itoa(_event->home_score, buff, 10);
+				strcpy(buff_, buff);
+				strcat(buff_, ":");
+				_itoa(_event->away_score, buff, 10);
+				strcat(buff_, buff);
+				if (event_score != nullptr) {
+					delete[] event_score; event_score = nullptr;
+				}
+
+				event_score = new char[strlen(buff_) + 1];
+				strcpy(event_score, buff_);
+
+				if (_event->set_scores != nullptr) {
+					if (event_set_scores != nullptr) { delete[] event_set_scores; event_set_scores = nullptr; }
+					event_set_scores = new char[strlen(_event->set_scores) + 1];
+					strcpy(event_set_scores, _event->set_scores);
+				}
+
+				if (_event->id == 5) {
+
+					_itoa(_event->home_gamescore, buff, 10);
+					strcpy(buff_, buff);
+					strcat(buff_, ":");
+					_itoa(_event->away_gamescore, buff, 10);
+					strcat(buff_, buff);
+					if (event_game_score != nullptr) {
+						delete[] event_game_score; event_game_score = nullptr;
+					}
+
+					event_game_score = new char[strlen(buff_) + 1];
+					strcpy(event_game_score, buff_);
+				}
+
+
+
+
+
+
+
+
+
+
+
+
+			}
+
+
+
+
+
+
+
+
+
+
+
+
+
+		}
+		if (tournament_id >= MAX_TOURNAMENTS) printf("tournament_id=%d out of MAX_TOURNAMENTS in in applyData\r\n", tournament_id);
+		else if (tournaments_id[tournament_id] == nullptr) printf("tournament_id=%d  not found in in applyData\r\n", tournament_id);
+		else {
+
+			if (tournaments_id[tournament_id]->category_id >= MAX_CATEGORIES) printf("category_id=%d out of  MAX_CATEGORIES in in applyData\r\n", tournaments_id[tournament_id]->category_id);
+			else if (categories_id[tournaments_id[tournament_id]->category_id] == nullptr) printf("tournament_id=%d  not found in in applyData\r\n", tournaments_id[tournament_id]->category_id);
+			else {
+				category_id = tournaments_id[tournament_id]->category_id;
+				if (categories_id[category_id]->name != nullptr) {
+					if (category_name != nullptr) { delete[] category_name; category_name = nullptr; }
+					category_name = new char[strlen(categories_id[category_id]->name) + 1];
+					std::strcpy(category_name, categories_id[category_id]->name);
+				}
+
+			}
+			if (tournaments_id[tournament_id]->name != nullptr) {
+				if (tournament_name != nullptr) { delete[] tournament_name; tournament_name = nullptr; }
+				tournament_name = new char[strlen(tournaments_id[tournament_id]->name) + 1];
+				std::strcpy(tournament_name, tournaments_id[tournament_id]->name);
+			}
+			if (season_id == 0) season_id = tournaments_id[tournament_id]->season_id;
+			if (season_id != 0 && season_id == tournaments_id[tournament_id]->season_id && tournaments_id[tournament_id]->season_name != nullptr) {
+				if (season_name != nullptr) { delete[] season_name; season_name = nullptr; }
+				season_name = new char[strlen(tournaments_id[tournament_id]->season_name) + 1];
+				std::strcpy(season_name, tournaments_id[tournament_id]->season_name);
+			}
+
+
+			if (tournaments_id[tournament_id]->sport_id >= MAX_SPORTS) printf("sport_id=%d out of MAX_SPORTS in in applyData\r\n", tournaments_id[tournament_id]->sport_id);
+			else if (sports_id[tournaments_id[tournament_id]->sport_id] == nullptr) printf("sport_id=%d  not found in in applyData\r\n", tournaments_id[tournament_id]->sport_id);
+			else {
+				sport_id = tournaments_id[tournament_id]->sport_id;
+				if (sports_id[sport_id]->name != nullptr) {
+					if (sport_name != nullptr) { delete[] sport_name; sport_name = nullptr; }
+					sport_name = new char[strlen(sports_id[sport_id]->name) + 1];
+					std::strcpy(sport_name, sports_id[sport_id]->name);
+				}
+			};
+		}
+		break;
+
+	case 2://sr:simple_tournament
+
+		if (simple_id >= MAX_TOURNAMENTS) printf("simple_id=%d out of MAX_simples in in applyData\r\n", simple_id);
+		else if (simples_id[simple_id] == nullptr) printf("simple_id=%d  not found in in applyData\r\n", simple_id);
+		else {
+
+			if (simples_id[simple_id]->category_id >= MAX_CATEGORIES) printf("category_id=%d out of  MAX_CATEGORIES in in applyData\r\n", simples_id[simple_id]->category_id);
+			else if (categories_id[simples_id[simple_id]->category_id] == nullptr) printf("simple_id=%d  not found in in applyData\r\n", simples_id[simple_id]->category_id);
+			else {
+				category_id = simples_id[simple_id]->category_id;
+				if (categories_id[category_id]->name != nullptr) {
+					if (category_name != nullptr) { delete[] category_name; category_name = nullptr; }
+					category_name = new char[strlen(categories_id[category_id]->name) + 1];
+					std::strcpy(category_name, categories_id[category_id]->name);
+				}
+
+			}
+			if (simples_id[simple_id]->name != nullptr) {
+				if (tournament_name != nullptr) { delete[] tournament_name; tournament_name = nullptr; }
+				tournament_name = new char[strlen(simples_id[simple_id]->name) + 1];
+				std::strcpy(tournament_name, simples_id[simple_id]->name);
+			}
+			if (season_id == 0) season_id = simples_id[simple_id]->season_id;
+			if (season_id != 0 && season_id == simples_id[simple_id]->season_id && simples_id[simple_id]->season_name != nullptr) {
+				if (season_name != nullptr) { delete[] season_name; season_name = nullptr; }
+				season_name = new char[strlen(simples_id[simple_id]->season_name) + 1];
+				std::strcpy(season_name, simples_id[simple_id]->season_name);
+			}
+
+
+			if (simples_id[simple_id]->sport_id >= MAX_SPORTS) printf("sport_id=%d out of MAX_SPORTS in in applyData\r\n", simples_id[simple_id]->sport_id);
+			else if (sports_id[simples_id[simple_id]->sport_id] == nullptr) printf("sport_id=%d  not found in in applyData\r\n", simples_id[simple_id]->sport_id);
+			else {
+				sport_id = simples_id[simple_id]->sport_id;
+				if (sports_id[sport_id]->name != nullptr) {
+					if (sport_name != nullptr) { delete[] sport_name; sport_name = nullptr; }
+					sport_name = new char[strlen(sports_id[sport_id]->name) + 1];
+					std::strcpy(sport_name, sports_id[sport_id]->name);
+				}
+			};
+		}
+
+
+		break;
+
+	default:
+
+		printf("error in type_radar=%d applyData", type_radar);
+
+		break;
+
+
+	}
+
+
+};
+Bet::Bet() {
+
+	id = 0;
+	status = 0;
+	language = 0;
+	line_id = 0;
+	ticket_id = 0;
+	selected_outcome_id = -1;
+	tournament_id = 0;
+	simple_id = 0;
+	season_id = 0;
+	market_id = 0;
+	event_id = 0;
+	sport_id = 0;
+	category_id = 0;
+	event_home_id = 0;
+	event_away_id = 0;
+	team = 0;
+	favourite = 0;
+	type = 0;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext
+	type_radar = 0;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season:
+	variant = 0;
+	name = nullptr;
+	outcome_number = 0;
+	outcome_name = nullptr;
+	outcome_id = nullptr;
+	outcome_active = nullptr;
+	outcome_team = nullptr;
+	outcome_probabilities = nullptr;
+	outcome_odds = nullptr;
+	specifier = nullptr;
+	specifier_value = nullptr;
+	extended_specifier = nullptr;
+	extended_specifier_value = nullptr;
+	specifier_number = 0;
+	extended_specifier_number = 0;
+	tournament_name = nullptr;
+	category_name = nullptr;
+	season_name = nullptr;
+	sport_name = nullptr;
+	event_away_name = nullptr;
+	event_home_name = nullptr;
+	event_match_time = nullptr;
+	event_remaining_time = nullptr;
+	event_remaining_time_in_period = nullptr;
+	event_score = nullptr;
+	event_set_scores = nullptr;
+	event_game_score = nullptr;
+	event_match_status_description = nullptr;
+	summary = nullptr;
+	event_match_status = 0;
+	event_status = 0;
+	event_start_time = 0;
+	event_period_length = 0;
+	event_overtime_length = 0;
+
+
+};
+Bet::Bet(Line* line, int  bet_outcome_id) {
+	if (line == nullptr) { printf("error line is null"); status = -1; return; }
+	if (line->status != 1) { printf("error line status is=%d/r/n", line->status); status = -1; return; }
+	id = 0;
+	ticket_id = 0;
+	selected_outcome_id = -1;
+	line_id = line->id;
+	status = 0;
+	market_id = line->market_id;
+	event_id = line->event_id;
+	favourite = line->favourite;
+	type = line->type;
+	tournament_id = line->tournament_id;
+	variant = line->variant;
+	simple_id = line->simple_id;
+	outcome_number = line->outcome_number;
+	type_radar = line->type_radar;
+	season_id = 0;
+	sport_id = 0;
+	category_id = 0;
+	event_home_id = 0;
+	event_away_id = 0;
+	event_match_status = 0;
+	event_status = 0;
+	event_start_time = 0;
+	event_period_length = 0;
+	event_overtime_length = 0;
+	event_bo = 0;
+
+	if (name != NULL) {
+		delete[] name; name = NULL;
+	}
+	if (line->name != NULL) {
+		name = new char[strlen(line->name) + 1];
+		std::strcpy(name, line->name);
+
+	}
+
+	for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != NULL) delete[] outcome_name[i];
+	if (outcome_name != NULL) { delete[] outcome_name; outcome_name = NULL; }
+	if (outcome_id != NULL) { delete[] outcome_id; outcome_id = NULL; }
+	if (outcome_active != NULL) { delete[] outcome_active; outcome_active = NULL; }
+	if (outcome_team != NULL) { delete[] outcome_team; outcome_team = NULL; }
+	if (outcome_probabilities != NULL) { delete[] outcome_probabilities; outcome_probabilities = NULL; }
+	if (outcome_odds != NULL) { delete[] outcome_odds; outcome_odds = NULL; }
+
+
+	outcome_name = new char*[outcome_number];
+	outcome_id = new int[outcome_number];
+	outcome_active = new int[outcome_number];
+	outcome_team = new int[outcome_number];
+	outcome_odds = new float[outcome_number];
+	outcome_probabilities = new float[outcome_number];
+
+	for (int i = 0; i < outcome_number; i++) {
+		outcome_name[i] = new char[strlen(line->outcome_name[i]) + 1];
+		std::strcpy(outcome_name[i], line->outcome_name[i]);
+		outcome_id[i] = line->outcome_id[i];
+		if (outcome_id[i] == bet_outcome_id) selected_outcome_id = i;
+		outcome_team[i] = line->outcome_team[i];
+		outcome_active[i] = line->outcome_active[i];
+		outcome_probabilities[i] = line->outcome_probabilities[i];
+		outcome_odds[i] = line->outcome_odds[i];
+	}
+
+
+	for (int i = 0; i < specifier_number; i++) { if (specifier[i] != NULL) delete[] specifier[i]; if (specifier_value[i] != NULL) delete[] specifier_value[i]; }
+	if (specifier != NULL) { delete[] specifier; specifier = NULL; }
+	if (specifier_value != NULL) { delete[] specifier_value; specifier_value = NULL; }
+
+
+
+	specifier_number = line->specifier_number;
+	std::strcpy(name, line->name);
+	specifier = new char*[specifier_number];
+	specifier_value = new char*[specifier_number];
+
+	for (int i = 0; i < specifier_number; i++) {
+		if (line->specifier[i] != NULL) {
+			specifier[i] = new char[strlen(line->specifier[i]) + 1]; std::strcpy(specifier[i], line->specifier[i]);
+		}
+		else specifier[i] = NULL;
+		if (line->specifier_value[i] != NULL) { specifier_value[i] = new char[strlen(line->specifier_value[i]) + 1]; std::strcpy(specifier_value[i], line->specifier_value[i]); }
+		else specifier_value[i] = NULL;
+	}
+
+
+	extended_specifier_number = line->extended_specifier_number;
+	std::strcpy(name, line->name);
+	extended_specifier = new char*[extended_specifier_number];
+	extended_specifier_value = new char*[extended_specifier_number];
+
+	for (int i = 0; i < extended_specifier_number; i++) {
+		if (line->extended_specifier[i] != NULL) {
+			extended_specifier[i] = new char[strlen(line->extended_specifier[i]) + 1]; std::strcpy(extended_specifier[i], line->extended_specifier[i]);
+		}
+		else extended_specifier[i] = NULL;
+		if (line->extended_specifier_value[i] != NULL) { extended_specifier_value[i] = new char[strlen(line->extended_specifier_value[i]) + 1]; std::strcpy(extended_specifier_value[i], line->extended_specifier_value[i]); }
+		else extended_specifier_value[i] = NULL;
+	}
+	if (selected_outcome_id == -1) { printf("error bet_outcome_id =%d not found in this line/r/n", bet_outcome_id); status = -1; return; }
+	setHistoryData();
+}
+string Bet::getCatKey() {
+	if (event_id > 0) {
+		return "e" + to_string(event_id);
+	}
+	else if (tournament_id > 0) {
+		return "t" + to_string(tournament_id);
+	}
+	else if (simple_id > 0) {
+		return "s" + to_string(simple_id);
+	}
+	else {
+		cout << "Something wrong with this line: " << name << endl;
+		return "";
+	}
+}
+string Bet::getCompoundKey() {
+	ostringstream key_oss;
+	key_oss.str("");  // reset our stream
+	key_oss << getCatKey() << ";" << market_id;
+	if (specifier_number > 0) {
+		key_oss << ";";  // add this only if there are specifiers for the line
+		for (int i = 0; i < specifier_number; i++) {
+			if (i != 0) key_oss << "&";
+			key_oss << specifier_value[i];
+		}
+	}
+	return key_oss.str();
+}
+
+class Ticket {
+public:
+	Ticket();
+	~Ticket() { if (bet_id != nullptr) delete bet_id; };
+	int id;
+	int client_id;
+	int freebet;
+	int status;// 0 initiate //1 accepted //calculated 
+	int64_t timestamp;
+	int bet_number;
+	int* bet_id;
+	int system_selected;
+	int type;//1 ordinar //2 express //3 system
+	float ñoeff;//1 ordinar //2 express ñoef //3 system ñoef
+	float ñoeff_settlement;//1 ordinar //2 express ñoef //3 system ñoef
+	float stake;
+	float payout;
+	float returned;
+	float bonus;
+	float coeff_bonus;
+	void operator = (const Ticket&);
+};
+void Ticket:: operator = (const Ticket & rhs) {
+	if (this == &rhs) return;
+	id=rhs.id;
+	client_id = rhs.client_id;
+	freebet = rhs.freebet;
+	status = rhs.status;// 0 initiate //1 accepted //calculated 
+	timestamp = rhs.timestamp;
+	bet_number = rhs.bet_number;
+	if (bet_id != nullptr) delete[] bet_id;
+	if (bet_number > 0) bet_id = new int[bet_number];
+	for (int i = 0; i < bet_number; i++) bet_id[i] = rhs.bet_id[i];
+	system_selected = rhs.system_selected;
+	type = rhs.type;//1 ordinar //2 express //3 system
+	ñoeff = rhs.ñoeff;//1 ordinar //2 express ñoef //3 system ñoef
+	ñoeff_settlement = rhs.ñoeff_settlement;//1 ordinar //2 express ñoef //3 system ñoef
+	stake = rhs.stake;
+	payout = rhs.payout;
+	returned = rhs.returned;
+	bonus = rhs.bonus;
+	coeff_bonus = rhs.coeff_bonus;
+}
+Ticket::Ticket() {
+	id = 0;
+	client_id = 0;
+	freebet = 0;
+	status = 0;
+	timestamp = 0;
+	bet_number =0;
+	bet_id = nullptr;
+	system_selected = 0;
+	type = 0;
+	ñoeff = 0;
+	ñoeff_settlement = 0;
+	stake = 0;
+	payout = 0;
+	returned = 0;
+	bonus = 0;
+	coeff_bonus = 0;
+};
+
+
+
+
+
 
 
 class wsClient {
@@ -4043,6 +4856,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	float* outcome_odds = new float[500];
 	for (int i = 0; i < 500; i++) outcome_name[i] = NULL;
 	Line* _line = new Line();
+	Market* _market = nullptr;
 	//char* socket_message_big = new char[145000];
 	char* buffer = new char[145000];
 	size_t offset = 0;
@@ -4133,6 +4947,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+			//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season:
 
 			
 			if (debug_output == true) printf("fixture_change type_radar=%d\r\n", type_radar);
@@ -4359,10 +5174,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
 				if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-				//2  sr:simple_tournament:
-				//0  sr:match:
-		        //3  sr:season:  
-				//1  sr:race_event:  
+				
+				//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season:
+				_line->type_radar = type_radar;
 
 				if (event_id == 0) {
 					std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value());
@@ -4458,7 +5272,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						_line->tournament_id = 0;
 						_line->event_id = 0;
 						_line->simple_id = _tournament->simple_id;
-						_line->betstop_reason = betstop_reason;
+						//_line->betstop_reason = betstop_reason;
 
 						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 						{
@@ -4596,12 +5410,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									std::printf("Variant market1 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 									for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 								}
-								_line->market = markets_id[_line->market_id][u];
+								_market = markets_id[_line->market_id][u];
 								if (outcomeNameError == 1)outcomeNameError = 2;
 
 								if (_line->type == 3) z = 16;
 							}
-							else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+							else { _market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 							outcome_number = 0;
 
 							for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
@@ -4656,8 +5470,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							if (_line->name != NULL) delete[] _line->name;
 
 
-							_line->name = new char[strlen(_line->market->name) + 1];
-							std::strcpy(_line->name, _line->market->name);
+							_line->name = new char[strlen(_market->name) + 1];
+							std::strcpy(_line->name, _market->name);
 							for (int i = 0; i < _line->specifier_number; i++) {
 								if (i == _line->variant) continue;
 
@@ -4704,20 +5518,20 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 									if (_line->type == 0) {
-										if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+										if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 										else
-											for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+											for (u = 0; u < _market->outcome_number; u++) if (_line->outcome_id[i] == _market->outcome_id[u]) break;
 
-										if (u < _line->market->outcome_number) {
-											_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-											std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+										if (u < _market->outcome_number) {
+											_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+											std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 										}
 										else {
 											std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d GoTo GetVarianMarket \r\n", _line->market_id, _line->outcome_id[i]);
 											_line->outcome_name[i] = new char[2];
 											std::strcpy(_line->outcome_name[i], " ");
-											if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+											if (_market->variant > -1) printf("_market->variant=%s\r\n", _market->variable_text);
 											if (outcomeNameError == 0) outcomeNameError = 1;
 
 
@@ -4781,10 +5595,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 										if (_line->outcome_team[i] == 3) {
 
-											for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-											if (u < _line->market->outcome_number) {
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+											for (u = 0; u < _market->outcome_number; u++) if (_market->outcome_id[u] == _line->outcome_id[i]) break;
+											if (u < _market->outcome_number) {
+												_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+												std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 												for (int j = 0; j < _line->specifier_number; j++) {
 													if (j == _line->variant) continue;
@@ -4862,10 +5676,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										}
 										else
 										{
-											for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-											if (u < _line->market->outcome_number) {
-												_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-												std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+											for (u = 0; u < _market->outcome_number; u++) if (_market->outcome_id[u] == _line->outcome_id[i]) break;
+											if (u < _market->outcome_number) {
+												_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+												std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 												for (int j = 0; j < _line->specifier_number; j++) {
 													if (j == _line->variant) continue;
 													replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
@@ -4896,18 +5710,18 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 									if (_line->type == 3) {
 
-										if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+										if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 										else
-											for (u = 0; u < _line->market->outcome_number; u++) {
+											for (u = 0; u < _market->outcome_number; u++) {
 
 
-												if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+												if (_line->outcome_id[i] == _market->outcome_id[u]) break;
 											}
 
-										if (u < _line->market->outcome_number) {
+										if (u < _market->outcome_number) {
 
-											_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-											std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+											_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+											std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 										}
 										else {
@@ -4916,8 +5730,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											_line->outcome_name[i] = new char[2];
 											std::strcpy(_line->outcome_name[i], " ");
 											if (outcomeNameError == 0) outcomeNameError = 1;
-											if (_line->market->variant > -1)
-												printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+											if (_market->variant > -1)
+												printf("_market->variant=%s\r\n", _market->variable_text);
 
 										}
 
@@ -4950,7 +5764,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								}
 
 
-								if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError1;
+								if (outcomeNameError == 1 && _market->variant > -1) goto outcomeNameError1;
 							}
 
 
@@ -5137,7 +5951,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						_line->tournament_id = _tournament->id;
 						_line->event_id = 0;
 						_line->simple_id = 0;
-						_line->betstop_reason = betstop_reason;
+						//_line->betstop_reason = betstop_reason;
 
 						for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 						{
@@ -5266,11 +6080,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								std::printf("Variant market2 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 							}
-							_line->market = markets_id[_line->market_id][u];
+							_market = markets_id[_line->market_id][u];
 							if (outcomeNameError == 1) outcomeNameError = 2;
 							if (_line->type == 3) z = 16;
 						}
-											else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+											else { _market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 											outcome_number = 0;
 
 											for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
@@ -5325,8 +6139,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											if (_line->name != NULL) delete[] _line->name;
 
 
-											_line->name = new char[strlen(_line->market->name) + 1];
-											std::strcpy(_line->name, _line->market->name);
+											_line->name = new char[strlen(_market->name) + 1];
+											std::strcpy(_line->name, _market->name);
 											for (int i = 0; i < _line->specifier_number; i++) {
 												if (i == _line->variant) continue;
 
@@ -5377,13 +6191,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 													if (_line->type == 0) {
-														if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+														if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 														else
-															for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+															for (u = 0; u < _market->outcome_number; u++) if (_line->outcome_id[i] == _market->outcome_id[u]) break;
 
-														if (u < _line->market->outcome_number) {
-															_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-															std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+														if (u < _market->outcome_number) {
+															_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+															std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 														}
 														else {
@@ -5391,7 +6205,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															_line->outcome_name[i] = new char[2];
 															std::strcpy(_line->outcome_name[i], " ");
 
-															if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+															if (_market->variant > -1) printf("_market->variant=%s\r\n", _market->variable_text);
 															if (outcomeNameError == 0) outcomeNameError = 1;
 
 														}
@@ -5454,10 +6268,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 														if (_line->outcome_team[i] == 3) {
 
-															for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-															if (u < _line->market->outcome_number) {
-																_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-																std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+															for (u = 0; u < _market->outcome_number; u++) if (_market->outcome_id[u] == _line->outcome_id[i]) break;
+															if (u < _market->outcome_number) {
+																_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+																std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 																for (int j = 0; j < _line->specifier_number; j++) {
 																	if (j == _line->variant) continue;
@@ -5532,10 +6346,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 														}
 														else
 														{
-															for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-															if (u < _line->market->outcome_number) {
-																_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-																std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+															for (u = 0; u < _market->outcome_number; u++) if (_market->outcome_id[u] == _line->outcome_id[i]) break;
+															if (u < _market->outcome_number) {
+																_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+																std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 																for (int j = 0; j < _line->specifier_number; j++) {
 																	if (j == _line->variant) continue;
 																	replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
@@ -5564,18 +6378,18 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 													if (_line->type == 3) {
 
-														if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+														if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 														else
-															for (u = 0; u < _line->market->outcome_number; u++) {
+															for (u = 0; u < _market->outcome_number; u++) {
 
 
-																if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+																if (_line->outcome_id[i] == _market->outcome_id[u]) break;
 															}
 
-														if (u < _line->market->outcome_number) {
+														if (u < _market->outcome_number) {
 
-															_line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-															std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+															_line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+															std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 														}
 														else {
@@ -5583,8 +6397,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															_line->outcome_name[i] = new char[2];
 															std::strcpy(_line->outcome_name[i], " ");
 
-															if (_line->market->variant > -1)
-																printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+															if (_market->variant > -1)
+																printf("_market->variant=%s\r\n", _market->variable_text);
 															if (outcomeNameError == 0) outcomeNameError = 1;
 
 														}
@@ -5622,7 +6436,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												}
 
-												if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError2;
+												if (outcomeNameError == 1 && _market->variant > -1) goto outcomeNameError2;
 											}
 
 
@@ -6122,7 +6936,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (odds != NULL) {
 						betstop_reason = 0;
 						if (odds->first_attribute("betstop_reason")) betstop_reason = atoi(odds->first_attribute("betstop_reason")->value());
-						_line->betstop_reason = betstop_reason;
+						//_line->betstop_reason = betstop_reason;
 						_line->event_id = event_id;
 						_line->tournament_id = 0;
 						_line->simple_id = 0;
@@ -6256,11 +7070,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								std::printf("Variant market3 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarkets\r\n"); if (getVariantMarkets(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
 								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != NULL && markets_id[_line->market_id][u]->variable_text != NULL && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 							}
-							_line->market = markets_id[_line->market_id][u];
+							_market = markets_id[_line->market_id][u];
 							if (outcomeNameError == 1) outcomeNameError = 2;
 							if (_line->type == 3) z = 16;
 						}
-										   else { _line->market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+										   else { _market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
 										   outcome_number = 0;
 										   if (debug_output == true) printf("start parse market2\r\n");
 										   for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
@@ -6314,9 +7128,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 										   if (debug_output == true) printf("start parse market4\r\n");
 										   if (_line->name != NULL) delete[] _line->name;
-										   _line->name = new char[strlen(_line->market->name) + 1];
-										   std::strcpy(_line->name, _line->market->name);
-										   std::strcpy(_line->name, _line->market->name);
+										   _line->name = new char[strlen(_market->name) + 1];
+										   std::strcpy(_line->name, _market->name);
+										   std::strcpy(_line->name, _market->name);
 
 										   for (int i = 0; i < _line->specifier_number; i++) {
 											   if (i == _line->variant) continue;
@@ -6350,7 +7164,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											   _line->outcome_active = new int[_line->outcome_number];
 											   _line->outcome_probabilities = new float[_line->outcome_number];
 											   _line->outcome_odds = new float[_line->outcome_number];
-                                              if (debug_output == true) printf("start parse market5 %d\r\n", _line->market->id);
+                                              if (debug_output == true) printf("start parse market5 %d\r\n", _market->id);
 
 										
 
@@ -6370,13 +7184,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 												   if (_line->type == 0) {
-													   if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+													   if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 													   else
-														   for (u = 0; u < _line->market->outcome_number; u++) if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+														   for (u = 0; u < _market->outcome_number; u++) if (_line->outcome_id[i] == _market->outcome_id[u]) break;
 
-													   if (u < _line->market->outcome_number) {
-														   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-														   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+													   if (u < _market->outcome_number) {
+														   _line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+														   std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 													   }
 													   else {
@@ -6384,7 +7198,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 														   _line->outcome_name[i] = new char[2];
 														   std::strcpy(_line->outcome_name[i], " ");
-														   if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+														   if (_market->variant > -1) printf("_market->variant=%s\r\n", _market->variable_text);
 														   if (outcomeNameError == 0) outcomeNameError = 1;
 
 
@@ -6504,10 +7318,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 													   if (_line->outcome_team[i] == 3) {
 
-														   for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-														   if (u < _line->market->outcome_number) {
-															   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-															   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+														   for (u = 0; u < _market->outcome_number; u++) if (_market->outcome_id[u] == _line->outcome_id[i]) break;
+														   if (u < _market->outcome_number) {
+															   _line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+															   std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 															   for (int j = 0; j < _line->specifier_number; j++) {
 																   if (j == _line->variant) continue;
@@ -6592,10 +7406,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   }
 													   else
 													   {
-														   for (u = 0; u < _line->market->outcome_number; u++) if (_line->market->outcome_id[u] == _line->outcome_id[i]) break;
-														   if (u < _line->market->outcome_number) {
-															   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-															   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+														   for (u = 0; u < _market->outcome_number; u++) if (_market->outcome_id[u] == _line->outcome_id[i]) break;
+														   if (u < _market->outcome_number) {
+															   _line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+															   std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 															   for (int j = 0; j < _line->specifier_number; j++) {
 																   if (j == _line->variant) continue;
 																   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
@@ -6625,25 +7439,25 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   if (_line->type == 3) {
 
-													   if (_line->outcome_id[i] == _line->market->outcome_id[i]) u = i;
+													   if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 													   else
-														   for (u = 0; u < _line->market->outcome_number; u++) {
+														   for (u = 0; u < _market->outcome_number; u++) {
 
 
-															   if (_line->outcome_id[i] == _line->market->outcome_id[u]) break;
+															   if (_line->outcome_id[i] == _market->outcome_id[u]) break;
 														   }
 
-													   if (u < _line->market->outcome_number) {
+													   if (u < _market->outcome_number) {
 
-														   _line->outcome_name[i] = new char[strlen(_line->market->outcome_name[u]) + 1];
-														   std::strcpy(_line->outcome_name[i], _line->market->outcome_name[u]);
+														   _line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
+														   std::strcpy(_line->outcome_name[i], _market->outcome_name[u]);
 
 													   }
 													   else {
 														   std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
 														   _line->outcome_name[i] = new char[2];
 														   std::strcpy(_line->outcome_name[i], " ");
-														   if (_line->market->variant > -1) printf("_line->market->variant=%s\r\n", _line->market->variable_text);
+														   if (_market->variant > -1) printf("_market->variant=%s\r\n", _market->variable_text);
 														   if (outcomeNameError == 0) outcomeNameError = 1;
 													   }
 
@@ -6685,7 +7499,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-											   if (outcomeNameError == 1 && _line->market->variant > -1) goto outcomeNameError3;
+											   if (outcomeNameError == 1 && _market->variant > -1) goto outcomeNameError3;
 										   }
 										   if (debug_output == true) printf("start parse market6\r\n");
 
@@ -9251,7 +10065,7 @@ return split_array;
 		 
 		 if (l == 0) return;
 		 index1[l] = -1;
-		 retValue = new char[string_l + 100 + l*(value_l - sub_l)];
+		 retValue = new char[string_l + 150 + l*(value_l - sub_l)];
 		 retValue[0] = 0;
 
 		 for (i = 0; i < 20; i++) {
@@ -9749,7 +10563,7 @@ void processLoadedMarkets() {
 		if (markets[k].id == 315) markets[k].line_type = 5;//{!setnr} set - 1x2 Bowls
 		if (markets[k].id == 188) markets[k].line_type = 3;//Set handicap Bowls
 		if (markets[k].id == 493) markets[k].line_type = 3;//Frame handicap Snooker
-		if (markets[k].id == 494) markets[k].line_type = 4;//Total handicap Snooker
+		if (markets[k].id == 494) markets[k].line_type = 4;// Total frames  Snooker
 		if (markets[k].id == 499) markets[k].line_type = 6;//{!framenr} frame - winner Snooker
 
 		if (markets[k].id == 204) markets[k].line_type = 8;//{!setnr} set - total games  Tennis
