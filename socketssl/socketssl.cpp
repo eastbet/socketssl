@@ -16,7 +16,7 @@
 #include <mongocxx/options/update.hpp>
 
 #pragma execution_character_set("utf-8") 
-
+#pragma warning(disable : 4996)
 
 
 #define _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -71,12 +71,6 @@ int gzip(char*, int, char* &, int);
 int64_t timestamp();
 int DMYtoSeconds(int, int, int);
 
-
-
-
-
-#define WEBSOCKET_H
-
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
 #define MALLOC(x) HeapAlloc(GetProcessHeap(), 0, (x))
@@ -110,7 +104,7 @@ typedef void(*messageCallback)(int, string);
 #define HTTPS_STATE_OPEN          5
 #define HTTPS_STATE_READ          6
 #define HTTPS_STATE_WRITE         7
- 
+#define WS_READY_STATE_DATA_ERROR 8
 
 #define WS_STATUS_NORMAL_CLOSE             1000
 #define WS_STATUS_GONE_AWAY                1001
@@ -123,8 +117,7 @@ typedef void(*messageCallback)(int, string);
 #define JUMP_PROCESS 15
 #define WS_TIMEOUT_RECV 10
 #define WS_TIMEOUT_PONG 5
-#define CERTF  "/passionbet.crt"
-#define KEYF  "/passionbet.key"
+#define MAX_OAM 100
 #define MAX_PATH 255
 #define EXTRA 67108864
 #define LARGE 16777216
@@ -133,8 +126,8 @@ typedef void(*messageCallback)(int, string);
 #define PLAYERS_LENTGH 300000
 #define COMPETITORS_LENTGH 150000
 #define NAME_LENTGH 127
-#define MAX_OUTCOME 500
-#define MAX_OUTCOME_NAME 64
+#define MAX_OUTCOME 700
+#define MAX_OUTCOME_NAME 256
 #define SPORTS_LENTGH 200
 #define BETSTOPS_LENTGH 200
 #define VOIDREASONS_LENTGH 200
@@ -144,8 +137,9 @@ typedef void(*messageCallback)(int, string);
 #define LINES_LENTGH 10000000
 #define CATEGORIES_LENTGH 10000
 #define SUMMARY_EVERY_US 1000000
-#define MARKETS_LENGTH 4000	
-//#define MAX_EVENTS 25000000
+#define MARKETS_LENGTH 10000	
+#define BET_TIMEOUT_REPORTING 3
+#define BET_TIMEOUT 7
 #define MAX_EVENTS 20000000
 #define MAX_LINES 10000000
 #define MAX_COEFF_SYSTEM 5000
@@ -154,8 +148,8 @@ typedef void(*messageCallback)(int, string);
 #define MAX_COMPETITORS 1000000
 #define MAX_PLAYERS 10000000
 #define MAX_SPORTS 1000
-#define MAX_MARKETS 10000
-#define MAX_MARKETS_IN 2000
+#define MAX_MARKETS 7000
+#define MAX_MARKETS_IN 5000
 #define MAX_BETSTOPS 200
 #define MAX_VOIDREASONS 200
 #define MAX_MATCHSTATUS 1000
@@ -165,11 +159,61 @@ typedef void(*messageCallback)(int, string);
 #define STEP_QUEUE 100
 #define AMQP_QUEUE 5000
 #define AMQP_BUFLEN 262144
-#define MTS_FLAG 1
+#define DEBUG_OUTPUT false
+#define PRINT false
 #define PROBABILITIES 0
+#define USER 0
 #define REPLAY 0
-//#define MONGO_URI "mongodb://bet:38998716@192.168.44.24:27017/?authSource=betdb"
+#define WRITE_NEW_DATA_TO_MONGO  true
+
+#if USER == 0
+#define MTS_FLAG 2
 #define MONGO_URI "mongodb://bet:38998716@192.168.44.23:27017/?authSource=betdb"
+#define CERTF  "/passionbet.crt"
+#define KEYF  "/passionbet.key"
+#define BOOKMAKERID 19751
+#define TOKEN "YaNJ9uwq8GHe953XQD"
+#define UOF_URL "/unifiedfeed/19751"
+#define MTS_NAME "passionbettest_19751"
+#define MTS_URL "/passionbettest_19751"
+#define MTS_HOSTNAME "integration-mts.betradar.com"
+#define MTS_TOKEN "7IdKP1jwq1"
+#define SMS_REQUEST "/sys/send.php?login=Atajan&psw=Qwaszx654&sender=PassionBet&phones="
+#endif
+#if USER == 1
+#define MTS_FLAG 1
+#define MONGO_URI "mongodb://bet:38998716@192.168.44.24:27017/?authSource=betdb"
+#define CERTF  "/passionbet.crt"
+#define KEYF  "/passionbet.key"
+#define BOOKMAKERID 19751
+#define TOKEN "YaNJ9uwq8GHe953XQD"
+#define UOF_URL "/unifiedfeed/19751"
+#define MTS_NAME "passionbettest_19751"
+#define MTS_URL "/passionbettest_19751"
+#define MTS_HOSTNAME "integration-mts.betradar.com"
+#define MTS_TOKEN "7IdKP1jwq1"
+#define SMS_REQUEST "/sys/send.php?login=Atajan&psw=Qwaszx654&sender=PassionBet&phones="
+#endif
+#if USER == 2
+#define MTS_FLAG 2
+#define MONGO_URI "mongodb://bet:38998716@192.168.18.123:27017/?authSource=betdb"
+#define CERTF  "/gbpremiumcom.crt"
+#define KEYF  "/gbpremiumcom.key"
+#define BOOKMAKERID 6521
+#define TOKEN "poHzp01TAHOWHzeHfz"
+#define UOF_URL "/unifiedfeed/6521"
+#define MTS_NAME "passionbettest_19751"
+#define MTS_URL "/passionbettest_19751"
+#define MTS_HOSTNAME "integration-mts.betradar.com"
+#define MTS_TOKEN "7IdKP1jwq1"
+#define SMS_REQUEST "/sys/send.php?login=greenbet.ru&psw=159874GHwfged&sender=GreenBet&phones="
+#endif
+
+#define UPDATE_AND_TRANSLATE 0 // 0 - server mode ; 1 - translate Mongo sports ; 2 - get24HoursFixture ; 3 - translate Mongo tournaments ; 4 - translate Mongo markets ; 5 - translate Mongo competitors; 6 - translate Mongo players; 7 - add new markets to Mongo ; 8 - add new sports to Mongo ; 9 - add new categories/tournamnets to Mongo ; 10 - add new events to Mongo
+
+#define BOOKING 0
+
+
 #pragma pack(push, 8)
 //#pragma pack(pop)
 #define LANG_NUM 18;
@@ -208,31 +252,28 @@ DWORD dwThreadID8;
 DWORD ExitCode8;
 DWORD WINAPI ClientSMSProcessThread(LPVOID);
 
-HANDLE hThread6;
-DWORD dwThreadID6;
-DWORD ExitCode6;
-DWORD WINAPI ClientsProcessThread(LPVOID);
 
-HANDLE hThread3[20];
-DWORD dwThreadID3[20];
+HANDLE* hThread3;
+DWORD* dwThreadID3;
 DWORD ExitCode3;
 DWORD WINAPI MTSPublishThread(LPVOID);
 
-HANDLE hThread9[20];
-DWORD dwThreadID9[20];
+HANDLE* hThread9;
+DWORD* dwThreadID9;
 DWORD ExitCode9;
 DWORD WINAPI MTSConsumeThread(LPVOID);
 
 
-int server_id = 0;
-atomic_int run_mts_num = 0;
+
+atomic_int run_mts_num = 2;
 atomic_int run_num = 0;
-atomic_int mts_error[20] ;
+atomic_int mts_error[20];
 atomic_int64_t recovery_state = -1;
 int64_t recovery_timestamp = 0;
 //int64_t thread_timestamp;
 atomic_int64_t recovery_state_timestamp = 0;
 atomic_int64_t https_request_status = 0;
+atomic_int mts_disconnect = 0;
 void GenerateBigStep();
 int* data_step_len_1 = new int[STEP_QUEUE];
 int* data_step_len_2 = new int[STEP_QUEUE];
@@ -261,11 +302,12 @@ using namespace std;
 class Sport {
 public:
 	Sport();
-	~Sport() { delete[] name; for (int i = 0; i < translation_num; i++) {
-		if (translation_name != nullptr) { if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; }
-	}
+	~Sport() {
+		delete[] name; for (int i = 0; i < translation_num; i++) {
+			if (translation_name != nullptr) { if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; }
+		}
 
-	if (translation_name != nullptr) { delete[] translation_name; translation_name = nullptr; }
+		if (translation_name != nullptr) { delete[] translation_name; translation_name = nullptr; }
 	};
 	int id;
 	int sort;
@@ -422,7 +464,8 @@ void Player:: operator = (const Player & rhs) {
 			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
-			if (rhs.translation_full_name[i] != nullptr) { translation_full_name[i] = new char[strlen(rhs.translation_full_name[i]) + 1]; strcpy(translation_full_name[i], rhs.translation_full_name[i]); }	else translation_full_name[i] = nullptr;
+			if (rhs.translation_full_name[i] != nullptr) { translation_full_name[i] = new char[strlen(rhs.translation_full_name[i]) + 1]; strcpy(translation_full_name[i], rhs.translation_full_name[i]); }
+			else translation_full_name[i] = nullptr;
 
 			if (rhs.translation_type[i] != nullptr) { translation_type[i] = new char[strlen(rhs.translation_type[i]) + 1]; strcpy(translation_type[i], rhs.translation_type[i]); }
 			else translation_type[i] = nullptr;
@@ -520,7 +563,7 @@ void Competitor:: operator = (const Competitor & rhs) {
 
 	if (translation_name != nullptr) { delete[] translation_name; translation_name = nullptr; }
 	if (translation_country_name != nullptr) { delete[] translation_country_name; translation_country_name = nullptr; }
-	
+
 	translation_num = rhs.translation_num;
 
 	if (rhs.translation_num > 0) {
@@ -554,14 +597,15 @@ Competitor::Competitor() {
 class Tournament {
 public:
 	Tournament();
-	~Tournament() { if (name != nullptr) delete[] name; if (season_name != nullptr) delete[] season_name; 
-	for (int i = 0; i < translation_num; i++) {
-		if (translation_season_name != nullptr) { if (translation_season_name[i] != nullptr) delete[] translation_season_name[i]; translation_season_name[i] = nullptr; }
-		if (translation_name != nullptr) { if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; }
-	}
+	~Tournament() {
+		if (name != nullptr) delete[] name; if (season_name != nullptr) delete[] season_name;
+		for (int i = 0; i < translation_num; i++) {
+			if (translation_season_name != nullptr) { if (translation_season_name[i] != nullptr) delete[] translation_season_name[i]; translation_season_name[i] = nullptr; }
+			if (translation_name != nullptr) { if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; }
+		}
 
-	if (translation_name != nullptr) { delete[] translation_name; translation_name = nullptr; }
-	if (translation_season_name != nullptr) { delete[] translation_season_name; translation_season_name = nullptr; }
+		if (translation_name != nullptr) { delete[] translation_name; translation_name = nullptr; }
+		if (translation_season_name != nullptr) { delete[] translation_season_name; translation_season_name = nullptr; }
 
 
 	};
@@ -599,7 +643,7 @@ void Tournament:: operator = (const Tournament & rhs) {
 		name = new char[strlen(rhs.name) + 1];
 		std::strcpy(name, rhs.name);
 	}
-    if (season_name != nullptr) {
+	if (season_name != nullptr) {
 		delete[] season_name; season_name = nullptr;
 	}
 	if (rhs.season_name != nullptr) {
@@ -614,7 +658,8 @@ void Tournament:: operator = (const Tournament & rhs) {
 			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
-			if (rhs.translation_season_name[i] != nullptr) { translation_season_name[i] = new char[strlen(rhs.translation_season_name[i]) + 1]; strcpy(translation_season_name[i], rhs.translation_season_name[i]); }	else translation_season_name[i] = nullptr;
+			if (rhs.translation_season_name[i] != nullptr) { translation_season_name[i] = new char[strlen(rhs.translation_season_name[i]) + 1]; strcpy(translation_season_name[i], rhs.translation_season_name[i]); }
+			else translation_season_name[i] = nullptr;
 
 		}
 	}
@@ -713,8 +758,8 @@ public:
 		if (home_name != nullptr) delete[] home_name; if (tv_channels != nullptr) delete[] tv_channels; if (venue != nullptr) delete[] venue; if (away_name != nullptr) delete[] away_name;
 		if (set_scores != nullptr) delete[] set_scores;  if (match_time != nullptr) delete[] match_time; if (remaining_time != nullptr) delete[] remaining_time; if (remaining_time_in_period != nullptr) delete[] remaining_time_in_period; if (bases != nullptr) delete[] bases;
 		if (stoppage_time != nullptr) delete[] stoppage_time; if (stoppage_time_announced != nullptr) delete[] stoppage_time_announced; if (delayed_description != nullptr) delete[] delayed_description;
-		
-	
+
+
 
 		for (int i = 0; i < translation_num; i++) {
 			if (translation_tv_channels != nullptr) { if (translation_tv_channels[i] != nullptr) delete[] translation_tv_channels[i]; translation_tv_channels[i] = nullptr; }
@@ -726,8 +771,8 @@ public:
 		if (translation_home_name != nullptr) { delete[] translation_home_name; translation_home_name = nullptr; }
 		if (translation_tv_channels != nullptr) { delete[] translation_tv_channels; translation_tv_channels = nullptr; }
 
-	
-	
+
+
 	};
 
 
@@ -964,7 +1009,7 @@ void Event:: operator = (const Event & rhs) {
 	if (translation_tv_channels != nullptr) { delete[] translation_tv_channels; translation_tv_channels = nullptr; }
 
 	translation_num = rhs.translation_num;
-	
+
 	if (rhs.translation_num > 0) {
 		translation_tv_channels = new char*[translation_num];
 		translation_home_name = new char*[translation_num];
@@ -1119,9 +1164,9 @@ Event::Event() {
 	delayed_description = nullptr;
 	bet_stop = 0;
 	translation_num = LANG_NUM;
-	translation_tv_channels = new char* [translation_num];
-	translation_home_name = new char* [translation_num];
-	translation_away_name = new char* [translation_num];
+	translation_tv_channels = new char*[translation_num];
+	translation_home_name = new char*[translation_num];
+	translation_away_name = new char*[translation_num];
 	for (int i = 0; i < translation_num; i++) {
 		translation_away_name[i] = nullptr;
 		translation_home_name[i] = nullptr;
@@ -1138,22 +1183,25 @@ public:
 		if (outcome_id != nullptr) delete[] outcome_id; if (outcome_name != nullptr) delete[] outcome_name;
 		if (specifier_number > 0) { for (int i = 0; i < specifier_number; i++) if (specifier_name[i] != nullptr) delete[] specifier_name[i]; for (int i = 0; i < specifier_number; i++) if (specifier_description[i] != nullptr) delete[] specifier_description[i]; } if (specifier_type != nullptr) delete[] specifier_type; if (specifier_name != nullptr) delete[] specifier_name;
 		if (specifier_description != nullptr) delete[] specifier_description; if (variable_text != nullptr) delete[] variable_text;
-	
-		if (translation_name != nullptr){
+
+		if (translation_name != nullptr) {
 			for (int i = 0; i < translation_num; i++) {
-				{ if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; } }
+				{ if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; }
+			}
 			delete[] translation_name; translation_name = nullptr;
 		}
-			
+
 		if (translation_outcome_name != nullptr) {
 			for (int i = 0; i < translation_num; i++) {
 				if (translation_outcome_name[i] != nullptr) {
 					for (int j = 0; j < outcome_number; j++) { if (translation_outcome_name[i][j] != nullptr) delete[] translation_outcome_name[i][j]; translation_outcome_name[i][j] = nullptr; }
-					delete[] translation_outcome_name[i]; translation_outcome_name[i] = nullptr; } 
+					delete[] translation_outcome_name[i]; translation_outcome_name[i] = nullptr;
+				}
 			}
-			delete[] translation_outcome_name; translation_outcome_name = nullptr; }
+			delete[] translation_outcome_name; translation_outcome_name = nullptr;
+		}
 
-	
+
 	};
 
 	int id;
@@ -1161,7 +1209,7 @@ public:
 	char* variable_text;
 	int variant;
 	int translation_num;
-	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext//4 liveodds:outcometext
+	int type;//0 -normal//1-sr:player liveodds:outcometext lo:cricet //2-sr:competitor//3 pre:outcometext 4:// pre:playerprops
 	int line_type;//ID_TIP_EVENT SITE
 	char* name;
 	char** translation_name;
@@ -1180,8 +1228,10 @@ void Market:: operator = (const Market & rhs) {
 	id = rhs.id;
 	//site_id = rhs.site_id;
 
-	if (outcome_name != nullptr){ for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) { delete[] outcome_name[i]; outcome_name[i] = nullptr; }
-	 delete[] outcome_name; outcome_name = nullptr; }
+	if (outcome_name != nullptr) {
+		for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) { delete[] outcome_name[i]; outcome_name[i] = nullptr; }
+		delete[] outcome_name; outcome_name = nullptr;
+	}
 	if (outcome_id != nullptr) { delete[] outcome_id; outcome_id = nullptr; }
 
 	if (variable_text != nullptr) {
@@ -1234,7 +1284,7 @@ void Market:: operator = (const Market & rhs) {
 	specifier_name = new char*[specifier_number];
 	specifier_description = new char*[specifier_number];
 	specifier_type = new int[specifier_number];
-	
+
 	for (int i = 0; i < specifier_number; i++) {
 		if (rhs.specifier_name[i] != nullptr) {
 			specifier_name[i] = new char[strlen(rhs.specifier_name[i]) + 1]; std::strcpy(specifier_name[i], rhs.specifier_name[i]);
@@ -1254,7 +1304,7 @@ void Market:: operator = (const Market & rhs) {
 		delete[] translation_name; translation_name = nullptr;
 	}
 
-	
+
 	if (translation_outcome_name != nullptr) {
 		for (int i = 0; i < translation_num; i++) {
 			if (translation_outcome_name[i] != nullptr) {
@@ -1273,10 +1323,11 @@ void Market:: operator = (const Market & rhs) {
 		for (int i = 0; i < translation_num; i++) {
 			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
-		
+
 			if (rhs.translation_outcome_name[i] != nullptr) {
 				translation_outcome_name[i] = new char*[outcome_number];
-				for (int j = 0; j < outcome_number; j++) if (rhs.translation_outcome_name[i][j] != nullptr) { translation_outcome_name[i][j] = new char[strlen(rhs.translation_outcome_name[i][j]) + 1]; strcpy(translation_outcome_name[i][j], rhs.translation_outcome_name[i][j]); } else translation_outcome_name[i][j] = nullptr;
+				for (int j = 0; j < outcome_number; j++) if (rhs.translation_outcome_name[i][j] != nullptr) { translation_outcome_name[i][j] = new char[strlen(rhs.translation_outcome_name[i][j]) + 1]; strcpy(translation_outcome_name[i][j], rhs.translation_outcome_name[i][j]); }
+				else translation_outcome_name[i][j] = nullptr;
 			}
 			else translation_outcome_name[i] = nullptr;
 
@@ -1303,13 +1354,13 @@ Market::Market() {
 	translation_num = LANG_NUM;
 	translation_name = new char*[translation_num];
 	translation_outcome_name = new char**[translation_num];
-	for (int i = 0; i < translation_num; i++ ) {
-	translation_name[i] = nullptr;
-	translation_outcome_name[i] = nullptr;
+	for (int i = 0; i < translation_num; i++) {
+		translation_name[i] = nullptr;
+		translation_outcome_name[i] = nullptr;
 	}
 
 
-	
+
 
 
 
@@ -1345,7 +1396,7 @@ public:
 	int team;
 	int status; //0 (inactive)// 1 (active) //-1(suspended) //- 3 (cleared, settled) //- 4 (cancelled)	//handed_over(-2)
 	int favourite;
-	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext // 4 liveodds:outcometext
+	int type;//0 -normal liveodds:outcometext //1-sr:player//2-sr:competitor//3 pre:outcometext // 4: pre:playerprops  
 	int type_radar;//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament
 	int variant;
 	char* name;
@@ -1593,8 +1644,20 @@ Matchstatus::Matchstatus() {
 	description = nullptr;
 };
 
-enum Currency { MANAT = 1, RUB = 2, EURO = 3, USD = 4, LIRA = 5, VIRTUAL = 6 };
+#if USER == 0
+enum Currency { TMT = 1, RUB = 2, EUR = 3, USD = 4, TRY = 5, VM = 6 };
 string currency_name[] = { "TMT", "RUB", "EUR", "USD", "TRY", "VM" };
+#endif
+
+#if USER == 1
+enum Currency { TMT = 1, RUB = 2, EUR = 3, USD = 4, TRY = 5, VM = 6 };
+string currency_name[] = { "TMT", "RUB", "EUR", "USD", "TRY", "VM" };
+#endif
+
+#if USER == 2
+enum Currency { RUB = 1, EUR = 2, USD = 3, GBP = 4, JPY = 5, CNY = 6, RON = 7, BGN = 8, HUF = 9, TRY = 10, KRW = 11, CZK = 12, KZT = 13, BYN = 14, TMT = 15, INR = 16, PLN = 17, UZS = 18, TJS = 19, KGS = 20, VM = 21 };
+string currency_name[] = { "RUB", "EUR", "USD", "GBP", "JPY", "CNY", "RON", "BGN", "HUF", "TRY", "KRW", "CZK", "KZT", "BYN", "TMT", "INR", "PLN", "UZS", "TJS", "KGS", "VM" };
+#endif
 
 
 
@@ -1627,7 +1690,6 @@ Competitor** bcompetitors_id = new Competitor*[MAX_COMPETITORS];
 Player** bplayers_id = new Player*[MAX_PLAYERS];
 Market*** bmarkets_id = new Market**[MAX_MARKETS];
 int *bmax_markets_in = new int[MAX_MARKETS];
-
 
 
 
@@ -1684,6 +1746,7 @@ public:
 	Bet(Line* line, int bet_outcome_id, float bet_odd);
 	~Bet() {
 
+		if (init == 0) return;
 		if (name != nullptr) delete[] name;  if (outcome_number > 0) { for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) delete[] outcome_name[i]; };
 
 		if (outcome_id != nullptr) delete[] outcome_id; if (outcome_active != nullptr) delete[] outcome_active; if (outcome_team != nullptr) delete[] outcome_team; if (outcome_odds != nullptr) delete[] outcome_odds;
@@ -1716,8 +1779,9 @@ public:
 		if (summary != nullptr) delete[] summary;
 	};
 	string id;
-
+	int timeout;
 	int status;
+	int init;
 	int language;
 	int counter;
 	int line_id;
@@ -1736,10 +1800,14 @@ public:
 	int category_id;
 	int event_home_id;
 	int event_away_id;
+	int home_score;
+	int away_score;
+	int home_gamescore;
+	int away_gamescore;
 	int team;
 	int favourite;
-	int type;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext // 4 liveodds:outcometext
-	int type_radar;;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season: 4//sr:race_tournament
+	int type;//0 -normal liveodds:outcometext //1-sr:player//2-sr:competitor//3 pre:outcometext   //4: pre:playerprops   
+	int type_radar;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season: 4//sr:race_tournament
 	int variant;
 	char* name;
 	int void_reason;
@@ -1771,6 +1839,7 @@ public:
 	char* season_name;
 	char* sport_name;
 	char* event_away_name;
+
 	char* event_home_name;
 	char* event_match_time;
 	char* event_remaining_time;
@@ -1795,7 +1864,10 @@ public:
 void Bet:: operator = (const Bet & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
+	timeout = rhs.timeout;
 	status = rhs.status;
+	init = rhs.init;
+	if (rhs.init == 0) return;
 	market_id = rhs.market_id;
 	counter = rhs.counter;
 	event_id = rhs.event_id;
@@ -1834,6 +1906,10 @@ void Bet:: operator = (const Bet & rhs) {
 	event_overtime_length = rhs.event_overtime_length;
 	event_current_server = rhs.event_current_server;
 	event_bo = rhs.event_bo;
+	home_score = rhs.home_score;
+	away_score = rhs.away_score;
+	home_gamescore = rhs.home_gamescore;
+	away_gamescore = rhs.away_gamescore;
 
 	if (name != nullptr) {
 		delete[] name; name = nullptr;
@@ -2140,6 +2216,8 @@ void Bet::setHistoryData() {
 				std::strcpy(event_remaining_time_in_period, _event->remaining_time_in_period);
 			}
 
+			home_score = _event->home_score;
+			away_score = _event->away_score;
 
 			_itoa(_event->home_score, buff, 10);
 			strcpy(buff_, buff);
@@ -2160,6 +2238,8 @@ void Bet::setHistoryData() {
 			}
 
 			if (_event->sport_id == 5) {
+				home_gamescore = _event->home_gamescore;
+				away_gamescore = _event->away_gamescore;
 
 				_itoa(_event->home_gamescore, buff, 10);
 				strcpy(buff_, buff);
@@ -2284,7 +2364,7 @@ void Bet::setHistoryData() {
 
 	default:
 
-		printf("error in type_radar=%d setHistoryData", type_radar);
+		std::printf("error in type_radar=%d setHistoryData", type_radar);
 
 		break;
 
@@ -2295,8 +2375,15 @@ void Bet::setHistoryData() {
 };
 Bet::Bet() {
 	id = "";
+	init = 1;
+	timeout = 0;
 	status = 0;
 	language = 0;
+	event_bo = 0;
+	home_score = 0;
+	away_score = 0;
+	home_gamescore = 0;
+	away_gamescore = 0;
 	line_id = 0;
 	ticket_id = "";
 	counter = 0;
@@ -2316,7 +2403,7 @@ Bet::Bet() {
 	settlement_odd = 0;
 	team = 0;
 	favourite = 0;
-	type = 0;//0 -normal//1-sr:player//2-sr:competitor//3 pre:outcometext //4 liveodds:outcometext
+	type = 0;//0 -normal liveodds:outcometext //1-sr:player//2-sr:competitor//3 pre:outcometext //4: pre:playerprops 
 	type_radar = 0;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season:
 	variant = 0;
 	void_reason = 0;
@@ -2368,21 +2455,28 @@ Bet::Bet() {
 
 };
 Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
-	if (line == nullptr) { printf("error line is null\r\n"); status = -1; return; }
-	if (line->status != 1) { printf("error line status is=%d\r\n", line->status); status = -2; return; }
-
-
+	init = 0;
+	if (line == nullptr) { std::printf("error line is null\r\n"); status = -1; return; }
+	if (line->status != 1) { std::printf("error line status is=%d\r\n", line->status); status = -2; return; }
 	id = "";
 	ticket_id = "";
 	selected_outcome_id = -1;
 	line_id = line->id;
 	status = 0;
+	timeout = 0;
 	timestamp = 0;
 	settlement_odd = 0;
+	home_score = 0;
+	away_score = 0;
+	home_gamescore = 0;
+	away_gamescore = 0;
 	counter = 0;
 	place_odd = bet_odd;
 	market_id = line->market_id;
 	event_id = line->event_id;
+	if (event_id >= MAX_EVENTS) { std::printf("event_id out of MAX_EVENTS in build Bet event_id =%d\r\n", event_id); status = -2; return; }
+	if (market_id >= MAX_MARKETS) { std::printf("market_id out of MAX_MARKETS in build Bet market_id =%d\r\n", market_id); status = -2; return; }
+	init = 1;
 	favourite = line->favourite;
 	type = line->type;
 	tournament_id = line->tournament_id;
@@ -2453,7 +2547,20 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 
 	}
 
-
+	tournament_name = nullptr;;
+	category_name = nullptr;;
+	season_name = nullptr;;
+	sport_name = nullptr;
+	event_away_name = nullptr;
+	event_home_name = nullptr;
+	event_match_time = nullptr;
+	event_remaining_time = nullptr;
+	event_remaining_time_in_period = nullptr;;
+	event_score = nullptr;
+	event_set_scores = nullptr;;
+	event_game_score = nullptr;
+	event_match_status_description = nullptr;
+	summary = nullptr;
 	specifier = nullptr;
 	specifier_value = nullptr;
 
@@ -2488,22 +2595,7 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 		if (line->extended_specifier_value[i] != nullptr) { extended_specifier_value[i] = new char[strlen(line->extended_specifier_value[i]) + 1]; std::strcpy(extended_specifier_value[i], line->extended_specifier_value[i]); }
 		else extended_specifier_value[i] = nullptr;
 	}
-	if (selected_outcome_id == -1) { printf("error bet_outcome_id =%d not found in this line\r\n", bet_outcome_id); status = -5; return; }
-
-	tournament_name = nullptr;;
-	category_name = nullptr;;
-	season_name = nullptr;;
-	sport_name = nullptr;
-	event_away_name = nullptr;
-	event_home_name = nullptr;
-	event_match_time = nullptr;
-	event_remaining_time = nullptr;
-	event_remaining_time_in_period = nullptr;;
-	event_score = nullptr;
-	event_set_scores = nullptr;;
-	event_game_score = nullptr;
-	event_match_status_description = nullptr;
-	summary = nullptr;
+	if (selected_outcome_id == -1) { std::printf("error bet_outcome_id =%d not found in this line\r\n", bet_outcome_id); status = -5; return; }
 	if (place_odd > accept_odd) status = -6;
 	if (place_odd < accept_odd) status = -7;
 	setHistoryData();
@@ -2540,12 +2632,21 @@ string Bet::getCompoundKey() {
 class Ticket {
 public:
 	Ticket();
-	~Ticket() { if (bets_id != nullptr) delete bets_id; for (int i = 0; i< bets_number; i++)  if (bets[i] != nullptr) delete bets[i]; if (bets != nullptr) delete[] bets; if (mts_message != nullptr) delete[] mts_message;
+	~Ticket() {
+		if (bets_id != nullptr) delete bets_id;  if (bets != nullptr) { for (int i = 0; i < bets_number; i++)  if (bets[i] != nullptr) delete bets[i]; delete[] bets; }
+		if (mts_message != nullptr) delete[] mts_message;
 	};
 	string id;
+	string mts_id;
+	string domain;
 	int client_id;
+	int currency;
 	int freebet;
 	int counter;
+	int contact_oam;
+	int device;
+	bool is_live;
+	int timeout;
 	int status;// 0 initiate //1 accepted //calculated 
 	int action;//0 cupon //1 expressday //2 expresslife //3 freebet
 	int64_t timestamp;
@@ -2557,23 +2658,37 @@ public:
 	double coeff;//1 ordinar //2 express coef //3 system coef
 	double coeff_settlement;//1 ordinar //2 express сoef //3 system coef
 	double stake;
+	int alternative_stake;
+	atomic_int alternative_process;
+	int reoffer_stake;
+	int reoffer_count;
+	int alternative_count;
 	double payout;
 	double returned;
 	double bonus;
 	double coeff_bonus;
 	bool any_coeff;
+	bool alternative;
 	int accept_code;//-3 баланс //- 6 -7 - odds change //-1 mts published error
 	int mts;
+	int language;
 	char* mts_message;
 	void operator = (const Ticket&);
-	string generateId(int,int,int);
+	void generateId(int, int, int);
 };
 void Ticket:: operator = (const Ticket & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
+	is_live = rhs.is_live;
+	contact_oam = rhs.contact_oam;
 	counter = rhs.counter;
+	mts_id = rhs.mts_id;
+	currency = rhs.currency;
+	domain = rhs.domain;
+	language = rhs.language;
 	client_id = rhs.client_id;
 	mts = rhs.mts;
+	timeout = rhs.timeout;
 	freebet = rhs.freebet;
 	status = rhs.status;// 0 initiate //1 accepted //calculated 
 	timestamp = rhs.timestamp;
@@ -2596,6 +2711,10 @@ void Ticket:: operator = (const Ticket & rhs) {
 	coeff = rhs.coeff;//1 ordinar //2 express сoef //3 system сoef
 	coeff_settlement = rhs.coeff_settlement;//1 ordinar //2 express сoef //3 system сoef
 	stake = rhs.stake;
+	alternative_stake = rhs.alternative_stake;
+	alternative_count = rhs.alternative_count;
+	reoffer_stake = rhs.reoffer_stake;
+	reoffer_count = rhs.reoffer_count;
 	payout = rhs.payout;
 	returned = rhs.returned;
 	bonus = rhs.bonus;
@@ -2607,9 +2726,14 @@ void Ticket:: operator = (const Ticket & rhs) {
 Ticket::Ticket() {
 	id = "";
 	client_id = 0;
+	is_live = false;
 	counter = 0;
+	contact_oam = 0;
+	timeout = 0;
+	currency = 0;
 	freebet = 0;
 	status = 0;
+	alternative_process = 0;
 	timestamp = 0;
 	bets_number = 0;
 	bets_id = nullptr;
@@ -2619,40 +2743,51 @@ Ticket::Ticket() {
 	coeff = 0;
 	coeff_settlement = 0;
 	stake = 0;
+	alternative_stake = 0;
+	alternative_count = 0;
+	reoffer_stake = 0;
+	reoffer_count = 0;
 	payout = 0;
 	returned = 0;
 	bonus = 0;
 	coeff_bonus = 0;
+	domain = "";
+	language = 0;
 	any_coeff = false;
+	alternative = true;
 	action = 0;
 	accept_code = 0;
 	mts = 0;
+	mts_id = "";
 	mts_message = nullptr;
 };
-string Ticket::generateId(int socket, int server, int index) {
-	char* mts_id = new char[MAX_PATH];
+void Ticket::generateId(int socket, int user, int index) {
+	char* mtsid = new char[MAX_PATH];
 	char* time_buf = new char[65];
-	strcpy(mts_id, "c");
-	_itoa(client_id, time_buf, 10);
-	strcat(mts_id, time_buf);
-	strcat(mts_id, "t");
+	//strcpy(mtsid, "c");
+	//_itoa(client_id, time_buf, 10);
+	//strcat(mtsid, time_buf);
+	strcpy(mtsid, "t");
 	_i64toa(timestamp, time_buf, 10);
-	strcat(mts_id, time_buf);
-	strcat(mts_id, "s");
+	strcat(mtsid, time_buf);
+	strcat(mtsid, "s");
 	_itoa(socket, time_buf, 10);
-	strcat(mts_id, time_buf);
-	strcat(mts_id, "r");
-	_itoa(server, time_buf, 10);
-	strcat(mts_id, time_buf);
-	strcat(mts_id, "i");
+	strcat(mtsid, time_buf);
+	strcat(mtsid, "r");
+	_itoa(user, time_buf, 10);
+	strcat(mtsid, time_buf);
+	strcat(mtsid, "i");
 	_itoa(index, time_buf, 10);
-	strcat(mts_id, time_buf);
+	strcat(mtsid, time_buf);
 
-    string s = mts_id;
-	delete[] mts_id;
+	mts_id = mtsid;
+	delete[] mtsid;
 	delete[] time_buf;
-	return s;
 }
+
+Ticket** tickets_contact_oam = new Ticket*[MAX_OAM];
+atomic_int tickets_contact_oam_count = 0;
+atomic_int tickets_contact_oam_count_read = 0;
 class wsClient {
 public:
 	wsClient(int _socket, SSL* _ssl, in_addr _addr) {
@@ -2682,6 +2817,7 @@ public:
 		for (int i = 0; i < QUEUE_LENGTH; i++) { bet_message_queue[i] = nullptr; bet_message_queue_length[i] = 0; }
 
 		mts_process = 0;
+		mts_send_process = 0;
 		message_ping = nullptr;
 		message_pong = nullptr;
 		message_close = nullptr;
@@ -2696,10 +2832,12 @@ public:
 		plus_message_length = 0;
 		outright_message_length = 0;
 		outright = 0;
+		outright_request_id = 0;
 		outright_create = false;
 		outright_send = false;
 		outright_message = nullptr;
 		plus = 0;
+		plus_request_id = 0;
 		handshake_message = nullptr;
 		plus_message = nullptr;
 		last_message_queue = 0;
@@ -2732,6 +2870,7 @@ public:
 		ticket_send = false;
 		ticket_process = false;
 		tickets_number = 0;
+		ticket_request_id = 0;
 
 
 		//flag = 0;
@@ -2755,8 +2894,9 @@ public:
 		if (outright_message != nullptr) delete[] outright_message;
 		if (send_ticket_message != nullptr) delete[] send_ticket_message;
 		if (recv_ticket_message != nullptr) delete[] recv_ticket_message;
-		if (tickets != nullptr){ for (int i = 0; i < tickets_number; i++)  if (tickets[i] != nullptr) delete tickets[i];  delete tickets; }
-
+		if (tickets != nullptr) { for (int i = 0; i < tickets_number; i++)  if (tickets[i] != nullptr) delete tickets[i];  delete tickets; }
+		//step_buffer_1 = nullptr;
+		//step_buffer_2 = nullptr;
 		//if (step_buffer_1 != nullptr) delete[] step_buffer_1;
 		//if (step_buffer_2 != nullptr) delete[] step_buffer_2;
 
@@ -2789,9 +2929,11 @@ public:
 	atomic_int64_t last_bet_message_queue;
 	atomic_int64_t last_bet_message_queue_socket;
 	int plus;
+	int plus_request_id;
 	std::atomic<bool> plus_create;
 	std::atomic<bool> plus_send;
 	atomic_int mts_process;
+	int mts_send_process;
 	atomic_int64_t timestamp;
 	int https_time;
 	char* message_ping;
@@ -2814,6 +2956,8 @@ public:
 	int current2;
 	int outright_message_length;
 	int outright = 0;
+	int outright_request_id = 0;
+	int ticket_request_id = 0;
 	std::atomic<bool> outright_create;
 	std::atomic<bool> outright_send;
 	char* outright_message;
@@ -2962,7 +3106,7 @@ Client::Client() {
 	phone = "";
 	login = "";
 	password = "";
-	currency = Currency::MANAT;
+	currency = Currency::TMT;
 	postal_code = "";
 	address = "";
 	balance = 0;
@@ -3055,6 +3199,13 @@ private:
 size_t calcDecodeLength(const char*);
 int Base64Decode(char*, unsigned char**, size_t*);
 void Base64Encode(const std::uint8_t*, std::size_t, char*&, std::size_t&);
+void writeInteger(char*, size_t &, int, int);
+void writeString(char*, size_t &, char*);
+void writeDouble(char*, size_t &, double);
+void writeFloat(char*, size_t &, float);
+int readInteger(char*, size_t &, int*, int, size_t);
+int readString(char*, size_t &, char* &, size_t);
+int readDouble(char*, size_t &, double*, size_t);
 
 
 
@@ -3500,7 +3651,12 @@ void webSocket::wsDeleteClient(int clientID) {
 }
 bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, string data, int dataLength) {
 
-	wsClient *client = wsClients[clientID];
+	unsigned char* recv_buf = nullptr;
+	size_t recv_offset;
+	size_t size;
+	int response;
+
+	wsClient *wsclient = wsClients[clientID];
 	// check opcodes
 
 	if (opcode == WS_OPCODE_PING) {
@@ -3509,16 +3665,16 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 	}
 	else if (opcode == WS_OPCODE_PONG) {
 		// received pong message (it's valid if the server did not send a ping request for this pong message)
-		if (client->ping_sent_time != 0) {
-			client->ping_sent_time = 0;
+		if (wsclient->ping_sent_time != 0) {
+			wsclient->ping_sent_time = 0;
 		}
 	}
 	else if (opcode == WS_OPCODE_CLOSE) {
 		// received close message
-		if (client->ready_state == WS_READY_STATE_CLOSING) {
+		if (wsclient->ready_state == WS_READY_STATE_CLOSING) {
 			// the server already sent a close frame to the client, this is the client's close frame reply
 			// (no need to send another close frame to the client)
-			client->ready_state = WS_READY_STATE_CLOSED;
+			wsclient->ready_state = WS_READY_STATE_CLOSED;
 			//wsRemoveClient(clientID);
 		}
 		else {
@@ -3534,53 +3690,68 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		//if(data.substr(0, dataLength)=="recovery" ) hThread4 = CreateThread(nullptr, 0, &startRecoveryThread, 0, THREAD_TERMINATE, &dwThreadID4);
 		//if (callOnMessage != nullptr)	callOnMessage(clientID, data.substr(0, dataLength));
 		//std::strncmp(data, "rospis@", 7) == 0)
-		if (dataLength > 7 && data.substr(0, 7) == "rospis@") {
-			int event_id = atoi(data.substr(7, dataLength).c_str()); //int event_id = atoi((char*)(data+7));
-			if (event_id != 0 && event_id < MAX_EVENTS && events_id[event_id] != nullptr && client->plus_send == false && client->plus_create == false) {
-				client->plus = event_id; client->plus_create = true;
 
+		if (dataLength > 10 && data.substr(0, 10) == "extralines") {
+			response = 0;
+			Base64Decode((char*)((char*)data.c_str() + 10), &recv_buf, &size);
+			int event_id;
+			int request_id;
+			recv_offset = 0;
+			if (readInteger((char*)recv_buf, recv_offset, &event_id, 4, size) == -1) response = -1; else
+				if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1) response = -1;
+			if (response == 0 && event_id != 0 && event_id < MAX_EVENTS && events_id[event_id] != nullptr && wsclient->plus_send == false && wsclient->plus_create == false) {
+				wsclient->plus_request_id = request_id;
+				wsclient->plus = event_id;
+				wsclient->plus_create = true;
 			}
 
+			if (recv_buf != nullptr) delete[] recv_buf;
 		}
 		else
 
-			if (dataLength > 9 && data.substr(0, 9) == "outright@") //&& std::strncmp(data, "outright@", 9) == 0)
-
+			if (dataLength > 8 && data.substr(0, 8) == "outright") //&& std::strncmp(data, "outright@", 9) == 0)
 			{
 
-				int category_id = atoi(data.substr(9, dataLength).c_str()); //int category_id = atoi((char*)(data + 9));
-				if (category_id != 0 && category_id < MAX_CATEGORIES && categories_id[category_id] != nullptr && client->outright_send == false && client->outright_create == false) { client->outright = category_id; client->outright_create = true; }
+				response = 0;
+				Base64Decode((char*)((char*)data.c_str() + 8), &recv_buf, &size);
 
+				int category_id;
+				int request_id;
+				recv_offset = 0;
+				if (readInteger((char*)recv_buf, recv_offset, &category_id, 4, size) == -1) response = -1; else
+					if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1) response = -1;
+				if (response == 0 && category_id != 0 && category_id < MAX_CATEGORIES && categories_id[category_id] != nullptr && wsclient->outright_send == false && wsclient->outright_create == false) { wsclient->outright = category_id; wsclient->outright_request_id = request_id; wsclient->outright_create = true; }
+				if (recv_buf != nullptr) delete[] recv_buf;
 			}
 
 			else if (dataLength > 6 && data.substr(0, 6) == "client") //std::strncmp(data, "client", 6) == 0)
 			{
 
-				if (client->recv_client_message[client->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE] != nullptr) delete[] client->recv_client_message[client->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE];
-				client->recv_client_message_length[client->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE] = data.size();
-				client->recv_client_message[client->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE] = new char[data.size() + 1];
-				memcpy(client->recv_client_message[client->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE], (char*)data.c_str(), data.size());
-				client->recv_client_message[client->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE][data.size()] = 0;
-				client->recv_client_message_queue++;
+				if (wsclient->recv_client_message[wsclient->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE] != nullptr) delete[] wsclient->recv_client_message[wsclient->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE];
+				wsclient->recv_client_message_length[wsclient->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE] = data.size();
+				wsclient->recv_client_message[wsclient->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE] = new char[data.size() + 1];
+				memcpy(wsclient->recv_client_message[wsclient->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE], (char*)data.c_str(), data.size());
+				wsclient->recv_client_message[wsclient->recv_client_message_queue % RECV_MAX_CLIENT_QUEUE][data.size()] = 0;
+				wsclient->recv_client_message_queue++;
 
 			}
 
 			else if (dataLength > 6 && data.substr(0, 6) == "ticket")
 			{
-				if (client->ticket_process == false && client->ticket_send == false) {
+				if (wsclient->ticket_process == false && wsclient->ticket_send == false) {
 
-					if (client->tickets != nullptr) {
-						for (int i = 0; i < client->tickets_number; i++) if (client->tickets[i] != nullptr) delete client->tickets[i];  delete[] client->tickets;
-						client->tickets = nullptr;
+					if (wsclient->tickets != nullptr) {
+						for (int i = 0; i < wsclient->tickets_number; i++) if (wsclient->tickets[i] != nullptr) delete wsclient->tickets[i];  delete[] wsclient->tickets;
+						wsclient->tickets = nullptr;
 					}
 
-					client->tickets_number = 0;
-					if (client->recv_ticket_message != nullptr) delete[] client->recv_ticket_message;
-					client->recv_ticket_message = new char[data.size() + 1];
-					client->recv_ticket_message_length = data.size();
-					memcpy(client->recv_ticket_message, (char*)data.c_str(), data.size());
-					client->recv_ticket_message[data.size()] = 0;
-					client->ticket_process = true;
+					wsclient->tickets_number = 0;
+					if (wsclient->recv_ticket_message != nullptr) delete[] wsclient->recv_ticket_message;
+					wsclient->recv_ticket_message = new char[data.size() + 1];
+					wsclient->recv_ticket_message_length = data.size();
+					memcpy(wsclient->recv_ticket_message, (char*)data.c_str(), data.size());
+					wsclient->recv_ticket_message[data.size()] = 0;
+					wsclient->ticket_process = true;
 
 				};
 			}
@@ -4102,7 +4273,7 @@ void webSocket::startServer(int port) {
 
 	//int retValue;
 	fdmax = ListenSocket;
-	int writeopcode = 0;
+	int type_of_write_data = 0;
 	fd_set read_fds;
 	fd_set write_fds;
 	fd_set except_fds;
@@ -4118,6 +4289,9 @@ void webSocket::startServer(int port) {
 	//std::printf(" ListenSocket=%d\r\n", ListenSocket);
 	struct timeval timeout;
 	time_t nextPingTime = time(nullptr) + 20;
+	int mts_time_disconnect = 0;
+	int mts_disconnect_process = 0;
+	vector<int> clientIDs;
 
 	while (FD_ISSET(ListenSocket, &r_fds) || FD_ISSET(ListenSocket, &w_fds)) {
 		read_fds = r_fds;
@@ -4125,14 +4299,37 @@ void webSocket::startServer(int port) {
 		except_fds = e_fds;
 		timeout.tv_sec = 0;
 		timeout.tv_usec = 100;
-		
-		if (MTS_FLAG == 1 && mts_error[run_mts_num % 20] == 1) {
-			//TerminateProcess(hThread3[run_mts_num % 20], 0);
-			//TerminateProcess(hThread9[run_mts_num % 20], 0);
+		if (MTS_FLAG == 1 && mts_error[run_mts_num % 10] == 1) {
+			printf("MTS DISCONNECT\r\n");
+			mts_disconnect = 0;
 			run_mts_num++;
-			mts_error[run_mts_num % 20] = 0;
-			hThread3[run_mts_num % 20] = CreateThread(nullptr, 16777216, &MTSPublishThread, 0, THREAD_TERMINATE, &dwThreadID3[run_mts_num % 20]);
-			hThread9[run_mts_num % 20] = CreateThread(nullptr, 16777216, &MTSConsumeThread, 0, THREAD_TERMINATE, &dwThreadID9[run_mts_num % 20]);
+			mts_error[run_mts_num % 10] = 0;
+			mts_disconnect_process = 1;
+			mts_time_disconnect = time(nullptr);
+		}
+
+
+		if (MTS_FLAG == 1 && mts_disconnect_process == 1 && (time(nullptr) - mts_time_disconnect > 10)) {
+			mts_disconnect_process = 0;
+			clientIDs.clear();
+			clientIDs = getClientIDs();
+			for (int i = 0; i < clientIDs.size(); i++) {
+				if (wsClients[clientIDs[i]] == nullptr || wsClients[clientIDs[i]]->timestamp > 0)  continue;
+				wsClient* wsclient = wsClients[clientIDs[i]];
+				if (wsclient->mts_process == 1 && wsclient->ticket_process == true) {
+					for (int j = 0; j < wsclient->tickets_number; j++) {
+						if (wsclient->tickets[j]->accept_code < 0) continue;
+						if (wsclient->tickets[j]->mts == 1) continue;
+						wsclient->tickets[j]->accept_code = -102;
+					}
+					wsclient->mts_process = 3;
+				}
+			}
+
+
+			hThread3[run_mts_num % 10] = CreateThread(nullptr, 16777216, &MTSPublishThread, 0, THREAD_TERMINATE, &dwThreadID3[run_mts_num % 10]);
+			hThread9[run_mts_num % 10] = CreateThread(nullptr, 16777216, &MTSConsumeThread, 0, THREAD_TERMINATE, &dwThreadID9[run_mts_num % 10]);
+
 		}
 
 
@@ -4184,6 +4381,7 @@ void webSocket::startServer(int port) {
 								//ssl = nullptr;
 								//std::printf("New connection from %s on socket %d\n", inet_ntoa(cli_addr.sin_addr), ClientSocket);
 							}
+
 						}
 						else {
 							//retValue = 0;
@@ -4191,8 +4389,6 @@ void webSocket::startServer(int port) {
 							if (socketIDmap.find(i) != socketIDmap.end()) {
 								//std::printf("start read from socket %d\r\n", i);
 								int nbytes = SSL_read(wsClients[socketIDmap[i]]->ssl, buf, sizeof(buf));
-
-								//printf("wsClients[%d]->ready_state=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ready_state, nbytes, SSL_get_error(ssl, nbytes));
 
 								//printf("Read Cicle wsClients[%d]->ready_state=%d last_message_queue=%d nbytes=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ready_state, wsClients[socketIDmap[i]]->last_message_queue, nbytes, SSL_get_error(ssl, nbytes));
 								//std::printf("read from socket %d %d bytes \r\n", i, nbytes);
@@ -4301,33 +4497,33 @@ void webSocket::startServer(int port) {
 						else {
 
 							if (socketIDmap.find(i) != socketIDmap.end()) {
-								writeopcode = 0;
+								type_of_write_data = 0;
 
 
 								int nbytes = 0;
 
 
-								if ((wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_OPEN || wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_READ || wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_WRITE)) {
-									if (time(nullptr) - wsClients[socketIDmap[i]]->https_time > 20) {
+								if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_DATA_ERROR || wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_OPEN || wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_READ || wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_WRITE) {
+									if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_DATA_ERROR || time(nullptr) - wsClients[socketIDmap[i]]->https_time > 20) {
 										wsRemoveClient(socketIDmap[i]);
 										//closesocket(i);
 										continue;
 
 									}
 									else if (wsClients[socketIDmap[i]]->ready_state == HTTPS_STATE_WRITE && wsClients[socketIDmap[i]]->https_write_buffer_length > 0) {
-										writeopcode = 13;
+										type_of_write_data = 13;
 										nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->https_write_buffer, wsClients[socketIDmap[i]]->https_write_buffer_length);
 
 									}
 								}
 
 								else if (wsClients[socketIDmap[i]]->message_close != nullptr) {
-									writeopcode = 2;
+									type_of_write_data = 2;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->message_close, wsClients[socketIDmap[i]]->message_close_length);
 
 								}
 								else if (wsClients[socketIDmap[i]]->ready_state == WS_READY_STATE_CONNECTING && wsClients[socketIDmap[i]]->handshake_message != nullptr) {
-									writeopcode = 1;
+									type_of_write_data = 1;
 
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->handshake_message, strlen(wsClients[socketIDmap[i]]->handshake_message));
 
@@ -4335,7 +4531,7 @@ void webSocket::startServer(int port) {
 
 								else if (wsClients[socketIDmap[i]]->step_buffer_len_1 == -1 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 									if (current_data_step_1 != -1) {
-										writeopcode = 6;
+										type_of_write_data = 6;
 										current = current_data_step_1.load();
 										wsClients[socketIDmap[i]]->step_buffer_1 = array_data_step_1[current];
 										wsClients[socketIDmap[i]]->step_buffer_len_1 = data_step_len_1[current];
@@ -4347,12 +4543,12 @@ void webSocket::startServer(int port) {
 
 								}
 								else if (wsClients[socketIDmap[i]]->step_buffer_len_1 > 0 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 6;
+									type_of_write_data = 6;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_1, wsClients[socketIDmap[i]]->step_buffer_len_1);
 								}
 								else if (wsClients[socketIDmap[i]]->step_buffer_len_2 == -1 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
 									if (current_data_step_2 != -1) {
-										writeopcode = 7;
+										type_of_write_data = 7;
 										current = current_data_step_2.load();
 										wsClients[socketIDmap[i]]->step_buffer_2 = array_data_step_2[current];
 										wsClients[socketIDmap[i]]->step_buffer_len_2 = data_step_len_2[current];
@@ -4362,50 +4558,50 @@ void webSocket::startServer(int port) {
 
 								}
 								else if (wsClients[socketIDmap[i]]->step_buffer_len_2 > 0 && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 7;
+									type_of_write_data = 7;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->step_buffer_2, wsClients[socketIDmap[i]]->step_buffer_len_2);
 								}
 
 								else if (wsClients[socketIDmap[i]]->ticket_send == true && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 11;
+									type_of_write_data = 11;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->send_ticket_message, wsClients[socketIDmap[i]]->send_ticket_message_length);
 								}
 								else if (wsClients[socketIDmap[i]]->plus_send == true && wsClients[socketIDmap[i]]->plus_create == false && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 8;
+									type_of_write_data = 8;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->plus_message, wsClients[socketIDmap[i]]->plus_message_length);
 								}
 								else if (wsClients[socketIDmap[i]]->outright_send == true && wsClients[socketIDmap[i]]->outright_create == false && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 9;
+									type_of_write_data = 9;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->outright_message, wsClients[socketIDmap[i]]->outright_message_length);
 								}
 								else if (wsClients[socketIDmap[i]]->last_message_queue > wsClients[socketIDmap[i]]->last_message_queue_socket && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 5;
+									type_of_write_data = 5;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->message_queue[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH], wsClients[socketIDmap[i]]->message_queue_length[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH]);
 								}
 								else if (wsClients[socketIDmap[i]]->client_send == true && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 10;
+									type_of_write_data = 10;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->send_client_message, wsClients[socketIDmap[i]]->send_client_message_length);
 								}
 								else if (wsClients[socketIDmap[i]]->last_bet_message_queue > wsClients[socketIDmap[i]]->last_bet_message_queue_socket && wsClients[socketIDmap[i]]->ready_state != WS_READY_STATE_CONNECTING) {
-									writeopcode = 12;
+									type_of_write_data = 12;
 
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->bet_message_queue[wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH], wsClients[socketIDmap[i]]->bet_message_queue_length[wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH]);
 								}
 								else if (wsClients[socketIDmap[i]]->message_pong != nullptr) {
-									writeopcode = 3;
+									type_of_write_data = 3;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->message_pong, wsClients[socketIDmap[i]]->message_pong_length);
 
 								}
 								else if (wsClients[socketIDmap[i]]->message_ping != nullptr) {
-									writeopcode = 4;
+									type_of_write_data = 4;
 									nbytes = SSL_write(wsClients[socketIDmap[i]]->ssl, wsClients[socketIDmap[i]]->message_ping, wsClients[socketIDmap[i]]->message_ping_length);
 
 								}
 
-								if (writeopcode == 0) continue;
-								//if (writeopcode == 12)
-								//printf("writeopcode=%d\r\n", writeopcode);
-								///	printf("wsClients[%d]->ready_state=%d last_message_queue=%d last_message_queue_socket=%d nbytes=%d writeopcode=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ready_state, wsClients[socketIDmap[i]]->last_bet_message_queue % QUEUE_LENGTH, wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH, nbytes, writeopcode, SSL_get_error(ssl, nbytes));
+								if (type_of_write_data == 0) continue;
+								//if (type_of_write_data == 12)
+								//printf("type_of_write_data=%d\r\n", type_of_write_data);
+								///	printf("wsClients[%d]->ready_state=%d last_message_queue=%d last_message_queue_socket=%d nbytes=%d type_of_write_data=%d ssl_error=%d\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->ready_state, wsClients[socketIDmap[i]]->last_bet_message_queue % QUEUE_LENGTH, wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH, nbytes, type_of_write_data, SSL_get_error(ssl, nbytes));
 
 
 								if (nbytes == 0) {
@@ -4455,12 +4651,12 @@ void webSocket::startServer(int port) {
 
 									if (ssl_error == SSL_ERROR_SYSCALL) {
 										//std::printf("SSL_write syscall error (returned -1)\r\n");
-										if (writeopcode < 2 && writeopcode > 4) continue;
+										if (type_of_write_data < 2 && type_of_write_data > 4) continue;
 
 
 									}
 									/*
-									if (writeopcode != 5 && writeopcode != 6 && writeopcode != 7 && writeopcode != 8 && writeopcode != 9) {
+									if (type_of_write_data != 5 && type_of_write_data != 6 && type_of_write_data != 7 && type_of_write_data != 8 && type_of_write_data != 9) {
 									long error = ERR_get_error();
 									const char* error_str = ERR_error_string(error, nullptr);
 									//std::printf("could not SSL_write (returned -1): %s\n", error_str);
@@ -4476,7 +4672,7 @@ void webSocket::startServer(int port) {
 
 								if (nbytes < 0) {
 
-									if (writeopcode == 2)
+									if (type_of_write_data == 2)
 										wsRemoveClient(socketIDmap[i]);
 									else {
 										wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
@@ -4485,7 +4681,7 @@ void webSocket::startServer(int port) {
 
 								}
 								else if (nbytes == 0) {
-									if (writeopcode == 2) wsRemoveClient(socketIDmap[i]);
+									if (type_of_write_data == 2) wsRemoveClient(socketIDmap[i]);
 									else {
 										wsSendClientClose(socketIDmap[i], WS_STATUS_PROTOCOL_ERROR);
 									}
@@ -4495,7 +4691,7 @@ void webSocket::startServer(int port) {
 								}
 								else {
 
-									if (writeopcode == 1) {
+									if (type_of_write_data == 1) {
 										wsClients[socketIDmap[i]]->ready_state = WS_READY_STATE_OPEN;
 										delete[] wsClients[socketIDmap[i]]->handshake_message;
 										wsClients[socketIDmap[i]]->handshake_message = nullptr;
@@ -4507,26 +4703,26 @@ void webSocket::startServer(int port) {
 										if (callOnOpen != nullptr) callOnOpen(socketIDmap[i]);
 									}
 
-									if (writeopcode == 2) {
+									if (type_of_write_data == 2) {
 										delete[] wsClients[socketIDmap[i]]->message_close; wsClients[socketIDmap[i]]->message_close = nullptr;
 										wsClients[socketIDmap[i]]->message_close_length = 0;
 										wsRemoveClient(socketIDmap[i]);
 
 									}
 
-									if (writeopcode == 3) {
+									if (type_of_write_data == 3) {
 										delete[] wsClients[socketIDmap[i]]->message_pong; wsClients[socketIDmap[i]]->message_pong = nullptr;
 										wsClients[socketIDmap[i]]->message_pong_length = 0;
 
 									}
-									if (writeopcode == 4) {
+									if (type_of_write_data == 4) {
 										delete[] wsClients[socketIDmap[i]]->message_ping; wsClients[socketIDmap[i]]->message_ping = nullptr;
 										wsClients[socketIDmap[i]]->message_ping_length = 0;
 
 									}
 
 
-									if (writeopcode == 5) {
+									if (type_of_write_data == 5) {
 										if (wsClients[socketIDmap[i]]->message_queue[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH] != nullptr)
 											delete[] wsClients[socketIDmap[i]]->message_queue[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH];
 										wsClients[socketIDmap[i]]->message_queue[wsClients[socketIDmap[i]]->last_message_queue_socket % QUEUE_LENGTH] = nullptr;
@@ -4534,7 +4730,7 @@ void webSocket::startServer(int port) {
 										wsClients[socketIDmap[i]]->last_message_queue_socket++;
 									}
 
-									if (writeopcode == 12) {
+									if (type_of_write_data == 12) {
 										if (wsClients[socketIDmap[i]]->bet_message_queue[wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH] != nullptr)
 											delete[] wsClients[socketIDmap[i]]->bet_message_queue[wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH];
 										wsClients[socketIDmap[i]]->bet_message_queue[wsClients[socketIDmap[i]]->last_bet_message_queue_socket % QUEUE_LENGTH] = nullptr;
@@ -4542,7 +4738,7 @@ void webSocket::startServer(int port) {
 										wsClients[socketIDmap[i]]->last_bet_message_queue_socket++;
 									}
 
-									if (writeopcode == 6) {
+									if (type_of_write_data == 6) {
 										wsClients[socketIDmap[i]]->step_buffer_1 = nullptr;
 										wsClients[socketIDmap[i]]->step_buffer_len_1 = 0;
 										if (current_data_step_2 != -1) {
@@ -4553,12 +4749,12 @@ void webSocket::startServer(int port) {
 
 									}
 
-									if (writeopcode == 7) {
+									if (type_of_write_data == 7) {
 										wsClients[socketIDmap[i]]->step_buffer_2 = nullptr;
 										wsClients[socketIDmap[i]]->step_buffer_len_2 = 0;
 									}
 
-									if (writeopcode == 8) {
+									if (type_of_write_data == 8) {
 										//printf("wsClients[%d]->plus=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->plus);
 										if (wsClients[socketIDmap[i]]->plus_message != nullptr) delete[] wsClients[socketIDmap[i]]->plus_message;
 										wsClients[socketIDmap[i]]->plus = 0;
@@ -4568,7 +4764,7 @@ void webSocket::startServer(int port) {
 
 									}
 
-									if (writeopcode == 9) {
+									if (type_of_write_data == 9) {
 										//printf("wsClients[%d]->outright=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->outright);
 										if (wsClients[socketIDmap[i]]->outright_message != nullptr) delete[] wsClients[socketIDmap[i]]->outright_message;
 										wsClients[socketIDmap[i]]->outright = 0;
@@ -4577,7 +4773,7 @@ void webSocket::startServer(int port) {
 										wsClients[socketIDmap[i]]->outright_send = false;
 
 									}
-									if (writeopcode == 10) {
+									if (type_of_write_data == 10) {
 
 										//printf("wsClients[%d]->outright=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->outright);
 										if (wsClients[socketIDmap[i]]->send_client_message != nullptr) delete[] wsClients[socketIDmap[i]]->send_client_message;
@@ -4589,7 +4785,7 @@ void webSocket::startServer(int port) {
 
 									}
 
-									if (writeopcode == 11) {
+									if (type_of_write_data == 11) {
 										//printf("wsClients[%d]->outright=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->outright);
 										if (wsClients[socketIDmap[i]]->send_ticket_message != nullptr) delete[] wsClients[socketIDmap[i]]->send_ticket_message;
 										wsClients[socketIDmap[i]]->send_ticket_message = nullptr;
@@ -4599,7 +4795,7 @@ void webSocket::startServer(int port) {
 									}
 
 
-									if (writeopcode == 13) {
+									if (type_of_write_data == 13) {
 										if (wsClients[socketIDmap[i]]->https_write_buffer != nullptr) delete[] wsClients[socketIDmap[i]]->https_write_buffer; wsClients[socketIDmap[i]]->https_write_buffer = nullptr;
 										wsClients[socketIDmap[i]]->https_write_buffer_length = 0;
 										wsRemoveClient(socketIDmap[i]);
@@ -4662,14 +4858,6 @@ void webSocket::stopServer() {
 }
 
 
-void writeInteger(char*, size_t &, int, int);
-void writeString(char*, size_t &, char*);
-void writeDouble(char*, size_t &, double);
-void writeFloat(char*, size_t &, float);
-void readInteger(char*, size_t &, int*, int);
-void readString(char*, size_t &, char* &);
-void readDouble2(char*, size_t &, double*);
-void readDouble(char*, size_t &, double*);
 
 
 
@@ -4686,7 +4874,7 @@ void getEvents(time_t, int);
 void getCategoriesTournaments();
 void getCategoriesTournamentsTranslate(int);
 int getTournament(Tournament*, bool, bool = false);
-int getTournamentTranslate(Tournament*,int);
+int getTournamentTranslate(Tournament*, int);
 int getEventFixture(Event*, bool = false);
 int get24HoursEventsFixture();
 int getEventSummary(Event*);
@@ -4701,29 +4889,33 @@ int getCompetitorTranslate(Competitor*, int);
 int getBetstops();
 int  getVoidreasons();
 int getMatchstatus();
-int getVariantMarket(Market*, char*, bool = false);
-int getVariantMarketTranslate(Market*,int);
+int getVariantMarket(Market*, char*, bool = false, bool = false);
+int getVariantMarketTranslate(Market*, int);
 int httpsRequest(char*, char*, char*, int);
+int httpRequest(char*, char*, char*, int);
 int httpsRequestExtern(char*, char*, char*, int);
 int httpsServer();
 char** split(char*, char*);
 void replace(char* &, char*, char*, bool = false);
 void replace_competitor(char* &);
+void replace_player(char* &);
 void replace_substr(char* &, char*, char*);
 void saveEventToDB(Event*, bool = false);
-void loadEventsFromDB(bool = false);
+void loadEventsFromDB();
 void saveMarketToDB(Market*, bool = false);
-void loadMarketsFromDB(bool = false);
+void deleteMarketFromDB(Market*);
+void deleteTournamentFromDB(Tournament*);
+void loadMarketsFromDB();
 void saveTournamentToDB(Tournament*, bool = false);
 void saveSportToDB(Sport*, bool = false);
-void loadTournamentsFromDB(bool = false);
+void loadTournamentsFromDB();
 void saveCategoryToDB(Category*, bool = false);
-void loadCategoriesFromDB(bool = false);
+void loadCategoriesFromDB();
 void saveCompetitorToDB(Competitor*, bool = false);
-void loadCompetitorsFromDB(bool = false);
-void loadSportsFromDB(bool = false);
+void loadCompetitorsFromDB();
+void loadSportsFromDB();
 void savePlayerToDB(Player*, bool = false);
-void loadPlayersFromDB(bool = false);
+void loadPlayersFromDB();
 void loadClientsFromDB();
 int saveClientToDB(Client*);
 int updateClientToDB(Client*);
@@ -4796,12 +4988,14 @@ inline void HistoryTicket(char* buffer, size_t& offset, Ticket* ticket) {
 
 }
 inline void HistoryCalculationBet(char* buffer, size_t& offset, Bet* bet) {
+	writeInteger(buffer, offset, 0, 1);//sistem request_id
 	writeInteger(buffer, offset, bet->counter, 4);
 	writeFloat(buffer, offset, bet->settlement_odd);
 	writeString(buffer, offset, bet->summary);
 	writeInteger(buffer, offset, bet->status, 1);
 }
 inline void HistoryCalculationTicket(char* buffer, size_t& offset, Ticket* ticket, double balance, double bets_amount) {
+	writeInteger(buffer, offset, 0, 1);//sistem request_id
 	writeInteger(buffer, offset, ticket->counter, 4);
 	writeInteger(buffer, offset, (int)(ticket->payout * 100 + 0.5), 4);
 	writeInteger(buffer, offset, ticket->status, 1);
@@ -4835,7 +5029,7 @@ unordered_map<int, unordered_set<int>*> simple2lines, bsimple2lines;
 unordered_map<string, int> compound2line_index, bcompound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
 																		 // whenever a new Line is created call this function to update reverse lookup tables
 void insert_line(Line& line, const int line_index) {
-	bool debug_output = false;
+	//	bool DEBUG_OUTPUT = false;
 	int cat_id;
 	string compound_key;
 	string cat_name;
@@ -4856,7 +5050,7 @@ void insert_line(Line& line, const int line_index) {
 		cat_id = line.event_id;
 		cat_name = "EVENT";
 		cat2lines = &event2lines;
-		//if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
+		//if (rand() % 100 != 0) DEBUG_OUTPUT = false;   // only output 1/100 of these lines
 	}
 	else if (line.tournament_id > 0) {
 		cat_id = line.tournament_id;
@@ -4880,7 +5074,7 @@ void insert_line(Line& line, const int line_index) {
 	}
 	(*cat2lines)[cat_id]->insert(line_index);   // insert new line to the set
 
-												/*if (debug_output) {
+												/*if (DEBUG_OUTPUT) {
 												cout << "New line for " << cat_name << "=" << cat_id << endl;
 												cout << "\tTotal lines: " << (*cat2lines)[cat_id]->size() << endl;
 												}*/
@@ -4891,7 +5085,7 @@ void insert_line(Line& line, const int line_index) {
 	compound_key = line.getCompoundKey();
 	compound2line_index[compound_key] = line_index;   // insert new line's index as value
 													  /*
-													  if (debug_output) {
+													  if (DEBUG_OUTPUT) {
 													  cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
 													  }
 
@@ -5057,7 +5251,7 @@ void delete_line(Line &line) {
 
 
 void binsert_line(Line& line, const int line_index) {
-	bool debug_output = false;
+	//bool DEBUG_OUTPUT = false;
 	int cat_id;
 	string compound_key;
 	string cat_name;
@@ -5078,7 +5272,7 @@ void binsert_line(Line& line, const int line_index) {
 		cat_id = line.event_id;
 		cat_name = "EVENT";
 		cat2lines = &bevent2lines;
-		//if (rand() % 100 != 0) debug_output = false;   // only output 1/100 of these lines
+		//if (rand() % 100 != 0) DEBUG_OUTPUT = false;   // only output 1/100 of these lines
 	}
 	else if (line.tournament_id > 0) {
 		cat_id = line.tournament_id;
@@ -5102,7 +5296,7 @@ void binsert_line(Line& line, const int line_index) {
 	}
 	(*cat2lines)[cat_id]->insert(line_index);   // insert new line to the set
 
-												/*if (debug_output) {
+												/*if (DEBUG_OUTPUT) {
 												cout << "New line for " << cat_name << "=" << cat_id << endl;
 												cout << "\tTotal lines: " << (*cat2lines)[cat_id]->size() << endl;
 												}*/
@@ -5113,7 +5307,7 @@ void binsert_line(Line& line, const int line_index) {
 	compound_key = line.getCompoundKey();
 	bcompound2line_index[compound_key] = line_index;   // insert new line's index as value
 													   /*
-													   if (debug_output) {
+													   if (DEBUG_OUTPUT) {
 													   cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
 													   }
 
@@ -5306,10 +5500,10 @@ void writeEventsDB();
 // make this true if you want to populate MongoDB from scratch with the data in HDD (i.e. BetRadar directory)
 const bool POPULATE_MONGO = false;
 // when this is true each saveXXXToDB() function saves new XXX data to Mongo in addition to [instead of] file.
-const bool WRITE_NEW_DATA_TO_MONGO = true;
+
 // when this is true each loadXXXFromFile() function loads data from Mongo. There is also a bool argument for such functions but
 // this makes testing easier.
-const bool LOAD_FROM_MONGO = true;
+//const bool LOAD_FROM_MONGO = true;
 
 //auto db = mongo_client["passion_bet"]; // SQL:  USE db
 auto db = mongo_client["betdb"];
@@ -5584,7 +5778,7 @@ void createRandomClients() {
 	client_login_hash.reserve(4 * num);
 	for (int i = 0; i < num; i++) {
 		Client* c = new Client();
-		c->currency = Currency::EURO;// static_cast<Currency>(int)1;
+		c->currency = Currency::EUR;// static_cast<Currency>(int)1;
 		c->name = "Alexander";
 		c->surname = "Cernavain";
 		c->country = "Russia";
@@ -5869,7 +6063,6 @@ int registerClient(string name, string surname, int day, int month, int year, st
 		addClientToHash(c); delete client; client = nullptr;
 		return 0;
 	}
-
 	if (saveClientToDB(c) == -1) { delete c; return 1; }
 	else return 0;
 }
@@ -5945,12 +6138,12 @@ bsoncxx::document::value buildMarketDoc(Market* m, bool translate = false) {
 			{
 				auto outcomes_name = bsoncxx::builder::basic::array{};
 				for (int l = 0; l < m->outcome_number; l++) {
-				if(m->translation_outcome_name[j][l] != nullptr) outcomes_name.append(m->translation_outcome_name[j][l]);
-				else outcomes_name.append(m->outcome_name[l]);
+					if (m->translation_outcome_name[j][l] != nullptr) outcomes_name.append(m->translation_outcome_name[j][l]);
+					else outcomes_name.append(m->outcome_name[l]);
 				};
 
 				language.append(kvp("outcomes_name", std::move(outcomes_name)));
-                create_language_field = true;
+				create_language_field = true;
 
 			}
 
@@ -6083,7 +6276,7 @@ bsoncxx::document::value buildSportDoc(Sport* s, bool translate = false) {
 		kvp("sort", s->sort),
 		kvp("name", name)
 	);
-	
+
 	if (translate == true) {
 		bsoncxx::builder::basic::document translations{};
 		for (int j = 0; j < s->translation_num; j++) {
@@ -6142,7 +6335,7 @@ bsoncxx::document::value buildCompetitorDoc(Competitor *c, bool translate = fals
 
 			if (c->translation_country_name != nullptr && c->translation_country_name[j] != nullptr)
 			{
-				language.append(kvp("full_name", c->translation_country_name[j])), create_language_field = true;
+				language.append(kvp("country_name", c->translation_country_name[j])), create_language_field = true;
 			}
 
 			if (create_language_field == true) translations.append(kvp(lang[j], std::move(language)));
@@ -6155,14 +6348,15 @@ bsoncxx::document::value buildCompetitorDoc(Competitor *c, bool translate = fals
 }
 void writeCompetitorsDB() {
 	try {
-		if (db.has_collection("competitors")) {
-			db["competitors"].drop();  // clear collection
-		}
-		auto coll = db["competitors"];
+		/*	if (db.has_collection("competitors")) {
+		db["competitors"].drop();  // clear collection
+		}*/
+
+		auto coll = db["competitors2"];
 
 		vector<bsoncxx::document::value> docs;
 		for (int i = 0; i < competitors_l; i++) {
-			docs.push_back(buildCompetitorDoc(&competitors[i]));
+			docs.push_back(buildCompetitorDoc(&competitors[i], true));
 		}
 		coll.insert_many(docs);
 		cout << docs.size() << " competitor docs created..." << endl;
@@ -6363,6 +6557,7 @@ inline void mongo_str_to_buffer(bsoncxx::array::element str_field, char* &buffer
 
 
 unordered_map<string, Ticket*> tickets = {};   // Key: ticket_id
+unordered_map<string, Ticket*> tickets_oam = {}; //Key: mts_id
 unordered_map<int, unordered_map<time_t, unordered_set<Ticket*>>> client_tickets = {};    // Key: client_id -> Value: hash (key : ticket date timestamp, value: ticket set)
 unordered_map<int, unordered_set<Ticket*>> client_open_tickets = {};
 unordered_map<string, unordered_set<Bet*>> bets = {};   // Key: bet.getCompoundKey() -> Value: Bet set
@@ -6474,9 +6669,6 @@ unordered_set<Ticket*> clientGetOpenTickets(Client* c) {
 }
 void insertTicketIntoHashes(Ticket* ticket, bool newTicket = false) {
 	tickets[ticket->id] = ticket;
-	//printf("client_id_hash[ticket->client_id]->phone=%s\r\n", client_id_hash[ticket->client_id]->phone);
-	//printf("client_id_hash[ticket->client_id]->password=%s\r\n", client_id_hash[ticket->client_id]->password);
-
 	time_t t = (time_t)ticket->timestamp / 1000;
 	t += client_id_hash[ticket->client_id]->timezone * 3600;   // adjust for client's timezone
 	struct tm ticket_time;
@@ -6486,7 +6678,7 @@ void insertTicketIntoHashes(Ticket* ticket, bool newTicket = false) {
 	ticket_time.tm_sec = 0;
 	time_t date_key = mktime(&ticket_time);
 
-	
+
 	auto client_it = client_tickets.find(ticket->client_id);
 	if (client_it == client_tickets.end()) {
 		client_tickets[ticket->client_id] = {};
@@ -6745,7 +6937,7 @@ void loadBetsFromDB() {
 			mongo_str_to_buffer(bet_doc["category_name"], bet->category_name);
 			mongo_str_to_buffer(bet_doc["season_name"], bet->season_name);
 			mongo_str_to_buffer(bet_doc["sport_name"], bet->sport_name);
-			
+
 			// fill outcomes
 			{  // scoped not to carry variables
 				bsoncxx::document::element mongo_arr = bet_doc["outcomes"];
@@ -6810,7 +7002,7 @@ void loadBetsFromDB() {
 			}
 			;
 
-		
+
 			// fill specifiers
 			{  // scoped not to carry variables
 				bsoncxx::document::element mongo_arr = bet_doc["specifiers"];
@@ -6863,12 +7055,13 @@ void loadBetsFromDB() {
 			bet->event_away_id = event_doc["away_id"].get_int32();
 			bet->event_match_status = event_doc["match_status"].get_int32();
 			bet->event_status = event_doc["status"].get_int32();
-		    bet->event_start_time = event_doc["start_time"].get_int32();
+			bet->event_start_time = event_doc["start_time"].get_int32();
 			bet->event_period_length = event_doc["period_length"].get_int32();
 			bet->event_overtime_length = event_doc["overtime_length"].get_int32();
-			if (!event_doc["current_server"]) {} else bet->event_current_server = event_doc["current_server"].get_int32();
+			if (!event_doc["current_server"]) {}
+			else bet->event_current_server = event_doc["current_server"].get_int32();
 
-            bet->event_bo = event_doc["bo"].get_int32();
+			bet->event_bo = event_doc["bo"].get_int32();
 			mongo_str_to_buffer(event_doc["away_name"], bet->event_away_name);
 			mongo_str_to_buffer(event_doc["home_name"], bet->event_home_name);
 			mongo_str_to_buffer(event_doc["match_time"], bet->event_match_time);
@@ -6879,7 +7072,7 @@ void loadBetsFromDB() {
 			mongo_str_to_buffer(event_doc["game_score"], bet->event_game_score);
 			mongo_str_to_buffer(event_doc["match_status_description"], bet->event_match_status_description);
 
-	
+
 			auto bet_it = bets_ticket.find(bet->ticket_id);
 			if (bet_it == bets_ticket.end()) {
 				bets_ticket[bet->ticket_id] = {};
@@ -6905,10 +7098,16 @@ void loadTicketsFromDB() {
 		auto coll = db["tickets"];
 		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
 		for (auto doc : cursor) {
+			if (!doc["Contact OAM"]) {}
+			else if (doc["Contact OAM"].get_int32() == 1) continue;
 			Ticket* ticket = new Ticket();
 			//int id = doc["_id"].get_int32();
 			ticket->id = doc["_id"].get_oid().value.to_string();
+			//if (client_id == 1000041) continue;
 			ticket->client_id = doc["client_id"].get_int32();
+			//if (!doc["mts_id"]) {} else  ticket->mts_id = doc["mts_id"].get_utf8().value.to_string();
+
+
 			ticket->freebet = doc["freebet"].get_int32();
 			ticket->status = doc["status"].get_int32();
 			ticket->counter = doc["counter"].get_int32();
@@ -6918,6 +7117,7 @@ void loadTicketsFromDB() {
 			ticket->coeff = doc["coeff"].get_double();
 			ticket->coeff_settlement = doc["coeff_settlement"].get_double();
 			ticket->stake = doc["stake"].get_double();
+			//	if (ticket->mts_id == "t1521729745232s628r0i0") printf("ticket->status=%d\r\n", ticket->status);
 			ticket->payout = doc["payout"].get_double();
 			ticket->returned = doc["returned"].get_double();
 			ticket->bonus = doc["bonus"].get_double();
@@ -6966,9 +7166,9 @@ void loadTicketsFromDB() {
 
 
 			}
-			
+
 			insertTicketIntoHashes(ticket);
-			
+
 		}
 		tickets_counter = tickets.size();
 
@@ -7185,6 +7385,8 @@ void processNewTicket(Ticket* ticket) {
 	ticket->counter = tickets_counter;
 	builder.append(
 		kvp("client_id", ticket->client_id),
+		kvp("mts_id", ticket->mts_id),
+		kvp("domain", ticket->domain),
 		kvp("freebet", ticket->freebet),
 		kvp("status", ticket->status),
 		kvp("counter", ticket->counter),
@@ -7199,6 +7401,7 @@ void processNewTicket(Ticket* ticket) {
 		kvp("bonus", ticket->bonus),
 		kvp("coeff_bonus", ticket->coeff_bonus)
 	);
+	if (ticket->contact_oam == 1) builder.append(kvp("Contact OAM", ticket->contact_oam));
 
 	bsoncxx::types::b_oid oid;
 	try {
@@ -7227,7 +7430,7 @@ void processNewTicket(Ticket* ticket) {
 		stream::document{} << "$set" << stream::open_document <<
 		"bet_ids" << bet_ids << stream::close_document << stream::finalize);
 
-	insertTicketIntoHashes(ticket, true);
+	if (ticket->contact_oam == 0)	insertTicketIntoHashes(ticket, true);
 
 }
 
@@ -7404,9 +7607,10 @@ void calculationBet(Bet* bet, Bet* _bet, int type) {
 	summary[0] = 0;
 	if (type == 0) {
 
-		if (bet->outcome_number != _bet->outcome_number) {
-			printf("ERROR in  calculationBet: bet->outcome_number=%d _bet->outcome_number=%d bet->market_id=%d bet->event_id=%d bet->type=%d bet->type_radr=%d", bet->outcome_number, _bet->outcome_number, bet->market_id, bet->event_id, bet->type, bet->type_radar); return;
-		}
+		/*	if (bet->outcome_number != _bet->outcome_number) {
+		printf("ERROR in calculationBet: bet->outcome_number=%d _bet->outcome_number=%d bet->market_id=%d bet->event_id=%d bet->type=%d bet->type_radr=%d", bet->outcome_number, _bet->outcome_number, bet->market_id, bet->event_id, bet->type, bet->type_radar); return;
+		}*/
+
 
 		//if (bet->outcome_result != nullptr)	delete[] bet->outcome_result;
 		//if (bet->outcome_void_factor != nullptr) delete[] bet->outcome_void_factor;
@@ -7421,9 +7625,9 @@ void calculationBet(Bet* bet, Bet* _bet, int type) {
 		if (bet->summary != nullptr) delete[] bet->summary; bet->summary = nullptr;
 
 
-		for (int i = 0; i < bet->outcome_number; i++) {
-			bet->outcome_result[i] = _bet->outcome_result[i];
-			bet->outcome_void_factor[i] = _bet->outcome_void_factor[i];
+		for (int i = 0; i < bet->outcome_number; i++) for (int j = 0; j < _bet->outcome_number; j++) if (_bet->outcome_id[j] == bet->outcome_id[i]) {
+			bet->outcome_result[i] = _bet->outcome_result[j];
+			bet->outcome_void_factor[i] = _bet->outcome_void_factor[j];
 
 			if (bet->outcome_result[i] == 1 && bet->outcome_name[i] != nullptr) {
 
@@ -7432,7 +7636,7 @@ void calculationBet(Bet* bet, Bet* _bet, int type) {
 				else { strcat(summary, " , "); strcat(summary, bet->outcome_name[i]); }
 				l++;
 			}
-			bet->outcome_dead_heat_factor[i] = _bet->outcome_dead_heat_factor[i];
+			bet->outcome_dead_heat_factor[i] = _bet->outcome_dead_heat_factor[j];
 
 		}
 		if (l > 0) { bet->summary = new char[strlen(summary) + 1]; strcpy(bet->summary, summary); }
@@ -7556,11 +7760,12 @@ int addToReplayList(int, int);
 
 int main() {
 
-	
-	
+	hThread3 = new HANDLE[20];
+	dwThreadID3 = new DWORD[20];
+	hThread9 = new HANDLE[20];
+	dwThreadID9 = new DWORD[20];
+
 	SetConsoleOutputCP(CP_UTF8);
-
-
 
 	/*
 	printf("seconds=%d/r/n", DMYtoSeconds(1, 11, 1969));
@@ -7593,9 +7798,6 @@ int main() {
 	_getch();
 	return 0;
 	*/
-	//recovery_timestamp = 0;
-	//get24HoursEventsFixture();
-	//return 0;
 
 	for (int i = 0; i < 20; i++) { combin[i] = new int64_t[20]; for (int j = 0; j < 20; j++) combin[i][j] = -1; }
 	for (int i = 0; i < 20; i++) { ARS[i] = new double*[20]; for (int j = 0; j < 20; j++) ARS[i][j] = nullptr; }
@@ -7668,130 +7870,119 @@ int main() {
 	}
 	for (int j = 0; j < AMQP_QUEUE; j++) AMQP_message[j] = new char[AMQP_BUFLEN];
 
-	//timestamp();
 
-	bool full_data = false;
-	//int recvbuflen = EXTRA;
-	//recvbuf = new char[EXTRA];
-
-
-
-
-	/*
-	auto coll = db["bets"];
-	coll.drop();
-	auto coll2 = db["tickets"];
-	coll2.drop();
-	auto coll3 = db["clients"];
-	coll3.drop();
+#if BOOKING > 0
+	booking = BOOKING;
+	getEvents(0, 10);
 	return 0;
-	*/
-
-	//clients
+#endif
 
 
-	if (booking > 0) {
-		getEvents(0, 10);
-		return 0;
-	}
+#if UPDATE_AND_TRANSLATE == 8
+	getSports();
+	for (int i = 0; i < sports_l; i++) saveSportToDB(&sports[i]);
+	return 0;
+#endif
 
+	loadSportsFromDB();
 
-	//auto coll3 = db[""];
-	//coll3.drop();
+#if UPDATE_AND_TRANSLATE == 1
 
-
-	//getSports();
-	//getSports(true);
-
-	//for (int i = 0; i < sports_l; i++) saveSportToDB(&sports[i]);
-		//return 0;
-	
-   loadSportsFromDB();
-
-
-   //int lang_num = LANG_NUM; for (int l = 0; l < lang_num; l++) getSportsTranslate(l); for (int i = 0; i < sports_l; i++) saveSportToDB(&sports[i],true); return 0;
-
-
+	int lang_num = LANG_NUM; for (int l = 0; l < lang_num; l++) getSportsTranslate(l); for (int i = 0; i < sports_l; i++) saveSportToDB(&sports[i], true); return 0;
+#endif
 	if (getBetstops() != -1) std::printf("Load betstops success. Numbers of betstops : %d\r\n", betstops_l);
 	if (getVoidreasons() != -1) std::printf("Load voidreasons success. Numbers of voidreasons : %d\r\n", voidreasons_l);
 	if (getMatchstatus() != -1) std::printf("Load matchstatus success. Numbers of matchstatus : %d\r\n", matchstatus_l);
 
-	if (full_data == false) {
-		//getMarkets();
-		//getEvents(0, 10);
-		//return 0;
-		loadMarketsFromDB();
-
-
-		//int lang_num = LANG_NUM; for (int l = 0; l < lang_num; l++) { printf("start lang=%s\r\n", lang[l].c_str()); getMarketsTranslate(l);	printf("start2 lang=%s\r\n", lang[l].c_str());  for (int j = 0; j < markets_l; j++) getVariantMarketTranslate(&markets[j], l);} 	for (int j = 0; j < markets_l; j++) { printf("save market %d in total %d\r\n", j, markets_l); saveMarketToDB(&markets[j], true); }return 0;
-
-		
-	//	for (int j = 0; j < tournaments_l; j++) { printf("process tornament %d in total %d\r\n", j, tournaments_l); for (int l = 0; l < lang_num; l++) getTournamentTranslate(&tournaments[j], l); saveTournamentToDB(&tournaments[j],true); } return 0;
-
-
-		loadCategoriesFromDB();
-		loadTournamentsFromDB();
-		
-		//int lang_num = LANG_NUM; for (int j = 0; j < tournaments_l; j++) { printf("process tornament %d in total %d\r\n", j, tournaments_l); for (int l = 0; l < lang_num; l++) getTournamentTranslate(&tournaments[j], l); saveTournamentToDB(&tournaments[j],true); } return 0;
-
-		/*int lang_num = LANG_NUM; for (int l = 0; l < lang_num; l++) { std::printf("start lang=%s\r\n", lang[l].c_str()); getCategoriesTournamentsTranslate(l); }
-		//std::printf("Translate Done from https\r\n");
-		for (int j = 0; j < tournaments_l; j++) { std::printf("save tourn id=%d\r\n", tournaments[j].id); saveTournamentToDB(&tournaments[j],true); }
-		for (int j = 0; j < categories_l; j++) { std::printf("save cate id=%d\r\n", categories[j].id); saveCategoryToDB(&categories[j],true); }
-		return 0;*/
-		
-		loadEventsFromDB();
-		loadCompetitorsFromDB();
-	//	int lang_num = LANG_NUM; for (int j = 0; j < competitors_l; j++) { std::printf("translate competitor nr =%d in total\r\n", j, competitors_l); for (int l = 0; l < lang_num; l++)getCompetitorTranslate(&competitors[j], l); saveCompetitorToDB(&competitors[j], true); } return 0;
-
-		loadPlayersFromDB();
-		//int lang_num = LANG_NUM; for (int j = 0; j < players_l; j++) { std::printf("translate player nr =%d in total\r\n", j, players_l); for (int l = 0; l < lang_num; l++) getPlayerTranslate(&players[j], l); savePlayerToDB(&players[j], true); } return 0;
-
-		loadClientsFromDB();
-		loadBetsFromDB();
-		loadTicketsFromDB();
-
-		//recoveryStatefull();
-
-
-		//Event* event_ = events_id[13422295];	getEventFixture(event_);		_getch();		return 0;
-
-		//get24HoursEventsFixture();
-		//return 0;
+#if UPDATE_AND_TRANSLATE == 7
+	getMarkets();
+	return 0;
+#endif
+	loadMarketsFromDB();
 
 
 
+#if UPDATE_AND_TRANSLATE == 4
 
-/*
+	int lang_num = LANG_NUM; for (int l = 0; l < lang_num; l++) { printf("start lang=%s\r\n", lang[l].c_str()); getMarketsTranslate(l);	printf("start2 lang=%s\r\n", lang[l].c_str());  for (int j = 0; j < markets_l; j++) getVariantMarketTranslate(&markets[j], l); } 	for (int j = 0; j < markets_l; j++) { printf("save market %d in total %d\r\n", j, markets_l); saveMarketToDB(&markets[j], true); } return 0;
+#endif
 
-		if (POPULATE_MONGO) {
-			if (sports_l == 0) getSports();
-			writeSportsDB();
-			writeMarketsDB();
-			writeCategoriesDB();
-			writeEventsDB();
-			writeTournamentsDB();
-			writeCompetitorsDB();
-			writePlayersDB();
-			std::printf("Mongo populate finished succes");
-			return 0;
-		}
-		*/
+#if UPDATE_AND_TRANSLATE == 9
+
+	int lang_num = LANG_NUM; for (int l = 0; l < lang_num; l++) { std::printf("start lang=%s\r\n", lang[l].c_str()); getCategoriesTournamentsTranslate(l); }
+	for (int j = 0; j < tournaments_l; j++) { std::printf("save tourn id=%d\r\n", tournaments[j].id); saveTournamentToDB(&tournaments[j], true); }
+	for (int j = 0; j < categories_l; j++) { std::printf("save category_id=%d\r\n", categories[j].id); saveCategoryToDB(&categories[j], true); }
+	return 0;
+#endif
+
+	loadCategoriesFromDB();
+	loadTournamentsFromDB();
+
+	//for (int i = 0; i < tournaments_l; i++) { if (tournaments[i].simple_id == 0 && tournaments[i].id == 0) { deleteTournamentFromDB(&tournaments[i]); printf("delete\r\n");} }
+
+#if UPDATE_AND_TRANSLATE == 3
+	int lang_num = LANG_NUM; for (int j = 0; j < tournaments_l; j++) { printf("process tornament %d in total %d\r\n", j, tournaments_l); for (int l = 0; l < lang_num; l++) getTournamentTranslate(&tournaments[j], l); saveTournamentToDB(&tournaments[j], true); } return 0;
+#endif
 
 
+
+#if UPDATE_AND_TRANSLATE == 10
+	getEvents(0, 180);
+	return 0;
+#endif
+
+	loadEventsFromDB();
+	loadCompetitorsFromDB();
+
+#if UPDATE_AND_TRANSLATE == 5
+	int lang_num = LANG_NUM; for (int j = 0; j < competitors_l; j++) { std::printf("translate competitor nr =%d in total\r\n", j, competitors_l); for (int l = 0; l < lang_num; l++)getCompetitorTranslate(&competitors[j], l); saveCompetitorToDB(&competitors[j], true); } return 0;
+#endif
+
+	loadPlayersFromDB();
+#if UPDATE_AND_TRANSLATE == 6
+	int lang_num = LANG_NUM; for (int j = 0; j < players_l; j++) { std::printf("translate player nr =%d in total\r\n", j, players_l); for (int l = 0; l < lang_num; l++) getPlayerTranslate(&players[j], l); savePlayerToDB(&players[j], true); } return 0;
+#endif
+
+	loadClientsFromDB();
+	loadBetsFromDB();
+	loadTicketsFromDB();
+
+
+
+
+#if UPDATE_AND_TRANSLATE == 2
+	get24HoursEventsFixture();
+#endif		
+
+	//return 0;
+
+
+	/*
+	if (POPULATE_MONGO) {
+	writeSportsDB();
+	writeMarketsDB();
+	writeCategoriesDB();
+	writeEventsDB();
+	writeTournamentsDB();
+	writeCompetitorsDB();
+	writePlayersDB();
+	std::printf("Mongo populate finished succes");
+	return 0;
 	}
-	if (full_data == true) {
-		getMarkets();
-		getCategoriesTournaments();
-		getEvents(0, 180);
-		for (int i = 0; i < tournaments_l; i++) saveTournamentToDB(&tournaments[i]);
-		for (int i = 0; i < categories_l; i++) saveCategoryToDB(&categories[i]);
-		for (int i = 0; i < events_l; i++) 	getEventFixture(&events[i]);
-		for (int i = 0; i < tournaments_l; i++) getTournament(&tournaments[i], true);
 
-	}
+	*/
 
-
+	/*
+	Event* stage = new Event();
+	stage->id = 350097;
+	stage->type_radar = 1;
+	getEventFixture(stage);
+	stage->id = 342299;
+	stage->type_radar = 1;
+	getEventFixture(stage);
+	_getch();
+	return 0;
+	*/
 
 
 	/*
@@ -7799,20 +7990,16 @@ int main() {
 	_getch();
 	return 0;*/
 
-	hThread1 = CreateThread(nullptr, 16777216, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
-	hThread2 = CreateThread(nullptr, 16777216, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-	hThread5 = CreateThread(nullptr, 16777216, &BetsProcessThread, 0, THREAD_TERMINATE, &dwThreadID5);
+	hThread1 = CreateThread(nullptr, 67108864, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
+	hThread2 = CreateThread(nullptr, 67108864, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
+	//hThread5 = CreateThread(nullptr, 67108864, &BetsProcessThread, 0, THREAD_TERMINATE, &dwThreadID5);
 	if (MTS_FLAG == 1) {
-		mts_error[run_mts_num % 20] = 0;
-		hThread3[run_mts_num % 20] = CreateThread(nullptr, 16777216, &MTSPublishThread, 0, THREAD_TERMINATE, &dwThreadID3[run_mts_num % 20]);
-		hThread9[run_mts_num % 20] = CreateThread(nullptr, 16777216, &MTSConsumeThread, 0, THREAD_TERMINATE, &dwThreadID9[run_mts_num % 20]);
+		mts_error[run_mts_num % 10] = 0;
+		hThread3[run_mts_num % 10] = CreateThread(nullptr, 67108864, &MTSPublishThread, 0, THREAD_TERMINATE, &dwThreadID3[run_mts_num % 10]);
+		hThread9[run_mts_num % 10] = CreateThread(nullptr, 67108864, &MTSConsumeThread, 0, THREAD_TERMINATE, &dwThreadID9[run_mts_num % 10]);
 	}
 	//hThread8 = CreateThread(nullptr, 16777216, &ClientSMSProcessThread, 0, THREAD_TERMINATE, &dwThreadID8);
 
-
-	//hThread6 = CreateThread(nullptr, 16777216, &ClientsProcessThread, 0, THREAD_TERMINATE, &dwThreadID6);
-	
-	//getchar();
 	int port = 1443;
 	//while (port == 1443) Sleep(10000);
 
@@ -7822,6 +8009,7 @@ int main() {
 	//server.setPeriodicHandler(periodicHandler);
 
 	//while (port == 1443) Sleep(1);
+	//_getch();
 	server.startServer(port);
 
 	return 0;
@@ -7967,7 +8155,7 @@ DWORD WINAPI SMSProcessThread(LPVOID lparam) {
 	char* request = new char[MAX_PATH];
 	memcpy(&phone, ((char*)lparam), sizeof(char*));
 	memcpy(&sms, ((char*)lparam + sizeof(char*)), sizeof(char*));
-	strcpy(request, "/sys/send.php?login=Atajan&psw=Qwaszx654&sender=PassionBet&phones=");
+	strcpy(request, SMS_REQUEST);
 	strcat(request, phone);
 	strcat(request, "&mes=");
 	strcat(request, sms);
@@ -8034,13 +8222,11 @@ DWORD WINAPI StateFullEvent(LPVOID lparam) {
 }
 DWORD WINAPI BetradarGetThread(LPVOID lparam) {
 	if (startRecovery() == -1) {
-		 return 0;
+		return 0;
 	}
 	rabbitmqssl();
 	return 0;
 }
-DWORD WINAPI ClientsProcessThread(LPVOID lparam) {
-};
 DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 {
 	using namespace rapidxml;
@@ -8067,8 +8253,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = false;
-	bool debug_output = false;
+	//bool DEBUG_OUTPUT = false;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
@@ -8093,9 +8278,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	size_t t_offset = 0;
 	int event_lines_l = 0;
 	char* zip_message = nullptr;
-	char** jump_buf = new char*[JUMP_PROCESS + 20];
-	int* jump_buf_len = new int[JUMP_PROCESS + 20];
-	for (i = 0; i < JUMP_PROCESS + 20; i++) jump_buf[i] = nullptr;
+	char** jump_buf = new char*[JUMP_PROCESS + 150];
+	int* jump_buf_len = new int[JUMP_PROCESS + 150];
+	for (i = 0; i < JUMP_PROCESS + 150; i++) jump_buf[i] = nullptr;
 	int zip_len = 0;
 	char* encode_message = nullptr;;// = SendframeEncode(zip_message, zip_len, len);
 	int encode_message_len = 0;
@@ -8111,6 +8296,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int counter_snapshot = 0;
 	bool radar_message = true;
 	bool new_variant = false;
+	int props_player_id = 0;
 
 	for (;;) {
 
@@ -8153,6 +8339,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			if (recovery_state == 0) {
 				offset = 0;
+				writeInteger(buffer, offset, 0, 1);//sistem request_id
 				writeInteger(buffer, offset, 1, 1);
 				zip_len = gzip(buffer, offset, zip_message, 9);
 				encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
@@ -8180,8 +8367,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 		offset = 0;
 		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
-		if (debug_output == true) printf("process_index=%d\r\n", process_index);
-		if (debug_output == true) printf("rabbit_index=%d\r\n", rabbit_index);
+		if (DEBUG_OUTPUT == true) printf("process_index=%d\r\n", process_index);
+		if (DEBUG_OUTPUT == true) printf("rabbit_index=%d\r\n", rabbit_index);
 
 
 		//int p1 = timestamp();
@@ -8189,9 +8376,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 		new_variant = false;
 		new_message_arrived = true;
-		if (debug_output == true) printf("doc.parse<0>\r\n");
+		if (DEBUG_OUTPUT == true) printf("doc.parse<0>\r\n");
 		std::strcpy(maxbuf, AMQP_message[process_index%AMQP_QUEUE]);
-		if (debug_output == true) printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
+		if (DEBUG_OUTPUT == true) printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
 		doc.parse<0>(maxbuf);// (AMQP_message[process_index%AMQP_QUEUE]);
 		process_index++;
 		//new_message_arrived = false;
@@ -8199,10 +8386,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		//printf("doc2.parse<0>\r\n");
 
 		if (doc.first_node() == nullptr) {
-			if (debug_output == true) printf("doc null\r\n");
+			if (DEBUG_OUTPUT == true) printf("doc null\r\n");
 			new_message_arrived = false; continue;
 		}
-
 
 		//new_message_arrived = true;
 		last_recovery_timestamp = timestamp();
@@ -8224,7 +8410,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			}
 
-			if (debug_output == true) printf("fixture_change\r\n");
+			if (DEBUG_OUTPUT == true) printf("fixture_change\r\n");
 			type_radar = 0;
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
@@ -8269,7 +8455,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				continue;
 			}
 
-			if (debug_output == true) printf("fixture_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) printf("fixture_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -8284,6 +8470,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 					if (recovery_state == 0) {
 						t_offset = 0;
+						writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 						writeInteger(buffer, t_offset, 0, 2);
 						writeInteger(buffer, t_offset, 0, 2);
 						writeInteger(buffer, t_offset, 1, 2);
@@ -8311,7 +8498,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						}
 						delete[] zip_message;
 						zip_message = nullptr;
-						if (debug_output == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
+						if (DEBUG_OUTPUT == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
 
 
 						t_offset = 0;
@@ -8344,6 +8531,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						tournaments_l++;
 						if (recovery_state == 0) {
 							t_offset = 0;
+							writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 1, 2);
@@ -8371,7 +8559,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							delete[] zip_message;
 							zip_message = nullptr;
-							if (debug_output == true) printf("new season tournament  in fixture change radarmessagehandler\r\n");
+							if (DEBUG_OUTPUT == true) printf("new season tournament  in fixture change radarmessagehandler\r\n");
 
 
 							t_offset = 0;
@@ -8405,6 +8593,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						tournaments_l++;
 						if (recovery_state == 0) {
 							t_offset = 0;
+							writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 1, 2);
@@ -8432,7 +8621,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							delete[] zip_message;
 							zip_message = nullptr;
-							if (debug_output == true) printf("new race_tournament  in fixture change radarmessagehandler\r\n");
+							if (DEBUG_OUTPUT == true) printf("new race_tournament  in fixture change radarmessagehandler\r\n");
 
 
 							t_offset = 0;
@@ -8467,6 +8656,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				if (recovery_state == 0 && ret_fixture == 1) {
 					t_offset = 0;
+					writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 					writeInteger(buffer, t_offset, 0, 2);
 					writeInteger(buffer, t_offset, 0, 2);
 					writeInteger(buffer, t_offset, 1, 2);
@@ -8494,7 +8684,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 					delete[] zip_message;
 					zip_message = nullptr;
-					if (debug_output == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
+					if (DEBUG_OUTPUT == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
 
 
 					t_offset = 0;
@@ -8504,8 +8694,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				if (recovery_state == 0 && events_id[event_id]->status != -1 && events_id[event_id]->bet_stop == 0) {
 					_event = events_id[event_id];
-					;
+
 					offset = 0;
+					writeInteger(buffer, offset, 0, 1);//request_id
 					writeInteger(buffer, offset, 1, 2);
 					writeInteger(buffer, offset, type_radar, 1);
 					writeInteger(buffer, offset, _event->id, 4);
@@ -8616,7 +8807,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						}
 
-						if (_event->sport_id == 0) writeInteger(buffer, offset, _event->current_ct_team, 1);
+						if (_event->sport_id == 109) writeInteger(buffer, offset, _event->current_ct_team, 1);
 
 						writeInteger(buffer, offset, _event->position, 1);
 
@@ -8634,7 +8825,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					writeInteger(buffer, offset, event_lines_l, 2);
 
 
-					if (debug_output == true)
+					if (DEBUG_OUTPUT == true)
 						printf("fixture radarmessagehandler\r\n");
 
 					zip_len = gzip(buffer, offset, zip_message, 2);
@@ -8656,7 +8847,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 					delete[] zip_message;
 					zip_message = nullptr;
-					if (debug_output == true)
+					if (DEBUG_OUTPUT == true)
 						printf("fixture end radarmessagehandler\r\n");
 
 
@@ -8718,16 +8909,17 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
 			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament
 			_line->type_radar = type_radar;
-			//if (type_radar == 1) printf("odds_message= = %s\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
+			//if (event_id == 14122909|| event_id == 14093243) printf("\r\r\n\nodds_message =  %s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
 
-			if (event_id == 13737833) printf("Durasovic_Viktor_vs_Hirschmueller_Christian request_id=%d \r\n", request_id);
 
 			if (event_id == 0) {
 				std::printf("event_id error=0 %s\r\n", doc.first_node()->first_attribute("event_id")->value()); std::printf(doc.first_node()->first_attribute("event_id")->value());
 				continue;
 			}
 
-			if (debug_output == true) printf("odds_change type_radar=%d\r\n", type_radar);
+			//if(event_id== 13941305 || event_id == 12152088 || event_id == 12152088 || event_id == 14125087) printf("\r\n\odds_message= %s\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
+
+			if (DEBUG_OUTPUT == true) printf("odds_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 
@@ -8741,6 +8933,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					tournaments_l++;
 					if (recovery_state == 0) {
 						t_offset = 0;
+						writeInteger(buffer, t_offset, 0, 1);//sistem request_id 
 						writeInteger(buffer, t_offset, 0, 2);
 						writeInteger(buffer, t_offset, 0, 2);
 						writeInteger(buffer, t_offset, 1, 2);
@@ -8768,7 +8961,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						}
 						delete[] zip_message;
 						zip_message = nullptr;
-						if (debug_output == true) printf("new simple tournament  in odds change radarmessagehandler\r\n");
+						if (DEBUG_OUTPUT == true) printf("new simple tournament  in odds change radarmessagehandler\r\n");
 
 
 						t_offset = 0;
@@ -8792,6 +8985,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				if (sports_id[_tournament->sport_id] == nullptr) { std::printf("Sport not found in run simple. Run getSports. sport_id=%d\r\n", _tournament->sport_id); getSports(); }
 
 				if (recovery_state == 0) {
+					writeInteger(buffer, offset, 0, 1); //0 sistem request_id
 					writeInteger(buffer, offset, 1, 2);
 					writeInteger(buffer, offset, type_radar, 1);
 					writeInteger(buffer, offset, event_id, 4);
@@ -8801,7 +8995,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					event_lines_l = 0;
 				}
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("Simple id: %d\r\n", event_id);
 					std::printf("NAME:"); std::printf(_tournament->name);
@@ -8821,7 +9015,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
 				}
 				//std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
@@ -8835,7 +9029,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					if (getTournament(simples_id[_tournament->simple_id], false) == -1);  continue;
 				}
 				categories_id[_tournament->category_id]->outrights = 1;
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 					std::printf("\r\n***************************************************\r\n");
 				}
@@ -8990,13 +9184,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != nullptr && markets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 							if (outcomeNameError == 1 || u == max_markets_in[_line->market_id]) {
-								std::printf("Variant market1 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarket\r\n"); if (getVariantMarket(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; } else new_variant = true;
+								std::printf("Variant market1 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf(" getVariantMarket\r\n"); if (getVariantMarket(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+								else new_variant = true;
 								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != nullptr && markets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 							}
 							_market = markets_id[_line->market_id][u];
 
-							if (new_variant == true && recovery_state == 0) {
+							if (new_variant == true && recovery_state == 0 && _market->type < 3) {
 								t_offset = 0;
+								writeInteger(buffer, t_offset, 0, 1);//sistem request_id 
 								writeInteger(buffer, t_offset, 0, 2);// step 1 num of sports = 0;
 								writeInteger(buffer, t_offset, 0, 2);// step 1 num of categories = 0;
 								writeInteger(buffer, t_offset, 0, 2);// step 1 num of tournaments = 0;
@@ -9034,7 +9230,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								}
 								delete[] zip_message;
 								zip_message = nullptr;
-								if (debug_output == true) printf("new variant market  radarmessagehandler\r\n");
+								if (DEBUG_OUTPUT == true) printf("new variant market  radarmessagehandler\r\n");
 
 
 								t_offset = 0;
@@ -9112,7 +9308,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-						if (print == true) {
+						if (PRINT == true) {
 
 							std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 						}
@@ -9179,7 +9375,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -9218,10 +9414,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											else players_l++;
 										}
 
-										if (_line->outcome_name[i] == nullptr) {
+										if (_line->outcome_name[i] == nullptr && players_id[_line->outcome_id[i]]->full_name != nullptr) {
+											_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
+											std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+										}
+										else if (_line->outcome_name[i] == nullptr && players_id[_line->outcome_id[i]]->name != nullptr) {
 											_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
 											std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
 										}
+
+
 
 									}
 
@@ -9256,13 +9458,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
-										printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+										std::printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
 									}
 									/*
 									std::strcat(socket_message_big, _line->outcome_name[i]);
@@ -9321,7 +9523,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										}
 										else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 									}
-									if (print == true) {
+									if (PRINT == true) {
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 										printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
@@ -9340,7 +9542,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 								}
 
-								if (_line->type == 3) {
+								if (_line->type == 3 || _line->type == 4) {
 
 									if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 									else
@@ -9378,7 +9580,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 									//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -9401,33 +9603,33 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-						if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 						auto it = compound2line_index.find(_line[0].getCompoundKey());
-						if (debug_output == true) {
+						if (DEBUG_OUTPUT == true) {
 							printf(_line[0].getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == compound2line_index.end()) {
-							if (debug_output == true) printf("new line add");
+							if (DEBUG_OUTPUT == true) printf("new line add");
 							_line[0].id = lines_l;
-							if (debug_output == true) printf("new line add1");
+							if (DEBUG_OUTPUT == true) printf("new line add1");
 							lines[lines_l] = _line[0];
 							lines_id[_line[0].id] = &lines[lines_l];
-							if (debug_output == true) printf("new line add2");
+							if (DEBUG_OUTPUT == true) printf("new line add2");
 							insert_line(_line[0], lines_l);
-							if (debug_output == true) printf("new line add3");
+							if (DEBUG_OUTPUT == true) printf("new line add3");
 							lines_l++;
 							categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
-							if (debug_output == true) printf("new line add finish");
+							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
-							if (debug_output == true) printf("line update");
+							if (DEBUG_OUTPUT == true) printf("line update");
 							_line[0].id = it->second;
-							if (debug_output == true) printf("line update1");
+							if (DEBUG_OUTPUT == true) printf("line update1");
 							lines[it->second] = _line[0];
-							if (debug_output == true) printf("line finish");
+							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
 						}
@@ -9440,11 +9642,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-						if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 						if (recovery_state == 0) {
 
-							if (debug_output == true) printf("write buffer data\r\n");
+							if (DEBUG_OUTPUT == true) printf("write buffer data\r\n");
 
 							//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 							//if (_line->status == 0 || _line->status == -3) continue;
@@ -9457,13 +9659,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							writeInteger(buffer, offset, _line->favourite, 1);
 							writeInteger(buffer, offset, _line->status, 1);
 							//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+							if (_line->type == 3) writeString(buffer, offset, _line->name);
 							writeInteger(buffer, offset, _line->outcome_number, 2);
 							for (int j = 0; j < _line->outcome_number; j++) {
 								writeInteger(buffer, offset, _line->outcome_id[j], 4);
 								writeInteger(buffer, offset, _line->outcome_active[j], 1);
-								if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-								if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-									writeString(buffer, offset, _line->outcome_name[j]);
+								if (_line->type == 1 || _line->type == 2 || _line->type == 4) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+								//if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+								//if (_line->type == 1 || _line->type == 2 || _line->type == 4)
+								if (_line->type > 0) writeString(buffer, offset, _line->outcome_name[j]);
 								//writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 10000), 4);
 								writeFloat(buffer, offset, _line->outcome_odds[j]);
 								if (PROBABILITIES == 1) writeInteger(buffer, offset, (int)(_line->outcome_probabilities[j] * 100000 + 0.5), 4);
@@ -9476,6 +9680,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									strcpy(specifier_value, _line->specifier_value[j]); replace_competitor(specifier_value);
 									writeString(buffer, offset, specifier_value);
 								}
+								else 	if (_line->market_id == 882 && j == 0) {
+									strcpy(specifier_value, _line->specifier_value[j]); replace_player(specifier_value);
+									writeString(buffer, offset, specifier_value);
+								}
 								else 	writeString(buffer, offset, _line->specifier_value[j]);
 
 
@@ -9484,7 +9692,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-							if (debug_output == true) printf("end write buffer data\r\n");
+							if (DEBUG_OUTPUT == true) printf("end write buffer data\r\n");
 						}
 
 
@@ -9530,6 +9738,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						else tournaments_l++;
 						if (recovery_state == 0) {
 							t_offset = 0;
+							writeInteger(buffer, t_offset, 0, 1);//sistem request_id 
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 1, 2);
@@ -9557,7 +9766,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							delete[] zip_message;
 							zip_message = nullptr;
-							if (debug_output == true) printf("new season tournament  in odds change radarmessagehandler\r\n");
+							if (DEBUG_OUTPUT == true) printf("new season tournament  in odds change radarmessagehandler\r\n");
 
 
 							t_offset = 0;
@@ -9584,6 +9793,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 				if (recovery_state == 0) {
+					writeInteger(buffer, offset, 0, 1);//sistem request id
 					writeInteger(buffer, offset, 1, 2);
 					writeInteger(buffer, offset, type_radar, 1);
 					writeInteger(buffer, offset, _tournament->id, 4);
@@ -9595,7 +9805,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("Season id: %d\r\n", event_id);
 					std::printf("Tournament id:%d\r\n", _tournament->id);
@@ -9619,7 +9829,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(sports_id[_tournament->sport_id]->name); std::printf("\r\n");
 				}
 				////std::strcat(socket_message_big, sports_id[_tournament->sport_id]->name);
@@ -9634,7 +9844,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				}
 				categories_id[_tournament->category_id]->outrights = 1;
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(categories_id[_tournament->category_id]->name); std::printf("\r\n");
 					std::printf("\r\n***************************************************\r\n");
 				}
@@ -9679,7 +9889,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						_line->variant = markets_id[_line->market_id][0]->variant;
 						_line->type = markets_id[_line->market_id][0]->type;
 
-						if (debug_output == true) {
+						if (DEBUG_OUTPUT == true) {
 							std::printf("_line->type=%d _line->variant=%d\r\n", _line->type, _line->variant);
 						}
 						if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
@@ -9757,7 +9967,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							index_separator[n] = q; n++;
 
-							if (debug_output == true) {
+							if (DEBUG_OUTPUT == true) {
 
 							}
 
@@ -9799,12 +10009,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != nullptr && markets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 							if (outcomeNameError == 1 || u == max_markets_in[_line->market_id]) {
-								std::printf("Variant market2 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarket\r\n"); if (getVariantMarket(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; } else new_variant = true;
+								std::printf("Variant market2 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarket\r\n"); if (getVariantMarket(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+								else new_variant = true;
 								for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != nullptr && markets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 							}
 							_market = markets_id[_line->market_id][u];
-							if (new_variant == true && recovery_state == 0) {
+							if (new_variant == true && recovery_state == 0 && _market->type < 3) {
 								t_offset = 0;
+								writeInteger(buffer, t_offset, 0, 1);// sistem request_id
 								writeInteger(buffer, t_offset, 0, 2);// step 1 num of sports = 0;
 								writeInteger(buffer, t_offset, 0, 2);// step 1 num of categories = 0;
 								writeInteger(buffer, t_offset, 0, 2);// step 1 num of tournaments = 0;
@@ -9842,7 +10054,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								}
 								delete[] zip_message;
 								zip_message = nullptr;
-								if (debug_output == true) printf("new variant market  radarmessagehandler\r\n");
+								if (DEBUG_OUTPUT == true) printf("new variant market  radarmessagehandler\r\n");
 
 
 								t_offset = 0;
@@ -9931,7 +10143,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-						if (print == true) {
+						if (PRINT == true) {
 
 							std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 						}
@@ -10001,7 +10213,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -10041,7 +10253,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 											else players_l++;
 										}
 
-										if (_line->outcome_name[i] == nullptr) {
+										if (_line->outcome_name[i] == nullptr && players_id[_line->outcome_id[i]]->full_name != nullptr) {
+											_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
+											std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+										}
+										else if (_line->outcome_name[i] == nullptr && players_id[_line->outcome_id[i]]->name != nullptr) {
 											_line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
 											std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
 										}
@@ -10076,7 +10292,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 
 
@@ -10141,7 +10357,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										}
 										else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 									}
-									if (print == true) {
+									if (PRINT == true) {
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 										printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
@@ -10158,7 +10374,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 								}
 
-								if (_line->type == 3) {
+								if (_line->type == 3 || _line->type == 4) {
 
 									if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 									else
@@ -10196,7 +10412,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 									//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -10222,42 +10438,42 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						}
 
 
-						if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 						auto it = compound2line_index.find(_line[0].getCompoundKey());
-						if (debug_output == true) {
+						if (DEBUG_OUTPUT == true) {
 							printf(_line[0].getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == compound2line_index.end()) {
-							if (debug_output == true) printf("new line add");
+							if (DEBUG_OUTPUT == true) printf("new line add");
 							_line[0].id = lines_l;
-							if (debug_output == true) printf("new line add1");
+							if (DEBUG_OUTPUT == true) printf("new line add1");
 							lines[lines_l] = _line[0];
 							lines_id[_line[0].id] = &lines[lines_l];
-							if (debug_output == true) printf("new line add2");
+							if (DEBUG_OUTPUT == true) printf("new line add2");
 							insert_line(_line[0], lines_l);
-							if (debug_output == true) printf("new line add3");
+							if (DEBUG_OUTPUT == true) printf("new line add3");
 							lines_l++;
 							categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
-							if (debug_output == true) printf("new line add finish");
+							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
-							if (debug_output == true) printf("line update");
+							if (DEBUG_OUTPUT == true) printf("line update");
 							_line[0].id = it->second;
-							if (debug_output == true) printf("line update1");
+							if (DEBUG_OUTPUT == true) printf("line update1");
 							lines[it->second] = _line[0];
-							if (debug_output == true) printf("line finish");
+							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
 						}
 
 
-						if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 						if (recovery_state == 0) {
 
-							if (debug_output == true) printf("write buffer data\r\n");
+							if (DEBUG_OUTPUT == true) printf("write buffer data\r\n");
 
 							//if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 							//if (_line->status == 0 || _line->status == -3) continue;
@@ -10270,13 +10486,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							writeInteger(buffer, offset, _line->favourite, 1);
 							writeInteger(buffer, offset, _line->status, 1);
 							//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
-							writeInteger(buffer, offset, _line->outcome_number, 2);
+							writeString(buffer, offset, _line->name);
+							if (_line->type == 3) writeInteger(buffer, offset, _line->outcome_number, 2);
 							for (int j = 0; j < _line->outcome_number; j++) {
 								writeInteger(buffer, offset, _line->outcome_id[j], 4);
 								writeInteger(buffer, offset, _line->outcome_active[j], 1);
-								if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-								if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-									writeString(buffer, offset, _line->outcome_name[j]);
+								if (_line->type == 1 || _line->type == 2 || _line->type == 4) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+								//if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+								//if (_line->type == 1 || _line->type == 2 || _line->type == 4) 
+								if (_line->type > 0)  writeString(buffer, offset, _line->outcome_name[j]);
 								writeFloat(buffer, offset, _line->outcome_odds[j]);
 								if (PROBABILITIES == 1) writeInteger(buffer, offset, (int)(_line->outcome_probabilities[j] * 100000 + 0.5), 4);
 								//writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 10000), 4);
@@ -10289,13 +10507,17 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									strcpy(specifier_value, _line->specifier_value[j]); replace_competitor(specifier_value);
 									writeString(buffer, offset, specifier_value);
 								}
+								else  if (_line->market_id == 882 && j == 0) {
+									strcpy(specifier_value, _line->specifier_value[j]); replace_player(specifier_value);
+									writeString(buffer, offset, specifier_value);
+								}
 								else 	writeString(buffer, offset, _line->specifier_value[j]);
 
 
 							}
 
 
-							if (debug_output == true) printf("end write buffer data\r\n");
+							if (DEBUG_OUTPUT == true) printf("end write buffer data\r\n");
 
 						}
 
@@ -10309,7 +10531,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 			}
 			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
+				if (event_id >= MAX_EVENTS) {
+					std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id);
+					printf("\r\r\n\nodds_message =  %s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
+					continue;
+				}
 				if (events_id[event_id] == nullptr) {
 					std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
 					events[events_l].id = event_id;
@@ -10322,6 +10548,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 					if (recovery_state == 0 && ret_fixture == 1) {
 						t_offset = 0;
+						writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 						writeInteger(buffer, t_offset, 0, 2);
 						writeInteger(buffer, t_offset, 0, 2);
 						writeInteger(buffer, t_offset, 1, 2);
@@ -10349,7 +10576,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						}
 						delete[] zip_message;
 						zip_message = nullptr;
-						if (debug_output == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
+						if (DEBUG_OUTPUT == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
 
 
 						t_offset = 0;
@@ -10371,7 +10598,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				//_event->bet_stop = 0;
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("%d\r\n", _event->id);
 					std::printf(_event->home_name); if (_event->away_name != nullptr) { std::printf(" - ");  std::printf(_event->away_name); }
@@ -10386,7 +10613,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				if (_event->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nsevent sport_id out of MAX_SPORTS in run %d\r\n", _event->sport_id); continue; }
 				if (sports_id[_event->sport_id] == nullptr) { std::printf("Sport not found. Run getSports. sport_id=%d\r\n", _event->sport_id); getSports(); }
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(sports_id[_event->sport_id]->name); std::printf("\r\n");
 				}
 				//	std::strcat(socket_message_big, sports_id[_event->sport_id]->name);
@@ -10404,6 +10631,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						if (recovery_state == 0) {
 							t_offset = 0;
+							writeInteger(buffer, t_offset, 0, 1);//sistem request_id 
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 1, 2);
@@ -10431,7 +10659,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							delete[] zip_message;
 							zip_message = nullptr;
-							if (debug_output == true) printf("new tournament  radarmessagehandler\r\n");
+							if (DEBUG_OUTPUT == true) printf("new tournament  radarmessagehandler\r\n");
 
 
 							t_offset = 0;
@@ -10453,6 +10681,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						if (recovery_state == 0) {
 							t_offset = 0;
+							writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 0, 2);
 							writeInteger(buffer, t_offset, 1, 2);
@@ -10480,7 +10709,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							delete[] zip_message;
 							zip_message = nullptr;
-							if (debug_output == true) printf("new simple tournament  in odds change event simple radarmessagehandler\r\n");
+							if (DEBUG_OUTPUT == true) printf("new simple tournament  in odds change event simple radarmessagehandler\r\n");
 
 
 							t_offset = 0;
@@ -10493,7 +10722,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				}
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					if (_event->type_radar == 0) std::printf(tournaments_id[_event->tournament_id]->name);
 					if (_event->type_radar == 2) std::printf(simples_id[_event->simple_id]->name);
 					std::printf("\r\n");
@@ -10521,7 +10750,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 				}
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(categories_id[_event->category_id]->name); std::printf("\r\n");
 					std::printf("\r\n***************************************************\r\n");
 				}
@@ -10734,9 +10963,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				}
 
-				//	if (_event->status > 0) print = true; else print = false;
+				//	if (_event->status > 0) PRINT= true; else PRINT= false;
 
-				if (print == true) {
+				if (PRINT == true) {
 					if (_event->set_scores != nullptr) { std::printf("set_scores="); std::printf(_event->set_scores); }
 					if (_event->match_time != nullptr) { std::printf("match_time="); std::printf(_event->match_time); std::printf(" "); }
 					if (_event->remaining_time != nullptr) { std::printf("remaining_time="); std::printf(_event->remaining_time); std::printf(" "); }
@@ -10761,6 +10990,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				if (recovery_state == 0) {
 					offset = 0;
+					writeInteger(buffer, offset, 0, 1);
 					writeInteger(buffer, offset, 1, 2);
 					writeInteger(buffer, offset, type_radar, 1);
 					writeInteger(buffer, offset, _event->id, 4);
@@ -10900,7 +11130,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					_line->season_id = 0;
 					for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 					{
-						if (debug_output == true) printf("start parse market\r\n");
+						if (DEBUG_OUTPUT == true) printf("start parse market\r\n");
 						outcomeNameError = 0;
 						if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 						if (market_node->first_node("market_metadata") && market_node->first_node("market_metadata")->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_node("market_metadata")->first_attribute("next_betstop")->value());
@@ -10916,10 +11146,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							std::printf("ERROR DATA!\r\nmarket id not found in run%d\r\n", _line->market_id); continue;
 						};
 						if (markets_id[_line->market_id][0] == nullptr) {
-							std::printf("ERROR DATA!\r\nmarket id 0 not found in run%d\r\n", _line->market_id); continue;
+							std::printf("ERROR DATA!\r\nmarket id [0] not found in run%d\r\n", _line->market_id); continue;
 						};
 						_line->variant = markets_id[_line->market_id][0]->variant;
 						_line->type = markets_id[_line->market_id][0]->type;
+						//if (_line->type == 4) {printf(AMQP_message[process_index-1 % AMQP_QUEUE]);	printf("\r\n"); printf("\r\n");}
+
 						if (_line->specifier_number > 0) for (q = 0; q < _line->specifier_number; q++) {
 							if (_line->specifier[q] != nullptr) delete[] _line->specifier[q]; _line->specifier[q] = nullptr;
 							if (_line->specifier_value[q] != nullptr)  delete[] _line->specifier_value[q]; _line->specifier_value[q] = nullptr;
@@ -11021,16 +11253,19 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								}
 							}
 						}
-					outcomeNameError3: if (_line->variant > -1) {
-						z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
+					outcomeNameError3: if (_line->variant > -1 && _line->type != 4) {
+						z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); continue; }
 						for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != nullptr && markets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 						if (outcomeNameError == 1 || u == max_markets_in[_line->market_id]) {
-							std::printf("Variant market3 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarket\r\n"); if (getVariantMarket(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }	else new_variant = true;
+							std::printf("Variant market3 not found in run market_id=%d variant=", _line->market_id);  std::printf(_line->specifier_value[_line->variant]);  std::printf("  getVariantMarket\r\n"); if (getVariantMarket(markets_id[_line->market_id][0], _line->specifier_value[_line->variant]) == -1) { std::printf("variant market not found "); continue; }
+							else new_variant = true;
 							for (u = 0; u < max_markets_in[_line->market_id]; u++) if (markets_id[_line->market_id][u] != nullptr && markets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], markets_id[_line->market_id][u]->variable_text) == 0) break;
 						}
 						_market = markets_id[_line->market_id][u];
-						if (new_variant == true && recovery_state == 0) {
+						if (DEBUG_OUTPUT == true) printf("start parse market01\r\n");
+						if (new_variant == true && recovery_state == 0 && _market->type < 3) {
 							t_offset = 0;
+							writeInteger(buffer, t_offset, 0, 1);// sistem request_id
 							writeInteger(buffer, t_offset, 0, 2);// step 1 num of sports = 0;
 							writeInteger(buffer, t_offset, 0, 2);// step 1 num of categories = 0;
 							writeInteger(buffer, t_offset, 0, 2);// step 1 num of tournaments = 0;
@@ -11050,6 +11285,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 								writeString(buffer, t_offset, _market->outcome_name[j]);
 							}
 
+
 							writeInteger(buffer, t_offset, _market->specifier_number, 1);
 							for (j = 0; j < _market->specifier_number; j++) 	writeString(buffer, t_offset, _market->specifier_name[j]);
 
@@ -11068,17 +11304,45 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							}
 							delete[] zip_message;
 							zip_message = nullptr;
-							if (debug_output == true) printf("new variant market  radarmessagehandler\r\n");
 
 
 							t_offset = 0;
 						}
+						if (DEBUG_OUTPUT == true) std::printf("start parse market02\r\n");
 						if (outcomeNameError == 1) outcomeNameError = 2;
 						if (_line->type == 3) z = 16;
 					}
-									   else { _market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+									   else {
+										   _market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; else if (_line->type == 4) {
+
+											   z = strlen(_line->specifier_value[_line->variant]) + 1;
+											   int in_dot = 0;
+											   for (int q = 0; q < z - 2; q++) {
+												   if (_line->specifier_value[_line->variant][q] == ':') in_dot++;
+												   if (in_dot == 3) {
+													   props_player_id = atoi((char*)((char*)_line->specifier_value[_line->variant] + q + 1)); break;
+												   }
+											   }
+
+											   if (props_player_id >= MAX_PLAYERS) {
+												   std::printf("ERROR props_player_id out of MAX_PLAYERS props_player_id=%d\r\n", props_player_id); continue;
+											   }
+
+											   if (players_id[props_player_id] == nullptr) {
+												   std::printf("props_player_id=%d  not found . getPlayer\r\n ", props_player_id);
+												   players[players_l].id = props_player_id; if (getPlayer(&players[players_l]) == -1)
+												   {
+													   std::printf("error props_player_id=%d  in getPlayer returned -1 \r\n ", props_player_id); continue;
+												   }
+
+												   else players_l++;
+											   }
+
+										   }
+
+									   }
 									   outcome_number = 0;
-									   if (debug_output == true) printf("start parse market2\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market2\r\n");
 
 
 									   if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != nullptr) delete[] _line->outcome_name[i]; };
@@ -11090,10 +11354,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									   _line->outcome_team = nullptr;
 
 
-									   if (debug_output == true) printf("start parse market4\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market4\r\n");
 									   if (_line->name != nullptr) delete[] _line->name;
 									   _line->name = new char[strlen(_market->name) + 1];
-									   std::strcpy(_line->name, _market->name);
 									   std::strcpy(_line->name, _market->name);
 
 									   for (int i = 0; i < _line->specifier_number; i++) {
@@ -11143,12 +11406,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   outcome_number++;
 
 									   }
-									   if (debug_output == true) printf("start parse market3\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market3\r\n");
 
 
 
 
-									   if (print == true) {
+									   if (PRINT == true) {
 
 										   std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 									   }
@@ -11169,15 +11432,10 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   _line->outcome_active = new int[_line->outcome_number];
 										   _line->outcome_probabilities = new float[_line->outcome_number];
 										   _line->outcome_odds = new float[_line->outcome_number];
-										   if (debug_output == true) printf("start parse market5 %d\r\n", _market->id);
+										   if (DEBUG_OUTPUT == true) std::printf("start parse market5 %d\r\n", _market->id);
 
 
-
-
-
-
-
-
+										   if (DEBUG_OUTPUT == true) std::printf("_line->outcome_number= %d\r\n", _line->outcome_number);
 
 										   for (int i = 0; i < _line->outcome_number; i++) {
 											   _line->outcome_name[i] = nullptr;
@@ -11190,8 +11448,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 											   if (_line->type == 0) {
 												   if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
-												   else
-													   for (u = 0; u < _market->outcome_number; u++) if (_line->outcome_id[i] == _market->outcome_id[u]) break;
+												   else   for (u = 0; u < _market->outcome_number; u++) if (_line->outcome_id[i] == _market->outcome_id[u]) break;
+
+												   if (DEBUG_OUTPUT == true) printf("_line->outcome_id[i]= %d\r\n", _line->outcome_id[i]);
 
 												   if (u < _market->outcome_number) {
 													   _line->outcome_name[i] = new char[strlen(_market->outcome_name[u]) + 1];
@@ -11209,6 +11468,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   }
 
+												   if (DEBUG_OUTPUT == true)	   printf("_line->specifier_number= %d\r\n", _line->specifier_number);
+
 												   for (int j = 0; j < _line->specifier_number; j++) {
 													   if (j == _line->variant) continue;
 
@@ -11221,7 +11482,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-												   if (print == true) {
+												   if (PRINT == true) {
 
 													   std::printf(_line->outcome_name[i]); std::printf("\t");
 													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -11248,6 +11509,28 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   continue;
 
 												   }
+
+
+												   if (DEBUG_OUTPUT == true) std::printf("_line->outcome_id[i]= %d\r\n", _line->outcome_id[i]);
+												   if (DEBUG_OUTPUT == true) std::printf("_line->outcome_team[i]= %d\r\n", _line->outcome_team[i]);
+
+
+												   if (players_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 0) {
+													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 0 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+													   players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
+													   {
+														   std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+														   _line->outcome_team[i] = 1;
+													   }
+													   else    players_l++;
+
+												   }
+
+												   if (players_id[_line->outcome_id[i]] != nullptr && _line->outcome_team[i] == 0) {
+													   if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
+													   else _line->outcome_team[i] = 1;
+												   }
+
 
 												   if (players_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 2) {
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
@@ -11301,16 +11584,39 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   if (_line->outcome_team[i] < 3 && _line->outcome_name[i] == nullptr) {
 													   if (_line->outcome_team[i] == 1) {
-														   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
-														   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+														   if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
+															   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + strlen(_event->home_name) + 4];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+
+														   }
+														   else {
+															   _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+														   }
+
+
+
+
 														   std::strcat(_line->outcome_name[i], " (");
 														   std::strcat(_line->outcome_name[i], _event->home_name);
 														   std::strcat(_line->outcome_name[i], ")");
 
 													   }
 													   if (_line->outcome_team[i] == 2) {
-														   if (_event->away_name != nullptr) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
-														   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+
+
+														   if (players_id[_line->outcome_id[i]]->full_name != nullptr) {
+															   if (_event->away_name != nullptr) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->full_name) + 1];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->full_name);
+
+														   }
+														   else {
+															   if (_event->away_name != nullptr) _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(players_id[_line->outcome_id[i]]->name) + 1];
+															   std::strcpy(_line->outcome_name[i], players_id[_line->outcome_id[i]]->name);
+														   }
+
+
+
 														   if (_event->away_name != nullptr) {
 															   std::strcat(_line->outcome_name[i], " (");
 															   std::strcat(_line->outcome_name[i], _event->away_name);
@@ -11354,7 +11660,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 
-												   if (print == true) {
+												   if (PRINT == true) {
 
 
 
@@ -11425,7 +11731,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   }
 													   else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 												   }
-												   if (print == true) {
+												   if (PRINT == true) {
 													   std::printf(_line->outcome_name[i]); std::printf("\t");
 													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 													   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
@@ -11479,7 +11785,42 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   //if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
 
-												   if (print == true) {
+												   if (PRINT == true) {
+
+													   std::printf(_line->outcome_name[i]); std::printf("\t");
+													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+													   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												   }
+												   /*
+												   std::strcat(socket_message_big, _line->outcome_name[i]);
+												   std::strcat(socket_message_big, "\t");
+												   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												   std::strcat(socket_message_big, socket_message_little);
+												   std::strcat(socket_message_big, "\t");
+												   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												   std::strcat(socket_message_big, socket_message_little);*/
+
+
+
+
+											   }
+
+											   if (_line->type == 4) {
+
+												   if (_line->outcome_team[i] == 2) _line->outcome_name[i] = new char[strlen(players_id[props_player_id]->full_name) + 14 + strlen(_event->away_name)];
+												   else  _line->outcome_name[i] = new char[strlen(players_id[props_player_id]->full_name) + 14 + strlen(_event->home_name)];
+
+												   strcpy(_line->outcome_name[i], players_id[props_player_id]->full_name);
+												   //strcat(_line->outcome_name[i], " (");
+												   //if (_line->outcome_team[i] == 2) strcat(_line->outcome_name[i], _event->away_name);
+												   //else strcat(_line->outcome_name[i], _event->home_name);
+												   //strcat(_line->outcome_name[i], ") ");
+												   strcat(_line->outcome_name[i], " ");
+												   _itoa(_line->outcome_id[i], buf, 10);
+												   strcat(_line->outcome_name[i], buf);
+												   strcat(_line->outcome_name[i], ".0+");
+
+												   if (PRINT == true) {
 
 													   std::printf(_line->outcome_name[i]); std::printf("\t");
 													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -11506,44 +11847,44 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 										   if (outcomeNameError == 1 && _market->variant > -1) goto outcomeNameError3;
 									   }
-									   if (debug_output == true) printf("start parse market6\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market6\r\n");
 
-									   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-									   if (debug_output == true) {
+									   if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+									   if (DEBUG_OUTPUT == true) {
 										   printf(_line[0].getCompoundKey().c_str());
 										   printf("\r\n");
 									   }
 									   auto it = compound2line_index.find(_line[0].getCompoundKey());
-									   if (debug_output == true) printf("auto it\r\n");
+									   if (DEBUG_OUTPUT == true) printf("auto it\r\n");
 
 									   if (it == compound2line_index.end()) {
-										   if (debug_output == true) printf("new line add ");
+										   if (DEBUG_OUTPUT == true) printf("new line add ");
 										   _line[0].id = lines_l;
-										   if (debug_output == true) printf("new line add1 ");
+										   if (DEBUG_OUTPUT == true) printf("new line add1 ");
 										   lines[lines_l] = _line[0];
 										   lines_id[_line[0].id] = &lines[lines_l];
-										   if (debug_output == true) printf("new line add2 ");
+										   if (DEBUG_OUTPUT == true) printf("new line add2 ");
 										   insert_line(_line[0], lines_l);
-										   if (debug_output == true) printf("new line add3 ");
+										   if (DEBUG_OUTPUT == true) printf("new line add3 ");
 										   lines_l++;
-										   if (debug_output == true) printf("new line add finish\r\n");
+										   if (DEBUG_OUTPUT == true) printf("new line add finish\r\n");
 
 									   }
 									   else {
-										   if (debug_output == true) printf("line update");
+										   if (DEBUG_OUTPUT == true) printf("line update");
 										   _line[0].id = it->second;
-										   if (debug_output == true) printf("line update1");
+										   if (DEBUG_OUTPUT == true) printf("line update1");
 										   lines[it->second] = _line[0];
-										   if (debug_output == true) printf("line finish\r\n");
+										   if (DEBUG_OUTPUT == true) printf("line finish\r\n");
 
 										   //printf("Line Update\r\n");
 									   }
 
-									   if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+									   if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 									   if (recovery_state == 0) {
 
-										   if (debug_output == true) printf("write buffer data\r\n");
+										   if (DEBUG_OUTPUT == true) printf("write buffer data\r\n");
 
 										   //if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 										   //if (_line->status == 0 || _line->status == -3) continue;
@@ -11556,13 +11897,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   // if (_event->bet_stop == 1 && _line->status == 0) writeInteger(buffer, offset, -1, 1); else
 										   writeInteger(buffer, offset, _line->status, 1);
 										   //if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+										   if (_line->type == 3) writeString(buffer, offset, _line->name);
 										   writeInteger(buffer, offset, _line->outcome_number, 2);
 										   for (int j = 0; j < _line->outcome_number; j++) {
 											   writeInteger(buffer, offset, _line->outcome_id[j], 4);
 											   writeInteger(buffer, offset, _line->outcome_active[j], 1);
-											   if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-											   if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-												   writeString(buffer, offset, _line->outcome_name[j]);
+											   if (_line->type == 1 || _line->type == 2 || _line->type == 4) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+											   //if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+											   //if (_line->type == 1 || _line->type == 2 || _line->type == 4)
+											   if (_line->type > 0) writeString(buffer, offset, _line->outcome_name[j]);
 											   //writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 10000), 4);
 											   writeFloat(buffer, offset, _line->outcome_odds[j]);
 											   if (PROBABILITIES == 1) writeInteger(buffer, offset, (int)(_line->outcome_probabilities[j] * 100000 + 0.5), 4);
@@ -11575,14 +11918,18 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												   strcpy(specifier_value, _line->specifier_value[j]); replace_competitor(specifier_value);
 												   writeString(buffer, offset, specifier_value);
 											   }
-											   else 	writeString(buffer, offset, _line->specifier_value[j]);
+											   else    if (_line->market_id == 882 && j == 0) {
+												   strcpy(specifier_value, _line->specifier_value[j]); replace_player(specifier_value);
+												   writeString(buffer, offset, specifier_value);
+											   }
+											   else  writeString(buffer, offset, _line->specifier_value[j]);
 
 
 										   }
 
 
 
-										   if (debug_output == true) printf("end write buffer data\r\n");
+										   if (DEBUG_OUTPUT == true) printf("end write buffer data\r\n");
 
 									   }
 
@@ -11604,13 +11951,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			}
 
-			if (debug_output == true) printf("end parse type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) printf("end parse type_radar=%d\r\n", type_radar);
 
-			bool radar_message = true;
-			int active_lines_counter = 0;
+			//bool radar_message = true;
+			//int active_lines_counter = 0;
 
 			if (recovery_state == 0 && radar_message == true) {
-				if (debug_output == true) printf("radarmessagehandler\r\n");
+				if (DEBUG_OUTPUT == true) printf("radarmessagehandler\r\n");
 				zip_len = gzip(buffer, offset, zip_message, 2);
 				//delete[] buffer;
 				if (zip_len > 1)
@@ -11631,7 +11978,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				}
 				delete[] zip_message;
 				zip_message = nullptr;
-				if (debug_output == true) printf("end radarmessagehandler\r\n");
+				if (DEBUG_OUTPUT == true) printf("end radarmessagehandler\r\n");
 			}
 			//delete[] zip_message;
 
@@ -11651,6 +11998,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				counter_snapshot = 0;
 				if (recovery_state_timestamp != 0) {
 					offset = 0;
+					writeInteger(buffer, offset, 0, 1);//sistem request_id
 					writeInteger(buffer, offset, 0, 1);
 					zip_len = gzip(buffer, offset, zip_message, 9);
 					encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
@@ -11728,6 +12076,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 				if (recovery_state == 0) {
 					t_offset = 0;
+					writeInteger(buffer, t_offset, 0, 1);//sistem request_id
 					writeInteger(buffer, t_offset, _event->id, 4);
 					zip_len = gzip(buffer, t_offset, zip_message, 8);
 					if (zip_len > 1)
@@ -11744,7 +12093,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 					delete[] zip_message;
 					zip_message = nullptr;
-					if (debug_output == true) printf("bet_stop radarmessagehandler\r\n");
+					if (DEBUG_OUTPUT == true) printf("bet_stop radarmessagehandler\r\n");
 
 
 					t_offset = 0;
@@ -11768,7 +12117,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 		}
 		else {
-			printf(doc.first_node()->name()); std::printf("\r\n");
+			//printf(doc.first_node()->name()); std::printf("\r\n");
 		}
 
 
@@ -11914,6 +12263,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	//delete[] socket_message_little;
 	delete[] buffer;
 	clientIDs.clear();
+	printf("Exit BetradarProcessThread");
 	return 0;
 
 }
@@ -11941,8 +12291,6 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 	int z = 0;
 	int u = 0;
 	int write_count_file = 0;
-	bool print = false;
-	bool debug_output = false;
 	int event_id = 0;
 	int type_radar = 0;
 	int status = 0;
@@ -11996,12 +12344,14 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 	Bet* bet;
 	int type;
 	bool any_coeff;
+	bool alternative;
 	bool betradar_data_logs = false;
 	int system_selected;
 	double stake;
 	int action;
 	//int tickets_number = 0;;
 	int bets_number;
+	int device;
 	time_t start;
 	SYSTEMTIME st;
 	struct tm tm;
@@ -12012,6 +12362,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 	char* userpass = nullptr;
 	char* last_domain = nullptr;
 	int last_timezone = 0;
+	int request_id = 0;
 	char* newpass = nullptr;
 	vector<Ticket*> dynamic_unplayed_tickets;
 	unordered_set<Ticket*> unplayed_tickets;
@@ -12031,14 +12382,28 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 	int request_select = 0;
 	int ws_opt_len = 0;
 	int opt_len = 0;
+	int props_player_id = 0;
 	for (;;) {
 
 		if (recovery_state == 0) {
+
+
+			while (tickets_contact_oam_count_read < tickets_contact_oam_count) {
+
+				processNewTicket(tickets_contact_oam[tickets_contact_oam_count_read % MAX_OAM]);
+				tickets_contact_oam[tickets_contact_oam_count_read % MAX_OAM] = nullptr;
+				tickets_contact_oam_count_read++;
+			}
+
+
+
+
 
 			clientIDs.clear();
 			clientIDs = server.getClientIDs();
 
 			for (i = 0; i < clientIDs.size(); i++) {
+				int response = 0;
 				if (server.wsClients[clientIDs[i]] == nullptr || server.wsClients[clientIDs[i]]->timestamp > 0)  continue;
 				wsclient = server.wsClients[clientIDs[i]];
 				if (wsclient->client_send == false && wsclient->recv_client_message_thread_queue < wsclient->recv_client_message_queue) {
@@ -12046,33 +12411,32 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 					if (std::strlen(data) > 14 && std::strncmp(data, "clientregister", 14) == 0) {
 
-						//printf("ip=%s\r\n", server.getClientIP(wsclient).c_str());
 
 						string name = ""; string surname = ""; int day = 1; int month = 0; int year = 1900; string country = ""; string domain = ""; string region = ""; string city; string email = "";
 						string sms = ""; string phone = "";	string login = ""; string password = ""; int currency = 0; string postal_code = ""; string address = ""; int timezone = 0; int step = 0; int email_newsletter = 0; int country_id = 0; int region_id = 0; int city_id = 0;
-						int response = 0;
 						Base64Decode((char*)((char*)data + 14), &recv_buf, &size);
 						recv_offset = 0;
 						offset = 0;
-						readInteger((char*)recv_buf, recv_offset, &step, 1);
-						switch (step) {
+						response = 0;
+						if (readInteger((char*)recv_buf, recv_offset, &step, 1, size) == -1)  response = -1;
+						else switch (step) {
 
 						case 1:
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; }
 							surname = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; }
 							name = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &day, 2);
-							readInteger((char*)recv_buf, recv_offset, &month, 2);
-							readInteger((char*)recv_buf, recv_offset, &year, 2);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &day, 2, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &month, 2, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &year, 2, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							phone = reg_buf;
 							break;
 
 						case 2:
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							email = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							login = reg_buf;
 							break;
 
@@ -12081,40 +12445,40 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 						case 3:
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							surname = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							name = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &day, 2);
-							readInteger((char*)recv_buf, recv_offset, &month, 2);
-							readInteger((char*)recv_buf, recv_offset, &year, 2);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &day, 2, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &month, 2, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &year, 2, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							country = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &country_id, 4);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &country_id, 4, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							phone = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							city = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &city_id, 4);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &city_id, 4, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							postal_code = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							region = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &region_id, 4);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &region_id, 4, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							address = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							email = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							login = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							password = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &currency, 1);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &currency, 1, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							sms = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &email_newsletter, 1);
-							readInteger((char*)recv_buf, recv_offset, &timezone, 1);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &email_newsletter, 1, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &timezone, 1, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							domain = reg_buf;
 							break;
 
@@ -12122,65 +12486,72 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 						case 4:
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							phone = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &currency, 1);
-							readInteger((char*)recv_buf, recv_offset, &timezone, 1);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &currency, 1, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &email_newsletter, 1, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &timezone, 1, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							domain = reg_buf;
 							break;
 
 						case 5:
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							phone = reg_buf;
 							break;
 
 
 						case 6:
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							surname = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							name = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &day, 2);
-							readInteger((char*)recv_buf, recv_offset, &month, 2);
-							readInteger((char*)recv_buf, recv_offset, &year, 2);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &day, 2, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &month, 2, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &year, 2, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							country = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &country_id, 4);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &country_id, 4, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							phone = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							city = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &city_id, 4);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &city_id, 4, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							postal_code = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							region = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &region_id, 4);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &region_id, 4, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							address = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							email = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							login = reg_buf;
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							password = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &currency, 1);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &currency, 1, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							sms = reg_buf;
-							readInteger((char*)recv_buf, recv_offset, &email_newsletter, 1);
-							readInteger((char*)recv_buf, recv_offset, &timezone, 1);
-							readString((char*)recv_buf, recv_offset, reg_buf);
+							if (readInteger((char*)recv_buf, recv_offset, &email_newsletter, 1, size) == -1) { response = -1; break; };
+							if (readInteger((char*)recv_buf, recv_offset, &timezone, 1, size) == -1) { response = -1; break; };
+							if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; };
 							domain = reg_buf;
 							break;
 
 						}
+
+						if (response == 0) { if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1)  response = -1; }
+
+						if (recv_buf != nullptr) delete[] recv_buf; recv_buf = nullptr;
+						if (response == -1) { wsclient->ready_state = WS_READY_STATE_DATA_ERROR; continue; }
 
 						if (step == 6 && wsclient->client_id == -1) response = 1;
 						else if (step != 6 && wsclient->client_id > -1)  response = 1; else
 							response = registerClient(name, surname, day, month, year, country, domain, region, city, email, email_newsletter, phone, login, password, currency, postal_code, address, sms, timezone, step, wsclient, country_id, region_id, city_id);
 
 
+						writeInteger(buffer, offset, request_id, 1);
 						writeInteger(buffer, offset, response, 1);
 						zip_len = gzip(buffer, offset, zip_message, 10);
 						if (zip_len < 1) {
@@ -12199,30 +12570,34 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						Base64Decode((char*)((char*)data + 11), &recv_buf, &size);
 						recv_offset = 0;
 						offset = 0;
-						readString((char*)recv_buf, recv_offset, userlogin);
-						readString((char*)recv_buf, recv_offset, userpass);
-						readString((char*)recv_buf, recv_offset, last_domain);
-						readInteger((char*)recv_buf, recv_offset, &last_timezone, 1);
-						if (recv_buf != nullptr) delete[] recv_buf;
+						if (readString((char*)recv_buf, recv_offset, userlogin, size) == -1) response = -1; else
+							if (readString((char*)recv_buf, recv_offset, userpass, size) == -1)  response = -1; else
+								if (readString((char*)recv_buf, recv_offset, last_domain, size) == -1)  response = -1; else
+									if (readInteger((char*)recv_buf, recv_offset, &last_timezone, 1, size) == -1)  response = -1;
+						if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1)  response = -1;
+						if (recv_buf != nullptr) delete[] recv_buf; recv_buf = nullptr;
+						if (response == -1) { wsclient->ready_state = WS_READY_STATE_DATA_ERROR; continue; }
 						//string userlog = userlogin;
 						bool logged = false;
 						auto it = client_login_hash.find(userlogin);
 						if (it == client_login_hash.end()) {
 							it = client_phone_hash.find(userlogin);
-							if (it == client_phone_hash.end()) { logged = false; }
-							else  logged = true;
+							if (it == client_phone_hash.end()) {
+								auto client_it = client_id_hash.find(atoi(userlogin)); if (client_it == client_id_hash.end()) logged = false; else { logged = true; client = client_it->second; };
+							}
+							else { logged = true; client = it->second; }
 						}
-						else logged = true;
+						else { logged = true; client = it->second; }
+
 
 						//printf("it->second->password =%s\r\n", it->second->password.c_str());
 						//printf("userpass =%s\r\n", userpass);
 
-						if (logged == true && it->second->password != userpass) logged = false;
+						if (logged == true && client->password != userpass) logged = false;
 
 						if (logged == false) {
-
+							writeInteger(buffer, offset, request_id, 1);
 							writeInteger(buffer, offset, -1, 1);
-
 
 							if (wsclient->client_id > -1) {
 								auto client_it = client_id_hash.find(wsclient->client_id);
@@ -12245,9 +12620,8 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 						else {
-
+							writeInteger(buffer, offset, request_id, 1);
 							writeInteger(buffer, offset, 0, 1);
-							client = it->second;
 							client->wsclients.push_back(wsclient);
 							client_dates = clientGetAllTicketDates(client);
 							writeInteger(buffer, offset, client_dates.size(), 2);
@@ -12270,6 +12644,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 							writeString(buffer, offset, (char*)client->login.c_str());
 							writeString(buffer, offset, (char*)client->postal_code.c_str());
 							writeString(buffer, offset, (char*)client->phone.c_str());
+							writeInteger(buffer, offset, client->client_id, 4);
 							writeString(buffer, offset, (char*)client->address.c_str());
 							writeInteger(buffer, offset, (int)(client->balance * 100 + 0.5), 4);
 							writeInteger(buffer, offset, (int)(client->bets_amount * 100 + 0.5), 4);
@@ -12308,9 +12683,11 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						Base64Decode((char*)((char*)data + 13), &recv_buf, &size);
 						recv_offset = 0;
 						offset = 0;
-						readString((char*)recv_buf, recv_offset, userpass);//oldpass
-						readString((char*)recv_buf, recv_offset, newpass);
-						if (recv_buf != nullptr) delete[] recv_buf;
+						if (readString((char*)recv_buf, recv_offset, userpass, size) == -1) response = -1;
+						else if (readString((char*)recv_buf, recv_offset, newpass, size) == -1)  response = -1;
+						else if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1)  response = -1;
+						if (recv_buf != nullptr) delete[] recv_buf; recv_buf = nullptr;
+						if (response == -1) { wsclient->ready_state = WS_READY_STATE_DATA_ERROR; continue; }
 						//string userlog = userlogin;
 						if (wsclient->client_id > -1) {
 							auto it = client_id_hash.find(wsclient->client_id);
@@ -12329,7 +12706,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						}
 						else response = 11;
 
-
+						writeInteger(buffer, offset, request_id, 1);
 						writeInteger(buffer, offset, response, 1);
 
 						zip_len = gzip(buffer, offset, zip_message, 10);
@@ -12375,7 +12752,10 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						Base64Decode((char*)((char*)data + 9), &recv_buf, &size);
 						recv_offset = 0;
 
-						readString((char*)recv_buf, recv_offset, phone);
+						if (readString((char*)recv_buf, recv_offset, phone, size) == -1) response = -1;
+						if (recv_buf != nullptr) delete[] recv_buf; recv_buf = nullptr;
+						if (response == -1) { wsclient->ready_state = WS_READY_STATE_DATA_ERROR; continue; }
+
 						if (wsclient->client_id > -1) {
 							auto it = client_id_hash.find(wsclient->client_id);
 							if (it == client_id_hash.end()) { wsclient->client_id = -1; delete[] phone; phone = nullptr; continue; }
@@ -12401,8 +12781,10 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						Base64Decode((char*)((char*)data + 13), &recv_buf, &size);
 						recv_offset = 0;
 						offset = 0;
-						readInteger((char*)recv_buf, recv_offset, &date_bets, 4);
-						if (recv_buf != nullptr) delete[] recv_buf;
+						if (readInteger((char*)recv_buf, recv_offset, &date_bets, 4, size) == -1) response = -1; else
+							if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1) response = -1;
+						if (recv_buf != nullptr) delete[] recv_buf; recv_buf = nullptr;
+						if (response == -1) { wsclient->ready_state = WS_READY_STATE_DATA_ERROR; continue; }
 						//string userlog = userlogin;
 						if (wsclient->client_id > -1) {
 							auto it = client_id_hash.find(wsclient->client_id);
@@ -12413,6 +12795,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						if (wsclient->client_id > -1) {
 							date_tickets = clientGetTicketsOnDate(client, (time_t)date_bets);
 							if (date_tickets.size() > 0) {
+								writeInteger(buffer, offset, request_id, 1);
 								writeInteger(buffer, offset, date_tickets.size(), 2);
 								for (auto ticket_it = date_tickets.begin(); ticket_it != date_tickets.end(); ++ticket_it)
 									HistoryTicket(buffer, offset, (*ticket_it));
@@ -12446,48 +12829,60 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						}
 						else client = it->second;
 
-						if (recovery_state_timestamp != 0 || https_request_status == -1) accept_code = -10;
+						if (recovery_state_timestamp != 0 || https_request_status == -1 || (MTS_FLAG == 1 && mts_disconnect != 2)) accept_code = -10;
 						if (accept_code < 0) goto ticket_response;
 
 						Base64Decode((char*)((char*)data + 6), &recv_buf, &size);
 						recv_offset = 0;
 						offset = 0;
-						readInteger((char*)recv_buf, recv_offset, &type, 1);//1 ordinar //2 express //3 system
-						readInteger((char*)recv_buf, recv_offset, &bets_number, 1);
-						if (bets_number > 20 || bets_number < 1) { accept_code = -9; goto ticket_response; }
+						if (readInteger((char*)recv_buf, recv_offset, &type, 1, size) == -1) response = -1; else //1 ordinar //2 express //3 system
+							if (readInteger((char*)recv_buf, recv_offset, &device, 1, size) == -1) response = -1; else //mobile internet
+								if (readInteger((char*)recv_buf, recv_offset, &bets_number, 1, size) == -1) response = -1;
 
 
+						if (response == -1 || bets_number > 20 || bets_number < 1) { accept_code = -9; goto ticket_response; }
 						if (type == 1 && bets_number > 1) wsclient->tickets_number = bets_number;
 						else wsclient->tickets_number = 1;
-						readInteger((char*)recv_buf, recv_offset, &system_selected, 1);
-						readDouble((char*)recv_buf, recv_offset, &stake);
-						readInteger((char*)recv_buf, recv_offset, (int*)&any_coeff, 1);
-						readInteger((char*)recv_buf, recv_offset, &action, 1);
-						wsclient->tickets = new Ticket*[wsclient->tickets_number];
+						if (readInteger((char*)recv_buf, recv_offset, &system_selected, 1, size) == -1)  response = -1; else
+							if (readDouble((char*)recv_buf, recv_offset, &stake, size) == -1)  response = -1; else
+								if (readInteger((char*)recv_buf, recv_offset, (int*)&any_coeff, 1, size) == -1)  response = -1; else
+									if (readInteger((char*)recv_buf, recv_offset, (int*)&alternative, 1, size) == -1)  response = -1; else
+										if (readInteger((char*)recv_buf, recv_offset, &action, 1, size) == -1)  response = -1;
 
+						if (response == -1) { accept_code = -9; wsclient->tickets_number = 0; goto ticket_response; }
+						//wsclient->ticket_request_id = request_id;
+						wsclient->tickets = new Ticket*[wsclient->tickets_number];
+						for (int i = 0; i < wsclient->tickets_number; i++) wsclient->tickets[i] = nullptr;
 						for (int i = 0; i < wsclient->tickets_number; i++) {
 							wsclient->tickets[i] = new Ticket();
 							ticket = wsclient->tickets[i];
 							if (type == 3 && (system_selected > bets_number - 1 || system_selected < 2 || bets_number < 3)) type = 2;
 							ticket->type = type;
+							ticket->device = device;
 							ticket->any_coeff = any_coeff;
+							ticket->alternative = alternative;
 							ticket->action = action;
 							ticket->system_selected = system_selected;
 							ticket->stake = stake;
 							ticket->coeff = 1;
 							if (type == 1 && bets_number > 1) ticket->bets_number = 1; else ticket->bets_number = bets_number;
 							ticket->bets = new Bet*[ticket->bets_number];
-
+							for (int j = 0; j < ticket->bets_number; j++) ticket->bets[j] = nullptr;
 							for (int j = 0; j < ticket->bets_number; j++) {
-								readInteger((char*)recv_buf, recv_offset, &bet_line_id, 4);
-								readInteger((char*)recv_buf, recv_offset, &bet_outcome_id, 4);
-								readDouble((char*)recv_buf, recv_offset, &bet_odd);
+								if (readInteger((char*)recv_buf, recv_offset, &bet_line_id, 4, size) == -1) { response = -1; break; };
+								if (readInteger((char*)recv_buf, recv_offset, &bet_outcome_id, 4, size) == -1) { response = -1; break; };
+								if (readDouble((char*)recv_buf, recv_offset, &bet_odd, size) == -1) { response = -1; break; };
 
-								if (type == 1 && bets_number > 1)	readDouble((char*)recv_buf, recv_offset, &ticket->stake);
-								else readDouble((char*)recv_buf, recv_offset, &bet_stake);
+								if (type == 1 && bets_number > 1) { if (readDouble((char*)recv_buf, recv_offset, &ticket->stake, size) == -1) { response = -1; break; }; }
+								else if (readDouble((char*)recv_buf, recv_offset, &bet_stake, size) == -1) { response = -1; break; };
 								ticket->bets[j] = new Bet(blines_id[bet_line_id], bet_outcome_id, bet_odd);
+								//printf("bet bet_line_id=%d\r\n", bet_line_id);
+								//printf("bet bet_outcome_id=%d\r\n", bet_outcome_id);
+								//printf("blines_id[bet_line_id]->market_id=%d\r\n", blines_id[bet_line_id]->market_id);
+
 								if (ticket->type < 3) ticket->coeff = ticket->coeff*ticket->bets[j]->accept_odd;
 								bet = ticket->bets[j];
+								if (bet->status >= 0 && bet->event_status > 0) ticket->is_live = true;
 								if (ticket->accept_code == 0) {
 									if (bet->status == -6 || bet->status == -7) { if (ticket->any_coeff == false) ticket->accept_code = bet->status; }
 									else ticket->accept_code = bet->status;
@@ -12495,9 +12890,28 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 							}
 
 
+
+							if (response == -1) {
+								printf("response=%d\r\n", response);
+								for (int i = 0; i < wsclient->tickets_number; i++) wsclient->tickets[i] = nullptr;
+								if (wsclient->tickets != nullptr) {
+									for (int i = 0; i < wsclient->tickets_number; i++) if (wsclient->tickets[i] != nullptr) { delete wsclient->tickets[i]; wsclient->tickets[i] = nullptr; }
+									delete[] wsclient->tickets;
+								}
+								wsclient->tickets = nullptr;
+								wsclient->tickets_number = 0;
+								wsclient->ready_state = WS_READY_STATE_DATA_ERROR;
+								accept_code = -9; break;
+							}
+
+
 							if (ticket->accept_code == 0) {
 								if (ticket->stake > client->balance) ticket->accept_code = -3; else {
-									ticket->timestamp = timestamp(); ticket->client_id = client->client_id;
+									ticket->timestamp = timestamp(); ticket->generateId(wsclient->socket, USER, i);
+									ticket->client_id = client->client_id;
+									ticket->domain = client->last_domain;
+									ticket->currency = (int)client->currency;
+									ticket->language = client->language;
 									if (MTS_FLAG == 0) {
 										client->balance = client->balance - ticket->stake; client->bets_amount = client->bets_amount + ticket->stake;
 										processNewTicket(ticket);
@@ -12510,24 +12924,27 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 						}
 
+						if (response == 0) readInteger((char*)recv_buf, recv_offset, &request_id, 1, size);
+						wsclient->ticket_request_id = request_id;
 
 					ticket_response:
 
 						if (MTS_FLAG == 0 || accept_code < 0) {
+							writeInteger(buffer, offset, wsclient->ticket_request_id, 1);
 							writeInteger(buffer, offset, accept_code, 1);
 							if (accept_code >= 0) {
 								writeInteger(buffer, offset, (int)(client->balance * 100 + 0.5), 4);
 								writeInteger(buffer, offset, (int)(client->bets_amount * 100 + 0.5), 4);
 								updateClientBalanceToDB(client);
+								writeInteger(buffer, offset, wsclient->tickets_number, 1);
 								for (int i = 0; i < wsclient->tickets_number; i++) {
 									ticket = wsclient->tickets[i];
 									writeInteger(buffer, offset, ticket->accept_code, 2);
 									if (ticket->accept_code < 0) { delete wsclient->tickets[i]; wsclient->tickets[i] = nullptr; continue; }
 									writeInteger(buffer, offset, ticket->counter, 4);
-									//writeString(buffer, offset, (char*)wsclient->tickets[i]->id.c_str());
 									writeInteger(buffer, offset, ticket->timestamp / 1000, 4);
 									writeInteger(buffer, offset, (int)(ticket->bonus * 100 + 0.5), 4);
-
+									writeInteger(buffer, offset, (int)(ticket->stake * 100 + 0.5), 4);
 									for (int j = 0; j < ticket->bets_number; j++) {
 										bet = ticket->bets[j];
 										writeInteger(buffer, offset, bet->counter, 4);
@@ -12540,17 +12957,15 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 										writeString(buffer, offset, bet->event_match_time);
 
 									}
-
-
 									wsclient->tickets[i] = nullptr;
-
-
 								}
 								delete[] wsclient->tickets;
 								wsclient->tickets = nullptr;
 								wsclient->tickets_number = 0;
-
 							}
+
+
+
 							zip_len = gzip(buffer, offset, zip_message, 4);
 							if (zip_len < 1) {
 								delete[] zip_message; zip_message = nullptr;
@@ -12565,104 +12980,155 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 							wsclient->ticket_send = true;
 							wsclient->ticket_process = false;
 						}
-						else { 
+						else {
 							delete[] wsclient->recv_ticket_message; wsclient->recv_ticket_message = nullptr;
-							wsclient->mts_process = 1; }
+							wsclient->mts_send_process = 0; wsclient->mts_process = 1;
+						}
+
+						if (recv_buf != nullptr) delete[] recv_buf; recv_buf = nullptr;
+
+					}
+
+				}
+				if (MTS_FLAG == 2 && wsclient->ticket_send == false && wsclient->ticket_process == true && wsclient->mts_process == 1) {
+					int ticket_ready_counter = 0;
+					int bet_ready_counter = 0;
+					Line* bline;
+					Event* bevent;
+					for (int i = 0; i < wsclient->tickets_number; i++) {
+						ticket = wsclient->tickets[i];
+						if (ticket->accept_code < 0 || ticket->is_live == false) { ticket_ready_counter++; continue; }
+						if (ticket->timeout == 1) { ticket_ready_counter++; continue; }
+
+						bet_ready_counter = 0;
+						for (int j = 0; j < ticket->bets_number; j++) {
+							bet = ticket->bets[j];
+							if (bet->event_status == 0) { bet_ready_counter++; continue; }
+							if (bet->timeout == 1) { bet_ready_counter++; continue; }
+							bevent = bevents_id[bet->event_id];
+							if (bevent == nullptr || bevent->status > 2 || bevent->reporting == -1) { ticket->accept_code = -12;  ticket_ready_counter++; break; }
+							if (bevent->reporting == 1 && (time(nullptr) - ticket->timestamp / 1000  < BET_TIMEOUT_REPORTING)) break;
+							if (bevent->reporting == 0 && (time(nullptr) - ticket->timestamp / 1000  < BET_TIMEOUT)) break;
+
+							if (bevent->home_score != bet->home_score || bevent->away_score != bet->away_score || bevent->away_gamescore != bet->away_gamescore || bevent->home_gamescore != bet->home_gamescore || (bevent->set_scores != nullptr && bet->event_set_scores != nullptr && strcmp(bet->event_set_scores, bevent->set_scores) != 0))
+							{
+								ticket->accept_code = -11; ticket_ready_counter++; break;
+							}
 
 
 
-}
+							bline = blines_id[bet->line_id];
+							if (bline == nullptr || bline->status != 1 || bline->outcome_active[bet->selected_outcome_id] == 0 || (bline->outcome_odds[bet->selected_outcome_id] != bet->accept_odd && ticket->any_coeff == false)) { ticket->accept_code = -12; ticket_ready_counter++; break; }
+							bet->accept_odd = bline->outcome_odds[bet->selected_outcome_id];
+							bet_ready_counter++;
+							bet->timeout = 1;
+						}
+						if (bet_ready_counter == ticket->bets_number) { ticket_ready_counter++; ticket->timeout = 1; }
+
+					}
+
+					if (ticket_ready_counter == wsclient->tickets_number) wsclient->mts_process = 3;
+
+
+
 
 				}
 				if (wsclient->ticket_send == false && wsclient->ticket_process == true && wsclient->mts_process == 3) {
-
-						//if (wsclient->client_id == -1)  accept_code = -8;
-						client = client_id_hash[wsclient->tickets[0]->client_id];
-						accept_code = 0;
-						for (int i = 0; i < wsclient->tickets_number; i++) {
+					//if (wsclient->client_id == -1)  accept_code = -8;
+					client = client_id_hash[wsclient->tickets[0]->client_id];
+					accept_code = 0;
+					for (int i = 0; i < wsclient->tickets_number; i++) {
 						ticket = wsclient->tickets[i];
-								if (ticket->accept_code >= 0) {
-									if (ticket->stake > client->balance) ticket->accept_code = -3; else {
-                                        client->balance = client->balance - ticket->stake; client->bets_amount = client->bets_amount + ticket->stake;
-										processNewTicket(ticket);
-									}
+						if (ticket->accept_code >= 0) {
+							if (ticket->stake > client->balance) ticket->accept_code = -3; else {
+								client->balance = client->balance - ticket->stake; client->bets_amount = client->bets_amount + ticket->stake;
+								processNewTicket(ticket);
 							}
-
 						}
 
-						if (wsclient->client_id == wsclient->tickets[0]->client_id) {
-							offset = 0;
-							writeInteger(buffer, offset, accept_code, 1);
-							if (accept_code >= 0) {
-								writeInteger(buffer, offset, (int)(client->balance * 100 + 0.5), 4);
-								writeInteger(buffer, offset, (int)(client->bets_amount * 100 + 0.5), 4);
-								updateClientBalanceToDB(client);
-								for (int i = 0; i < wsclient->tickets_number; i++) {
-									ticket = wsclient->tickets[i];
-									writeInteger(buffer, offset, ticket->accept_code, 2);
-									if (wsclient->tickets[i]->accept_code < 0) { delete wsclient->tickets[i]; wsclient->tickets[i] = nullptr; continue; }
-									writeInteger(buffer, offset, ticket->counter, 4);
-									//writeString(buffer, offset, (char*)wsclient->tickets[i]->id.c_str());
-									writeInteger(buffer, offset, ticket->timestamp / 1000, 4);
-									writeInteger(buffer, offset, (int)(ticket->bonus * 100 + 0.5), 4);
+					}
+
+					if (wsclient->client_id == wsclient->tickets[0]->client_id) {
+						offset = 0;
+						writeInteger(buffer, offset, wsclient->ticket_request_id, 1);
+						writeInteger(buffer, offset, accept_code, 1);
+						if (accept_code >= 0) {
+							writeInteger(buffer, offset, (int)(client->balance * 100 + 0.5), 4);
+							writeInteger(buffer, offset, (int)(client->bets_amount * 100 + 0.5), 4);
+							updateClientBalanceToDB(client);
+							writeInteger(buffer, offset, wsclient->tickets_number, 1);
+							for (int i = 0; i < wsclient->tickets_number; i++) {
+								ticket = wsclient->tickets[i];
+								writeInteger(buffer, offset, ticket->accept_code, 2);
+								if (wsclient->tickets[i]->accept_code < 0) { if (wsclient->tickets[i]->contact_oam == 0) delete wsclient->tickets[i]; wsclient->tickets[i] = nullptr; continue; }
+								writeInteger(buffer, offset, ticket->counter, 4);
+								//writeString(buffer, offset, (char*)wsclient->tickets[i]->id.c_str());
+								writeInteger(buffer, offset, ticket->timestamp / 1000, 4);
+								writeInteger(buffer, offset, (int)(ticket->bonus * 100 + 0.5), 4);
+								writeInteger(buffer, offset, (int)(ticket->stake * 100 + 0.5), 4);
 
 
-									for (int j = 0; j < ticket->bets_number; j++) {
-										bet = ticket->bets[j];
-										//printf(" bet->event_id=%d\r\n", bet->event_id);
-										writeInteger(buffer, offset, bet->counter, 4);
-										//writeString(buffer, offset, (char*)ticket->bets[j]->id.c_str());
-										writeFloat(buffer, offset, bet->accept_odd);
-										writeString(buffer, offset, bet->event_score);
-										writeString(buffer, offset, bet->event_set_scores);
-										writeString(buffer, offset, bet->event_game_score);
-										writeString(buffer, offset, bet->event_match_status_description);
-										writeString(buffer, offset, bet->event_match_time);
-
-									}
-
-
-									wsclient->tickets[i] = nullptr;
-
+								for (int j = 0; j < ticket->bets_number; j++) {
+									bet = ticket->bets[j];
+									//printf(" bet->event_id=%d\r\n", bet->event_id);
+									writeInteger(buffer, offset, bet->counter, 4);
+									//writeString(buffer, offset, (char*)ticket->bets[j]->id.c_str());
+									writeFloat(buffer, offset, bet->accept_odd);
+									writeString(buffer, offset, bet->event_score);
+									writeString(buffer, offset, bet->event_set_scores);
+									writeString(buffer, offset, bet->event_game_score);
+									writeString(buffer, offset, bet->event_match_status_description);
+									writeString(buffer, offset, bet->event_match_time);
 
 								}
-								delete[] wsclient->tickets;
-								wsclient->tickets = nullptr;
-								wsclient->tickets_number = 0;
+
+
+								wsclient->tickets[i] = nullptr;
+
 
 							}
-							zip_len = gzip(buffer, offset, zip_message, 4);
-							if (zip_len < 1) {
-								delete[] zip_message; zip_message = nullptr;
-								delete[] wsclient->recv_ticket_message; wsclient->recv_ticket_message = nullptr;  wsclient->ticket_process = false; continue;
-							}
-							encode_message = SendframeEncode(zip_message, zip_len, len);
-							delete[] zip_message; zip_message = nullptr;
-							wsclient->send_ticket_message = encode_message;
-							encode_message = nullptr;
-							wsclient->send_ticket_message_length = len;
-							wsclient->ticket_send = true;
-							wsclient->ticket_process = false;
-							wsclient->mts_process = 0;
+							delete[] wsclient->tickets;
+							wsclient->tickets = nullptr;
+							wsclient->tickets_number = 0;
+
 						}
-						else {
+						zip_len = gzip(buffer, offset, zip_message, 4);
+
+						if (zip_len < 1) {
+							delete[] zip_message; zip_message = nullptr;
+							delete[] wsclient->recv_ticket_message; wsclient->recv_ticket_message = nullptr;  wsclient->ticket_process = false; continue;
+						}
+						encode_message = SendframeEncode(zip_message, zip_len, len);
+						delete[] zip_message; zip_message = nullptr;
+
+						wsclient->send_ticket_message = encode_message;
+						encode_message = nullptr;
+						wsclient->send_ticket_message_length = len;
+						wsclient->ticket_send = true;
+						wsclient->ticket_process = false;
+						wsclient->mts_process = 0;
+						wsclient->mts_send_process = 0;
+
+					}
+					else {
 						for (int i = 0; i < wsclient->tickets_number; i++) { if (wsclient->tickets[i]->accept_code < 0)  delete wsclient->tickets[i]; wsclient->tickets[i] = nullptr; }
 						delete[] wsclient->tickets;
 						wsclient->tickets = nullptr;
 						wsclient->tickets_number = 0;
 						wsclient->mts_process = 0;
+						wsclient->mts_send_process = 0;
 						wsclient->ticket_process = false;
-						
-						}
+
+					}
 
 
 
 
-					
+
 
 				}
 				if (wsclient->ready_state == HTTPS_STATE_READ) {
-        		if (wsclient->options == nullptr) ws_opt_len = 0;
+					if (wsclient->options == nullptr) ws_opt_len = 0;
 					else  ws_opt_len = strlen(wsclient->options);
 					request_select = 0;
 					for (int j = 0; j < 6; j++) {
@@ -13194,18 +13660,19 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					arrayUsers.Clear();
 					buffer.Clear();
 
-					if (wsclient->https_buffer != nullptr) delete[] wsclient->https_buffer; wsclient->https_buffer = nullptr;
+					//if (wsclient->https_buffer != nullptr) delete[] wsclient->https_buffer; 
+					wsclient->https_buffer = nullptr;
 					if (wsclient->options != nullptr) delete[] wsclient->options; wsclient->options = nullptr;
 
 					wsclient->ready_state = HTTPS_STATE_WRITE;
 
 
-					}
-
 				}
 
 			}
-		
+
+		}
+
 
 
 		status = 0;
@@ -13213,17 +13680,17 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 		if (bprocess_index >= rabbit_index) { new_message_arrived = false; continue; }
-		if (debug_output == true) std::printf("bprocess_index=%d\r\n", bprocess_index);
-		if (debug_output == true) std::printf("rabbit_index=%d\r\n", rabbit_index);
+		if (DEBUG_OUTPUT == true) std::printf("bprocess_index=%d\r\n", bprocess_index);
+		if (DEBUG_OUTPUT == true) std::printf("rabbit_index=%d\r\n", rabbit_index);
 
 		new_message_arrived = true;
-		if (debug_output == true) std::printf("doc.parse<0>\r\n");
+		if (DEBUG_OUTPUT == true) std::printf("doc.parse<0>\r\n");
 		std::strcpy(maxbuf, AMQP_message[bprocess_index%AMQP_QUEUE]);
-		if (debug_output == true) std::printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[bprocess_index%AMQP_QUEUE]));
-		doc.parse<0>(maxbuf);// (AMQP_message[bprocess_index%AMQP_QUEUE]);
+		if (DEBUG_OUTPUT == true) std::printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[bprocess_index%AMQP_QUEUE]));
+		doc.parse<0>(maxbuf); //(AMQP_message[bprocess_index%AMQP_QUEUE]);
 		bprocess_index++;
 		if (doc.first_node() == nullptr) {
-			if (debug_output == true) printf("doc null\r\n");
+			if (DEBUG_OUTPUT == true) printf("doc null\r\n");
 			new_message_arrived = false; continue;
 		}
 
@@ -13244,7 +13711,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 		ret_fixture = 0;
 		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
-			if (debug_output == true) printf("fixture_change\r\n");
+			if (DEBUG_OUTPUT == true) printf("fixture_change\r\n");
 			type_radar = 0;
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
@@ -13295,7 +13762,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				continue;
 			}
 
-			if (debug_output == true) printf("fixture_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) printf("fixture_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -13433,7 +13900,10 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
+
 			//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament
+
+
 			_line->type_radar = type_radar;
 
 			if (event_id == 0) {
@@ -13441,7 +13911,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				continue;
 			}
 
-			if (debug_output == true) printf("odds_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) printf("odds_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 
@@ -13471,7 +13941,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("Simple id: %d\r\n", event_id);
 					std::printf("NAME:"); std::printf(_tournament->name);
@@ -13491,7 +13961,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(bsports_id[_tournament->sport_id]->name); std::printf("\r\n");
 				}
 				//std::strcat(socket_message_big, bsports_id[_tournament->sport_id]->name);
@@ -13505,7 +13975,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					if (getTournament(bsimples_id[_tournament->simple_id], false, true) == -1);  continue;
 				}
 				bcategories_id[_tournament->category_id]->outrights = 1;
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(bcategories_id[_tournament->category_id]->name); std::printf("\r\n");
 					std::printf("\r\n***************************************************\r\n");
 				}
@@ -13733,7 +14203,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-						if (print == true) {
+						if (PRINT == true) {
 
 							std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 						}
@@ -13800,7 +14270,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -13877,7 +14347,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 
 
@@ -13942,7 +14412,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 										}
 										else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 									}
-									if (print == true) {
+									if (PRINT == true) {
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 										printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
@@ -13961,7 +14431,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 								}
 
-								if (_line->type == 3) {
+								if (_line->type == 3 || _line->type == 4) {
 
 									if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 									else
@@ -13999,7 +14469,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 									//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -14022,33 +14492,33 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-						if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
 						auto it = bcompound2line_index.find(_line[0].getCompoundKey());
-						if (debug_output == true) {
+						if (DEBUG_OUTPUT == true) {
 							printf(_line[0].getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == bcompound2line_index.end()) {
-							if (debug_output == true) printf("new line add");
+							if (DEBUG_OUTPUT == true) printf("new line add");
 							_line[0].id = blines_l;
-							if (debug_output == true) printf("new line add1");
+							if (DEBUG_OUTPUT == true) printf("new line add1");
 							blines[blines_l] = _line[0];
 							blines_id[_line[0].id] = &blines[blines_l];
-							if (debug_output == true) printf("new line add2");
+							if (DEBUG_OUTPUT == true) printf("new line add2");
 							binsert_line(_line[0], blines_l);
-							if (debug_output == true) printf("new line add3");
+							if (DEBUG_OUTPUT == true) printf("new line add3");
 							blines_l++;
 							bcategories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
-							if (debug_output == true) printf("new line add finish");
+							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
-							if (debug_output == true) printf("line update");
+							if (DEBUG_OUTPUT == true) printf("line update");
 							_line[0].id = it->second;
-							if (debug_output == true) printf("line update1");
+							if (DEBUG_OUTPUT == true) printf("line update1");
 							blines[it->second] = _line[0];
-							if (debug_output == true) printf("line finish");
+							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
 						}
@@ -14061,7 +14531,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-						if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 
 
@@ -14127,7 +14597,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("Season id: %d\r\n", event_id);
 					std::printf("Tournament id:%d\r\n", _tournament->id);
@@ -14151,7 +14621,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(bsports_id[_tournament->sport_id]->name); std::printf("\r\n");
 				}
 				////std::strcat(socket_message_big, bsports_id[_tournament->sport_id]->name);
@@ -14166,7 +14636,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 				}
 				bcategories_id[_tournament->category_id]->outrights = 1;
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(bcategories_id[_tournament->category_id]->name); std::printf("\r\n");
 					std::printf("\r\n***************************************************\r\n");
 				}
@@ -14397,7 +14867,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-						if (print == true) {
+						if (PRINT == true) {
 
 							std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 						}
@@ -14468,7 +14938,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -14508,10 +14978,15 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 											else bplayers_l++;
 										}
 
-										if (_line->outcome_name[i] == nullptr) {
-											_line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + 1];
-											std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->name);
+										if (_line->outcome_name[i] == nullptr  && bplayers_id[_line->outcome_id[i]]->full_name != nullptr) {
+											_line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->full_name) + 1];
+											std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->full_name);
 										}
+										else
+											if (_line->outcome_name[i] == nullptr && bplayers_id[_line->outcome_id[i]]->name != nullptr) {
+												_line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + 1];
+												std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->name);
+											}
 
 									}
 
@@ -14543,7 +15018,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 
 
@@ -14608,7 +15083,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 										}
 										else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 									}
-									if (print == true) {
+									if (PRINT == true) {
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 										printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
@@ -14625,7 +15100,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 								}
 
-								if (_line->type == 3) {
+								if (_line->type == 3 || _line->type == 4) {
 
 									if (_line->outcome_id[i] == _market->outcome_id[i]) u = i;
 									else
@@ -14663,7 +15138,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 									//if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
 
-									if (print == true) {
+									if (PRINT == true) {
 
 										std::printf(_line->outcome_name[i]); std::printf("\t");
 										std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -14689,38 +15164,38 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						}
 
 
-						if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 						auto it = bcompound2line_index.find(_line[0].getCompoundKey());
-						if (debug_output == true) {
+						if (DEBUG_OUTPUT == true) {
 							printf(_line[0].getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == bcompound2line_index.end()) {
-							if (debug_output == true) printf("new line add");
+							if (DEBUG_OUTPUT == true) printf("new line add");
 							_line[0].id = blines_l;
-							if (debug_output == true) printf("new line add1");
+							if (DEBUG_OUTPUT == true) printf("new line add1");
 							blines[blines_l] = _line[0];
 							blines_id[_line[0].id] = &blines[blines_l];
-							if (debug_output == true) printf("new line add2");
+							if (DEBUG_OUTPUT == true) printf("new line add2");
 							binsert_line(_line[0], blines_l);
-							if (debug_output == true) printf("new line add3");
+							if (DEBUG_OUTPUT == true) printf("new line add3");
 							blines_l++;
 							bcategories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
-							if (debug_output == true) printf("new line add finish");
+							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
-							if (debug_output == true) printf("line update");
+							if (DEBUG_OUTPUT == true) printf("line update");
 							_line[0].id = it->second;
-							if (debug_output == true) printf("line update1");
+							if (DEBUG_OUTPUT == true) printf("line update1");
 							blines[it->second] = _line[0];
-							if (debug_output == true) printf("line finish");
+							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
 						}
 
 
-						if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+						if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 
 
@@ -14750,7 +15225,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				_event->show = 1;
 				//_event->bet_stop = 0;
 
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("%d\r\n", _event->id);
 					std::printf(_event->home_name); if (_event->away_name != nullptr) { std::printf(" - ");  std::printf(_event->away_name); }
@@ -14765,7 +15240,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 				if (_event->sport_id >= MAX_SPORTS) { std::printf("ERROR DATA!\r\nsevent sport_id out of MAX_SPORTS in run %d\r\n", _event->sport_id); continue; }
 				if (bsports_id[_event->sport_id] == nullptr) { std::printf("Sport not found. Run getSports. sport_id=%d\r\n", _event->sport_id); getSports(true); }
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(bsports_id[_event->sport_id]->name); std::printf("\r\n");
 				}
 				//	std::strcat(socket_message_big, bsports_id[_event->sport_id]->name);
@@ -14794,7 +15269,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				}
 
 
-				if (print == true) {
+				if (PRINT == true) {
 					if (_event->type_radar == 0) std::printf(btournaments_id[_event->tournament_id]->name);
 					if (_event->type_radar == 2) std::printf(bsimples_id[_event->simple_id]->name);
 					std::printf("\r\n");
@@ -14822,7 +15297,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 				}
-				if (print == true) {
+				if (PRINT == true) {
 					std::printf(bcategories_id[_event->category_id]->name); std::printf("\r\n");
 					std::printf("\r\n***************************************************\r\n");
 				}
@@ -15035,9 +15510,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 				}
 
-				//	if (_event->status > 0) print = true; else print = false;
+				//	if (_event->status > 0) PRINT= true; else PRINT= false;
 
-				if (print == true) {
+				if (PRINT == true) {
 					if (_event->set_scores != nullptr) { std::printf("set_scores="); std::printf(_event->set_scores); }
 					if (_event->match_time != nullptr) { std::printf("match_time="); std::printf(_event->match_time); std::printf(" "); }
 					if (_event->remaining_time != nullptr) { std::printf("remaining_time="); std::printf(_event->remaining_time); std::printf(" "); }
@@ -15076,7 +15551,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					_line->season_id = 0;
 					for (xml_node<> * market_node = odds->first_node("market"); market_node; market_node = market_node->next_sibling())
 					{
-						if (debug_output == true) printf("start parse market\r\n");
+						if (DEBUG_OUTPUT == true) printf("start parse market\r\n");
 						outcomeNameError = 0;
 						if (market_node->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_attribute("next_betstop")->value());
 						if (market_node->first_node("market_metadata") && market_node->first_node("market_metadata")->first_attribute("next_betstop")) _line->next_betstop = atoi(market_node->first_node("market_metadata")->first_attribute("next_betstop")->value());
@@ -15197,7 +15672,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 								}
 							}
 						}
-					outcomeNameError3: if (_line->variant > -1) {
+					outcomeNameError3: if (_line->variant > -1 && _line->type != 4) {
 						z = strlen(_line->specifier_value[_line->variant]) + 1; if (strcmp(_line->specifier[_line->variant], "variant") != 0) { std::printf(_line->specifier[_line->variant]); std::printf("\r\n"); }
 						for (u = 0; u < bmax_markets_in[_line->market_id]; u++) if (bmarkets_id[_line->market_id][u] != nullptr && bmarkets_id[_line->market_id][u]->variable_text != nullptr && std::strcmp(_line->specifier_value[_line->variant], bmarkets_id[_line->market_id][u]->variable_text) == 0) break;
 						if (outcomeNameError == 1 || u == bmax_markets_in[_line->market_id]) {
@@ -15208,9 +15683,39 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						if (outcomeNameError == 1) outcomeNameError = 2;
 						if (_line->type == 3) z = 16;
 					}
-									   else { _market = bmarkets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; }
+									   else {
+										   _market = markets_id[_line->market_id][0]; if (_line->type == 0) z = 0; else if (_line->type == 1) z = 10; else if (_line->type == 2) z = 14; else if (_line->type == 3) z = 16; else if (_line->type == 4) {
+											   z = strlen(_line->specifier_value[_line->variant]) + 1;
+											   int in_dot = 0;
+											   for (int q = 0; q < z - 2; q++) {
+												   if (_line->specifier_value[_line->variant][q] == ':') in_dot++;
+												   if (in_dot == 3) {
+													   props_player_id = atoi((char*)((char*)_line->specifier_value[_line->variant] + q + 1)); break;
+												   }
+											   }
+
+											   if (props_player_id >= MAX_PLAYERS) {
+												   printf("ERROR props_player_id out of MAX_PLAYERS props_player_id=%d\r\n", props_player_id); continue;
+											   }
+
+											   if (bplayers_id[props_player_id] == nullptr) {
+												   std::printf("props_player_id=%d  not found . getPlayer\r\n ", props_player_id);
+												   bplayers[bplayers_l].id = props_player_id; if (getPlayer(&bplayers[bplayers_l], true) == -1)
+												   {
+													   std::printf("error props_player_id=%d  in getPlayer bets process returned -1 \r\n ", props_player_id); continue;
+												   }
+
+												   else bplayers_l++;
+											   }
+
+										   }
+
+									   }
+
+
+
 									   outcome_number = 0;
-									   if (debug_output == true) printf("start parse market2\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market2\r\n");
 
 									   if (_line->outcome_number > 0) { for (int i = 0; i < _line->outcome_number; i++) if (_line->outcome_name[i] != nullptr) delete[] _line->outcome_name[i]; };
 									   _line->outcome_number = 0;
@@ -15221,7 +15726,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 									   _line->outcome_team = nullptr;
 
 
-									   if (debug_output == true) printf("start parse market4\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market4\r\n");
 									   if (_line->name != nullptr) delete[] _line->name;
 									   _line->name = new char[strlen(_market->name) + 1];
 									   std::strcpy(_line->name, _market->name);
@@ -15276,13 +15781,13 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 										   outcome_number++;
 
 									   }
-									   if (debug_output == true) printf("start parse market3\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market3\r\n");
 
 
 
 
 
-									   if (print == true) {
+									   if (PRINT == true) {
 
 										   std::printf("\r\n"); std::printf(_line->name); std::printf("\r\n"); std::printf("------------------------------------------------------------------------------\r\n");
 									   }
@@ -15303,7 +15808,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 										   _line->outcome_active = new int[_line->outcome_number];
 										   _line->outcome_probabilities = new float[_line->outcome_number];
 										   _line->outcome_odds = new float[_line->outcome_number];
-										   if (debug_output == true) printf("start parse market5 %d\r\n", _market->id);
+										   if (DEBUG_OUTPUT == true) printf("start parse market5 %d\r\n", _market->id);
 
 
 
@@ -15355,7 +15860,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-												   if (print == true) {
+												   if (PRINT == true) {
 
 													   std::printf(_line->outcome_name[i]); std::printf("\t");
 													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -15382,6 +15887,26 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 													   continue;
 
 												   }
+
+												   if (bplayers_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 0) {
+													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 0 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
+													   bplayers[bplayers_l].id = _line->outcome_id[i]; if (getPlayer(&bplayers[bplayers_l], true) == -1)
+													   {
+														   std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+														   _line->outcome_team[i] = 1;
+													   }
+													   else
+														   bplayers_l++;
+
+												   }
+
+												   if (bplayers_id[_line->outcome_id[i]] != nullptr && _line->outcome_team[i] == 0) {
+													   if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
+													   else _line->outcome_team[i] = 1;
+												   }
+
+
+
 
 												   if (bplayers_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 2) {
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
@@ -15435,16 +15960,35 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 												   if (_line->outcome_team[i] < 3 && _line->outcome_name[i] == nullptr) {
 													   if (_line->outcome_team[i] == 1) {
-														   _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
-														   std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->name);
+														   if (bplayers_id[_line->outcome_id[i]]->full_name != nullptr) {
+															   _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->full_name) + strlen(_event->home_name) + 4];
+															   std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->full_name);
+														   }
+														   else {
+
+															   _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + strlen(_event->home_name) + 4];
+															   std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->name);
+														   }
+
+
+
 														   std::strcat(_line->outcome_name[i], " (");
 														   std::strcat(_line->outcome_name[i], _event->home_name);
 														   std::strcat(_line->outcome_name[i], ")");
 
 													   }
 													   if (_line->outcome_team[i] == 2) {
-														   if (_event->away_name != nullptr) _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + 1];
-														   std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->name);
+
+														   if (bplayers_id[_line->outcome_id[i]]->full_name != nullptr) {
+															   if (_event->away_name != nullptr) _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->full_name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->full_name) + 1];
+															   std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->full_name);
+														   }
+														   else {
+															   if (_event->away_name != nullptr) _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + strlen(_event->away_name) + 4]; else _line->outcome_name[i] = new char[strlen(bplayers_id[_line->outcome_id[i]]->name) + 1];
+															   std::strcpy(_line->outcome_name[i], bplayers_id[_line->outcome_id[i]]->name);
+														   }
+
+
 														   if (_event->away_name != nullptr) {
 															   std::strcat(_line->outcome_name[i], " (");
 															   std::strcat(_line->outcome_name[i], _event->away_name);
@@ -15488,7 +16032,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-												   if (print == true) {
+												   if (PRINT == true) {
 
 
 
@@ -15559,7 +16103,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 													   }
 													   else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 												   }
-												   if (print == true) {
+												   if (PRINT == true) {
 													   std::printf(_line->outcome_name[i]); std::printf("\t");
 													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
 													   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
@@ -15613,7 +16157,43 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 												   //if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
 
-												   if (print == true) {
+												   if (PRINT == true) {
+
+													   std::printf(_line->outcome_name[i]); std::printf("\t");
+													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
+													   printf("probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												   }
+												   /*
+												   std::strcat(socket_message_big, _line->outcome_name[i]);
+												   std::strcat(socket_message_big, "\t");
+												   std::sprintf(socket_message_little, "odds=%g", _line->outcome_odds[i]);
+												   std::strcat(socket_message_big, socket_message_little);
+												   std::strcat(socket_message_big, "\t");
+												   std::sprintf(socket_message_little, "probabilitie=%g\r\n", _line->outcome_probabilities[i]);
+												   std::strcat(socket_message_big, socket_message_little);*/
+
+
+
+
+											   }
+
+											   if (_line->type == 4) {
+
+												   if (_line->outcome_team[i] == 2) _line->outcome_name[i] = new char[strlen(bplayers_id[props_player_id]->full_name) + 14 + strlen(_event->away_name)];
+												   else  _line->outcome_name[i] = new char[strlen(bplayers_id[props_player_id]->full_name) + 14 + strlen(_event->home_name)];
+
+												   strcpy(_line->outcome_name[i], bplayers_id[props_player_id]->full_name);
+												   //strcat(_line->outcome_name[i], " (");
+												   //if (_line->outcome_team[i] == 2) strcat(_line->outcome_name[i], _event->away_name);
+												   //else strcat(_line->outcome_name[i], _event->home_name);
+												   //strcat(_line->outcome_name[i], ") ");
+												   strcat(_line->outcome_name[i], " ");
+												   _itoa(_line->outcome_id[i], buf, 10);
+												   strcat(_line->outcome_name[i], buf);
+												   strcat(_line->outcome_name[i], ".0+");
+
+
+												   if (PRINT == true) {
 
 													   std::printf(_line->outcome_name[i]); std::printf("\t");
 													   std::printf("odds=%g", _line->outcome_odds[i]); std::printf("  \t");
@@ -15634,46 +16214,47 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 											   }
 
 
+
 										   }
 
 
 
 										   if (outcomeNameError == 1 && _market->variant > -1) goto outcomeNameError3;
 									   }
-									   if (debug_output == true) printf("start parse market6\r\n");
+									   if (DEBUG_OUTPUT == true) printf("start parse market6\r\n");
 
-									   if (debug_output == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-									   if (debug_output == true) {
+									   if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+									   if (DEBUG_OUTPUT == true) {
 										   printf(_line[0].getCompoundKey().c_str());
 										   printf("\r\n");
 									   }
 									   auto it = bcompound2line_index.find(_line[0].getCompoundKey());
-									   if (debug_output == true) printf("auto it\r\n");
+									   if (DEBUG_OUTPUT == true) printf("auto it\r\n");
 
 									   if (it == bcompound2line_index.end()) {
-										   if (debug_output == true) printf("new line add ");
+										   if (DEBUG_OUTPUT == true) printf("new line add ");
 										   _line[0].id = blines_l;
-										   if (debug_output == true) printf("new line add1 ");
+										   if (DEBUG_OUTPUT == true) printf("new line add1 ");
 										   blines[blines_l] = _line[0];
 										   blines_id[_line[0].id] = &blines[blines_l];
-										   if (debug_output == true) printf("new line add2 ");
+										   if (DEBUG_OUTPUT == true) printf("new line add2 ");
 										   binsert_line(_line[0], blines_l);
-										   if (debug_output == true) printf("new line add3 ");
+										   if (DEBUG_OUTPUT == true) printf("new line add3 ");
 										   blines_l++;
-										   if (debug_output == true) printf("new line add finish\r\n");
+										   if (DEBUG_OUTPUT == true) printf("new line add finish\r\n");
 
 									   }
 									   else {
-										   if (debug_output == true) printf("line update");
+										   if (DEBUG_OUTPUT == true) printf("line update");
 										   _line[0].id = it->second;
-										   if (debug_output == true) printf("line update1");
+										   if (DEBUG_OUTPUT == true) printf("line update1");
 										   blines[it->second] = _line[0];
-										   if (debug_output == true) printf("line finish\r\n");
+										   if (DEBUG_OUTPUT == true) printf("line finish\r\n");
 
 										   //printf("Line Update\r\n");
 									   }
 
-									   if (debug_output == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+									   if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 
 
@@ -15692,7 +16273,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				}
 			}
 
-			if (debug_output == true) printf("end parse type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) printf("end parse type_radar=%d\r\n", type_radar);
 
 
 			//delete[] zip_message;
@@ -15721,9 +16302,10 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-			//std::printf(doc.first_node()->name()); std::printf("\r\n");
+			//std::printf(doc.first_node()->first_attribute("event_id")->value()); std::printf("\r\n");
 			//if (settlement_type == 2) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index-1)%AMQP_QUEUE]);
 
+			if (event_id == 14011589) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
 
 			type_radar = 0;
 			event_id = 0;
@@ -15801,13 +16383,14 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 			}
 			else _bet->end_time = 0;
 
-			if (debug_output == true) printf("bet_settlement type_radar=%d  settlement_type=%d\r\n", type_radar, settlement_type);
+			if (DEBUG_OUTPUT == true) printf("bet_settlement type_radar=%d  settlement_type=%d\r\n", type_radar, settlement_type);
 			printf("bet_settlement type_radar=%d  settlement_type=%d\r\n", type_radar, settlement_type);
-
+			//printf("xml = %s\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
 			//printf("bet_settlement type_radar=%d\r\n", type_radar);
 
 			xml_node<> * outcomes = doc.first_node()->first_node("outcomes");
-			if (type_radar > 0) outcomes = doc.first_node();
+			if (outcomes == nullptr)  outcomes = doc.first_node();
+
 
 			if (outcomes != nullptr) {
 				_bet->tournament_id = 0;
@@ -15942,13 +16525,13 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 				settlementError1:
-					if (_bet->variant > -1) {
+					if (_bet->variant > -1 && _bet->type != 4) {
 						z = strlen(_bet->specifier_value[_bet->variant]) + 1; if (strcmp(_bet->specifier[_bet->variant], "variant") != 0) { std::printf(_bet->specifier[_bet->variant]); std::printf("\r\n"); }
 
 
 						for (u = 0; u < bmax_markets_in[_bet->market_id]; u++) if (bmarkets_id[_bet->market_id][u] != nullptr && bmarkets_id[_bet->market_id][u]->variable_text != nullptr && std::strcmp(_bet->specifier_value[_bet->variant], bmarkets_id[_bet->market_id][u]->variable_text) == 0) break;
 						if (settlementError == 1 || u == bmax_markets_in[_bet->market_id]) {
-							std::printf("Variant market1 not found in run market_id=%d variant=", _bet->market_id);  std::printf(_bet->specifier_value[_bet->variant]);  std::printf(" getVariantMarket\r\n"); if (getVariantMarket(bmarkets_id[_bet->market_id][0], _bet->specifier_value[_bet->variant], true) == -1) { std::printf("variant market not found "); continue; }
+							std::printf("Variant market not found in bet_settlement. Market_id=%d variant=", _bet->market_id);  std::printf(_bet->specifier_value[_bet->variant]);  std::printf(" getVariantMarket\r\n"); if (getVariantMarket(bmarkets_id[_bet->market_id][0], _bet->specifier_value[_bet->variant], true, true) == -1) { std::printf("variant market not found "); continue; }
 							for (u = 0; u < bmax_markets_in[_bet->market_id]; u++) if (bmarkets_id[_bet->market_id][u] != nullptr && bmarkets_id[_bet->market_id][u]->variable_text != nullptr && std::strcmp(_bet->specifier_value[_bet->variant], bmarkets_id[_bet->market_id][u]->variable_text) == 0) break;
 						}
 						_market = bmarkets_id[_bet->market_id][u];
@@ -15956,7 +16539,37 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 						if (_bet->type == 3) z = 16;
 					}
-					else { _market = bmarkets_id[_bet->market_id][0]; if (_bet->type == 0) z = 0; else if (_bet->type == 1) z = 10; else if (_bet->type == 2) z = 14; else if (_bet->type == 3) z = 16; }
+					else {
+						_market = bmarkets_id[_bet->market_id][0]; if (_bet->type == 0) z = 0; else if (_bet->type == 1) z = 10; else if (_bet->type == 2) z = 14; else if (_bet->type == 3) z = 16;
+						if (_bet->type == 4) {
+							z = strlen(_bet->specifier_value[_bet->variant]) + 1;
+							int in_dot = 0;
+							for (int q = 0; q < z - 2; q++) {
+								if (_bet->specifier_value[_bet->variant][q] == ':') in_dot++;
+								if (in_dot == 3) {
+									props_player_id = atoi((char*)((char*)_bet->specifier_value[_bet->variant] + q + 1)); break;
+								}
+							}
+
+							if (props_player_id >= MAX_PLAYERS) {
+								printf("ERROR props_player_id out of MAX_PLAYERS bet_settlement props_player_id=%d\r\n", props_player_id); continue;
+							}
+
+							if (bplayers_id[props_player_id] == nullptr) {
+								std::printf("props_player_id=%d  not found . getPlayer\r\n ", props_player_id);
+								bplayers[bplayers_l].id = props_player_id; if (getPlayer(&bplayers[bplayers_l], true) == -1)
+								{
+									std::printf("error props_player_id=%d  in getPlayer returned -1 \r\n ", props_player_id); continue;
+								}
+
+								else bplayers_l++;
+							}
+
+						}
+
+
+
+					}
 
 
 					if (_bet->outcome_number > 0) { for (int i = 0; i < _bet->outcome_number; i++) if (_bet->outcome_name[i] != nullptr) delete[] _bet->outcome_name[i]; };
@@ -16214,7 +16827,35 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 							}
-							if (print == true) {
+							if (_bet->type == 4) {
+
+								_bet->outcome_name[i] = new char[strlen(bplayers_id[props_player_id]->full_name) + 10];
+								strcpy(_bet->outcome_name[i], bplayers_id[props_player_id]->full_name);
+								strcat(_bet->outcome_name[i], " ");
+								_itoa(_bet->outcome_id[i], buf, 10);
+								strcat(_bet->outcome_name[i], buf);
+								strcat(_bet->outcome_name[i], ".0+");
+							}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+							if (PRINT == true) {
 								printf("_bet->outcome_name[i]=%s\r\n", _bet->outcome_name[i]);
 								printf("_bet->outcome_void_factor[i]=%d\r\n", _bet->outcome_void_factor[i]);
 								printf("_bet->outcome_dead_heat_factor[i]=%d\r\n", _bet->outcome_dead_heat_factor[i]);
@@ -16343,17 +16984,19 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 	//delete[] socket_message_big;
 	//delete[] socket_message_little;
 	delete[] buffer;
-
+	printf("Exit BetsProcessThread");
 	return 0;
 
 }
 DWORD WINAPI MTSPublishThread(LPVOID lparam) {
 	rabbitmqssl_mts();
+	printf("Exit MTSPublishThread");
 	return 0;
 
 }
 DWORD WINAPI MTSConsumeThread(LPVOID lparam) {
 	run_mts();
+	printf("Exit MTSConsumeThread");
 	return 0;
 
 }
@@ -16363,15 +17006,10 @@ void GenerateBigStep() {
 	int i = 0;
 	int j = 0;
 	int k = 0;
-
-
-
 	vector<int> clientIDs;
 
-
-
 	if (recovery_state != 0)  return;
-	//clientIDs.clear();
+	clientIDs.clear();
 	clientIDs = server.getClientIDs();
 	current_data_step_temp_1 = -1;
 	current_data_step_temp_2 = -1;
@@ -16412,16 +17050,15 @@ void GenerateBigStep() {
 		printf("error STEP_QUEUE\r\n"); return;
 	}
 
-	//printf("CreateStep_1--------------------------------------------\r\n");
 	if (reload_step_1 == 1) {
 		array_data_step_1[current_data_step_temp_1] = CreateStep_1(data_step_len_1[current_data_step_temp_1]);
 		//printf("CreateStep_1-------------------------------------------- end\r\n");
 		current_data_step_1 = current_data_step_temp_1;
 		reload_step_1 = 0;
 	}
-	//printf("CreateStep_2--------------------------------------------\r\n");
+
 	array_data_step_2[current_data_step_temp_2] = CreateStep_2(data_step_len_2[current_data_step_temp_2]);
-	//printf("CreateStep_2 --------------------------------------------end\r\n");
+
 	current_data_step_2 = current_data_step_temp_2;
 
 	//Sleep(100);
@@ -16460,20 +17097,25 @@ void writeDouble(char* buffer, size_t &offset, double data) {
 	memcpy(buffer + offset, &temp, 4);
 	offset += 4;
 };
-void readInteger(char* buffer, size_t & offset, int* data, int num) {
+int readInteger(char* buffer, size_t & offset, int* data, int num, size_t buffer_size) {
+	if (offset + num > buffer_size) return -1;
 	memcpy(data, buffer + offset, num);
 	offset += num;
+	return 0;
 };
-void readString(char* buffer, size_t &offset, char* &data) {
+int readString(char* buffer, size_t &offset, char* &data, size_t buffer_size) {
 	int num = 0;
+	if (offset + 2 > buffer_size) return -1;
 	memcpy(&num, buffer + offset, 2);
 	offset += 2;
+	if (offset + num > buffer_size) return -1;
 	//if (data != nullptr) num = strlen(data);
 	if (data != nullptr) delete[] data;
 	data = new char[num + 1];
 	memcpy(data, buffer + offset, num);
 	data[num] = 0;
 	offset += num;
+	return 0;
 };
 /*
 void readDouble(char* buffer, size_t &offset, float* data) {
@@ -16481,16 +17123,18 @@ memcpy(data,buffer + offset, sizeof(float));
 offset += sizeof(float);
 };
 */
-void readDouble(char* buffer, size_t &offset, double* data) {
+int readDouble(char* buffer, size_t &offset, double* data, size_t buffer_size) {
 	int temp = 0;
+	if (offset + 4 > buffer_size) return -1;
 	memcpy(&temp, buffer + offset, 4);
 	offset += 4;
 	*data = (double)(temp) / 1000;
+	return 0;
 };
-void readDouble2(char* buffer, size_t &offset, double* data) {
-	memcpy(data, buffer + offset, sizeof(double));
-	offset += sizeof(double);
-};
+/*void readDouble2(char* buffer, size_t &offset, double* data) {
+memcpy(data, buffer + offset, sizeof(double));
+offset += sizeof(double);
+};*/
 int GetMaxCompressedLen(int nLenSrc)
 {
 	int n16kBlocks = (nLenSrc + 16383) / 16384; // round up any fraction of a block
@@ -16574,7 +17218,6 @@ int startRecovery() {
 	//while (httpsRequest("api.betradar.com", request, recvbuf, 1) == -1) Sleep(1000);
 	if (recovery_timestamp > 0) result_liveodds = httpsRequest("api.betradar.com", request_liveodds, recvbuf, 1);
 	result_pre = httpsRequest("api.betradar.com", request_pre, recvbuf, 1);
-
 	if (result_pre > 0) std::printf("Start recovery pre recovery_timestamp=%s\r\n", request_pre);
 	if (result_liveodds > 0) std::printf("Start recovery liveodds recovery_timestamp=%s\r\n", request_liveodds);
 	delete[] request_pre;
@@ -16853,7 +17496,7 @@ void getCategoriesTournamentsTranslate(int l) {
 	i = 0;
 	for (xml_node<> * tournament_node = root_node->first_node("tournament"); tournament_node; tournament_node = tournament_node->next_sibling())
 	{
-	
+
 		int type_radar = 1;
 		int simple_id = 0;
 		int id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));
@@ -16878,9 +17521,9 @@ void getCategoriesTournamentsTranslate(int l) {
 			}
 		}
 
-	
+
 		if (type_radar == 2) {
-			if (simple_id== 0||simple_id >= MAX_TOURNAMENTS || simples_id[simple_id] == nullptr) { printf("simpleid torunamnets error=%d\r\n", simple_id); continue; }
+			if (simple_id == 0 || simple_id >= MAX_TOURNAMENTS || simples_id[simple_id] == nullptr) { printf("simpleid torunamnets error=%d\r\n", simple_id); continue; }
 			tournament = simples_id[simple_id];
 		}
 		else {
@@ -16889,15 +17532,15 @@ void getCategoriesTournamentsTranslate(int l) {
 
 		}
 
-	
+
 		if (tournament_node->first_attribute("name") && tournament->translation_name[l] == nullptr) {
 			//printf("tournament_node->first_attribute(name)->value()=%s\r\n", tournament_node->first_attribute("name")->value());
 			tournament->translation_name[l] = new char[strlen(tournament_node->first_attribute("name")->value()) + 1];
 			std::strcpy(tournament->translation_name[l], tournament_node->first_attribute("name")->value());
 			if (l > 0 && tournament->name != nullptr && strcmp(tournament->translation_name[l], tournament->name) == 0)
 			{
-								delete[] tournament->translation_name[l]; 
-								tournament->translation_name[l] = nullptr;
+				delete[] tournament->translation_name[l];
+				tournament->translation_name[l] = nullptr;
 			}
 
 		}
@@ -16905,34 +17548,35 @@ void getCategoriesTournamentsTranslate(int l) {
 
 		temp = atoi((char*)((char*)tournament_node->first_node("category")->first_attribute("id")->value() + 12));
 
-		
 
-	
+
+
 		if (tournament_node->first_node("current_season")) {
 			if (tournament_node->first_node("current_season")->first_attribute("name") && tournament->translation_season_name[l] == nullptr) {
 				tournament->translation_season_name[l] = new char[strlen(tournament_node->first_node("current_season")->first_attribute("name")->value()) + 1];
 				std::strcpy(tournament->translation_season_name[l], tournament_node->first_node("current_season")->first_attribute("name")->value());
-			
+
 				if (l > 0 && tournament->season_name != nullptr && strcmp(tournament->translation_season_name[l], tournament->season_name) == 0)
-				{	delete[] tournament->translation_season_name[l]; 
+				{
+					delete[] tournament->translation_season_name[l];
 					tournament->translation_season_name[l] = nullptr;
 				}
 
 			}
 
-	
-	
+
+
 
 		}
 
 
-	
+
 		if (temp == 0 || temp >= MAX_CATEGORIES || categories_id[temp] == nullptr) {
 			printf("id categories error=%d\r\n", temp); continue;
 		}
 
 		category = categories_id[temp];
-		
+
 		if (tournament_node->first_node("category") && tournament_node->first_node("category")->first_attribute("name") && category->translation_name[l] == nullptr) {
 			category->translation_name[l] = new char[1000 + 1];
 			std::strcpy(category->translation_name[l], tournament_node->first_node("category")->first_attribute("name")->value());
@@ -16941,11 +17585,11 @@ void getCategoriesTournamentsTranslate(int l) {
 				delete[] category->translation_name[l]; category->translation_name[l] = nullptr;
 			}
 		}
-		
 
 
 
-		
+
+
 	}
 	delete[] recvbuf;
 	doc.clear();
@@ -17014,7 +17658,7 @@ void getSportsTranslate(int l) {
 	char* request = new char[MAX_PATH];
 	strcpy(request, "/v1/sports/");
 	strcat(request, lang[l].c_str());
-	strcat(request,"/sports.xml");
+	strcat(request, "/sports.xml");
 	while (httpsRequest("api.betradar.com", request, recvbuf, 0) == -1) Sleep(1000);
 	using namespace rapidxml;
 	xml_document<> doc;
@@ -17034,7 +17678,7 @@ void getSportsTranslate(int l) {
 		sports_id[id]->translation_name[l] = new char[strlen(sport_node->first_attribute("name")->value()) + 1];
 		std::strcpy(sports_id[id]->translation_name[l], sport_node->first_attribute("name")->value());
 		if (l > 0 && strcmp(sports_id[id]->translation_name[l], sports_id[id]->name) == 0) { delete[] sports_id[id]->translation_name[l]; sports_id[id]->translation_name[l] = nullptr; }
-	
+
 	}
 
 	doc.clear();
@@ -17411,7 +18055,8 @@ void getEvents(time_t sec, int days) {
 
 
 }
-int getVariantMarket(Market* market, char* urn, bool b) {
+int getVariantMarket(Market* market, char* urn, bool b, bool a) {
+
 
 	char buffer[MAX_PATH];
 	char buf[MAX_PATH];
@@ -17466,7 +18111,7 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 	int c = 0;
 	for (i = 0; i < MAX_OUTCOME; i++) outcome_name[i] = new char[MAX_OUTCOME_NAME];
 
-	if (market->type == 3) std::strcpy(buffer, "/v1/pre/descriptions/en/markets/");
+	if (market->type == 3 || market->type == 4) std::strcpy(buffer, "/v1/pre/descriptions/en/markets/");
 	else if (urn[0] == 'l' && urn[1] == 'o' && urn[2] == ':') std::strcpy(buffer, "/v1/liveodds/descriptions/en/markets/");
 	else  std::strcpy(buffer, "/v1/descriptions/en/markets/");
 
@@ -17478,9 +18123,10 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 	if (recvbuf[0] == 0) return -1;
 
 	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length) { delete[] recvbuf; return -1; }
-   try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 
-   j = 0;
+	j = 0;
 	root_node = doc.first_node("market_descriptions");
 	if (root_node == nullptr || root_node->first_node("market") == nullptr) {
 		printf("market->type=%d market->id=%d\r\n", market->type, market->id);
@@ -17498,6 +18144,8 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 
 
 	j = -1;
+
+
 
 	for (i = 0; i < max_markets_in[market->id]; i++) {
 		if (j == -1 && markets_id[market->id][i] == nullptr) j = i;
@@ -17520,8 +18168,10 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 	}
 
 
+
 	markets_id[market->id][j][0] = market[0];
 	_market = markets_id[market->id][j];
+
 
 
 	if ((_market->type == 3 || (_market->type == 0 && _market->variant>-1 && _market->variable_text != nullptr && _market->variable_text[0] == 'l' && _market->variable_text[1] == 'o' && _market->variable_text[2] == ':')) && root_node->first_node("market") && root_node->first_node("market")->first_attribute("name")) {
@@ -17529,6 +18179,7 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 		_market->name = new char[strlen(root_node->first_node("market")->first_attribute("name")->value()) + 1];
 		std::strcpy(_market->name, root_node->first_node("market")->first_attribute("name")->value());
 	}
+
 
 
 
@@ -17546,6 +18197,9 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 
 	}
 
+
+
+
 	if (_market->outcome_number > 0) {
 		_market->outcome_id = new int[_market->outcome_number];
 		_market->outcome_name = new char*[_market->outcome_number];
@@ -17556,18 +18210,22 @@ int getVariantMarket(Market* market, char* urn, bool b) {
 		}
 	}
 
-	if (b == false) saveMarketToDB(_market);
+
+
+	if (b == false || a == true) saveMarketToDB(_market);
+
 
 	for (i = 0; i < MAX_OUTCOME; i++) delete[] outcome_name[i];
 	delete[] outcome_name;
 	delete[] outcome_id;
 	delete[] recvbuf;
 	doc.clear();
+
 	return 0;
 }
 int getVariantMarketTranslate(Market* market, int l) {
 
-	
+
 	if (market->variant == -1) return 0;
 	//if (market->id == 534) return 0;
 	//if (market->id == 535) return 0;
@@ -17581,26 +18239,26 @@ int getVariantMarketTranslate(Market* market, int l) {
 	xml_node<> * root_node;
 
 	//printf("market->id = %d market->variable_text=%s\r\n", market->id, market->variable_text);
-	
+
 	//using namespace std;
 	int k = 0;
 	int i = 0;
 	int j = 0;
 	int c = 0;
-	
-	if (market->type == 3) {
+
+	if (market->type == 3 || market->type == 4) {
 		std::strcpy(buffer, "/v1/pre/descriptions/");
 		std::strcat(buffer, lang[l].c_str());
 		std::strcat(buffer, "/markets/");
 
 	}
 	else if (market->variable_text[0] == 'l' && market->variable_text[1] == 'o' && market->variable_text[2] == ':') {
-	
-	std::strcpy(buffer, "/v1/liveodds/descriptions/"); 
-	std::strcat(buffer, lang[l].c_str());
-	std::strcat(buffer, "/markets/");
 
-	
+		std::strcpy(buffer, "/v1/liveodds/descriptions/");
+		std::strcat(buffer, lang[l].c_str());
+		std::strcat(buffer, "/markets/");
+
+
 	}
 	else {
 		std::strcpy(buffer, "/v1/descriptions/");
@@ -17623,9 +18281,9 @@ int getVariantMarketTranslate(Market* market, int l) {
 	j = 0;
 	root_node = doc.first_node("market_descriptions");
 	if (root_node == nullptr || root_node->first_node("market") == nullptr) {
-	//	printf("market->type=%d market->id=%d\r\n", market->type, market->id);
-	//	printf(market->variable_text);
-//		printf("\r\n");
+		//	printf("market->type=%d market->id=%d\r\n", market->type, market->id);
+		//	printf(market->variable_text);
+		//		printf("\r\n");
 		delete[] recvbuf;
 		doc.clear();
 		return -1;
@@ -17654,7 +18312,7 @@ int getVariantMarketTranslate(Market* market, int l) {
 	}
 	if (root_node->first_node("market") && root_node->first_node("market")->first_node("outcomes")) for (xml_node<> * outcome_node = root_node->first_node("market")->first_node("outcomes")->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 		if (outcome_number == market->outcome_number) break;
-		market->translation_outcome_name[l][outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value())+1];
+		market->translation_outcome_name[l][outcome_number] = new char[strlen(outcome_node->first_attribute("name")->value()) + 1];
 		std::strcpy(market->translation_outcome_name[l][outcome_number], outcome_node->first_attribute("name")->value());
 		outcome_number++;
 	}
@@ -17735,11 +18393,14 @@ void getMarkets() {
 			if (strcmp("sr:player", market_node->first_attribute("includes_outcomes_of_type")->value()) == 0)  markets[i].type = 1; else
 				if (strcmp("sr:competitor", market_node->first_attribute("includes_outcomes_of_type")->value()) == 0)  markets[i].type = 2; else
 					if (strcmp("pre:outcometext", market_node->first_attribute("includes_outcomes_of_type")->value()) == 0)  markets[i].type = 3;
-					else markets[i].type = 4;
+					else markets[i].type = 0;
 		}
 
+		if (market_node->first_attribute("groups") != nullptr && strcmp("player_props", (char*)market_node->first_attribute("groups")->value() + 4) == 0) {
+			markets[i].type = 4;
 
-		markets[i].outcome_number = 0;
+		}
+
 
 		if (market_node->first_node("outcomes")) for (xml_node<> * outcome_node = market_node->first_node("outcomes")->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 			outcome_id[markets[i].outcome_number] = atoi(outcome_node->first_attribute("id")->value());
@@ -18055,7 +18716,7 @@ void getMarketsTranslate(int l) {
 
 	for (xml_node<> * market_node = root_node->first_node("market"); market_node; market_node = market_node->next_sibling())
 	{
-        id = atoi(market_node->first_attribute("id")->value());
+		id = atoi(market_node->first_attribute("id")->value());
 		if (markets_id[id] == nullptr || markets_id[id][0] == nullptr) continue;
 		market = markets_id[id][0];
 		market->translation_name[l] = new char[strlen(market_node->first_attribute("name")->value()) + 1];
@@ -18088,7 +18749,7 @@ void getMarketsTranslate(int l) {
 	}
 
 
-	
+
 	delete[] request;
 	delete[] recvbuf;
 	doc.clear();
@@ -18128,10 +18789,11 @@ int getPlayer(Player* player, bool b) {
 	using namespace std;
 	int j = 0;
 
-	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length) { delete[] recvbuf; return -1;}
-	
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length) { delete[] recvbuf; return -1; }
+
 	//printf(((char*)((char*)recvbuf + j + 4)));
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("player_profile");
@@ -18195,94 +18857,95 @@ int getPlayer(Player* player, bool b) {
 	return 0;
 }
 int getPlayerTranslate(Player* player, int l) {
-		char* recvbuf = new char[EXTRA];
-		char buf[20];
-		char buffer[1024];
-		_itoa(player->id, buf, 10);
-		std::strcpy(buffer, "/v1/sports/");
-		std::strcat(buffer, lang[l].c_str());
-		std::strcat(buffer, "/players/sr:player:");
-		std::strcat(buffer, buf);
-		std::strcat(buffer, "/profile.xml");
-		while (httpsRequest("api.betradar.com", buffer, recvbuf, 0) == -1) Sleep(1000);
-		//printf(recvbuf);
-		if (recvbuf[0] == 0) return -1;
+	char* recvbuf = new char[EXTRA];
+	char buf[20];
+	char buffer[1024];
+	_itoa(player->id, buf, 10);
+	std::strcpy(buffer, "/v1/sports/");
+	std::strcat(buffer, lang[l].c_str());
+	std::strcat(buffer, "/players/sr:player:");
+	std::strcat(buffer, buf);
+	std::strcat(buffer, "/profile.xml");
+	while (httpsRequest("api.betradar.com", buffer, recvbuf, 0) == -1) Sleep(1000);
+	//printf(recvbuf);
+	if (recvbuf[0] == 0) return -1;
 
-		using namespace rapidxml;
-		xml_document<> doc;
-		xml_node<> * root_node;
-		SYSTEMTIME st;
-		struct tm tm;
-		time_t start;
-		memset(&st, 0, sizeof(st));
-		memset(&tm, 0, sizeof(tm));
+	using namespace rapidxml;
+	xml_document<> doc;
+	xml_node<> * root_node;
+	SYSTEMTIME st;
+	struct tm tm;
+	time_t start;
+	memset(&st, 0, sizeof(st));
+	memset(&tm, 0, sizeof(tm));
 
-		using namespace std;
-		int j = 0;
-		int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000;	for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; 
-		if (j == recv_length || j < 5 ) { delete[] recvbuf; return -1; }
-		try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	using namespace std;
+	int j = 0;
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000;	for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break;
+	if (j == recv_length || j < 5) { delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 
-		//printf(((char*)((char*)recvbuf + j + 4)));
-		//printf("\r\n\r\n");
-		root_node = doc.first_node("player_profile");
+	//printf(((char*)((char*)recvbuf + j + 4)));
+	//printf("\r\n\r\n");
+	root_node = doc.first_node("player_profile");
 
-		if (root_node == nullptr) { delete[] recvbuf; doc.clear(); return -1; }
-		xml_node<> * player_node = root_node->first_node("player"); if (player_node == nullptr) {
-			delete[] recvbuf; doc.clear(); return -1;
-		}
+	if (root_node == nullptr) { delete[] recvbuf; doc.clear(); return -1; }
+	xml_node<> * player_node = root_node->first_node("player"); if (player_node == nullptr) {
+		delete[] recvbuf; doc.clear(); return -1;
+	}
 
-		
-		if (player_node->first_attribute("name"))
+
+	if (player_node->first_attribute("name"))
+	{
+		player->translation_name[l] = new char[strlen(player_node->first_attribute("name")->value()) + 1];
+		std::strcpy(player->translation_name[l], player_node->first_attribute("name")->value());
+		if (l > 0 && player->name != nullptr && strcmp(player->translation_name[l], player->name) == 0)
 		{
-			player->translation_name[l] = new char[strlen(player_node->first_attribute("name")->value()) + 1]; 
-			std::strcpy(player->translation_name[l], player_node->first_attribute("name")->value());
-			if (l > 0 && player->name != nullptr && strcmp(player->translation_name[l], player->name) == 0)
-			{
-				delete[] player->translation_name[l]; player->translation_name[l] = nullptr;
-			}
-		
+			delete[] player->translation_name[l]; player->translation_name[l] = nullptr;
 		}
-		
-		if (player_node->first_attribute("full_name"))
+
+	}
+
+	if (player_node->first_attribute("full_name"))
+	{
+
+		player->translation_full_name[l] = new char[strlen(player_node->first_attribute("full_name")->value()) + 1];
+		std::strcpy(player->translation_full_name[l], player_node->first_attribute("full_name")->value());
+		if (l > 0 && player->full_name != nullptr && strcmp(player->translation_full_name[l], player->full_name) == 0)
 		{
-			
-			player->translation_full_name[l] = new char[strlen(player_node->first_attribute("full_name")->value()) + 1];
-			std::strcpy(player->translation_full_name[l], player_node->first_attribute("full_name")->value());
-			if (l > 0 && player->full_name != nullptr && strcmp(player->translation_full_name[l], player->full_name) == 0)
-			{
-				delete[] player->translation_full_name[l]; player->translation_full_name[l] = nullptr;
-			}
-			
-
+			delete[] player->translation_full_name[l]; player->translation_full_name[l] = nullptr;
 		}
-		if (player_node->first_attribute("nationality"))
+
+
+	}
+	if (player_node->first_attribute("nationality"))
+	{
+
+		player->translation_nationality[l] = new char[strlen(player_node->first_attribute("nationality")->value()) + 1];
+		std::strcpy(player->translation_nationality[l], player_node->first_attribute("nationality")->value());
+		if (l > 0 && player->nationality != nullptr && strcmp(player->translation_nationality[l], player->nationality) == 0)
 		{
-			
-			player->translation_nationality[l] = new char[strlen(player_node->first_attribute("nationality")->value()) + 1];
-			std::strcpy(player->translation_nationality[l], player_node->first_attribute("nationality")->value());
-			if (l > 0 && player->nationality != nullptr && strcmp(player->translation_nationality[l], player->nationality) == 0)
-			{
-				delete[] player->translation_nationality[l]; player->translation_nationality[l] = nullptr;
-			}
-
-
+			delete[] player->translation_nationality[l]; player->translation_nationality[l] = nullptr;
 		}
-		
-		if (player_node->first_attribute("type"))
+
+
+	}
+
+	if (player_node->first_attribute("type"))
+	{
+		player->translation_type[l] = new char[strlen(player_node->first_attribute("type")->value()) + 1];
+		std::strcpy(player->translation_type[l], player_node->first_attribute("type")->value());
+		if (l > 0 && player->type != nullptr && strcmp(player->translation_type[l], player->type) == 0)
 		{
-			player->translation_type[l] = new char[strlen(player_node->first_attribute("type")->value()) + 1];
-			std::strcpy(player->translation_type[l], player_node->first_attribute("type")->value());
-			if (l > 0 && player->type != nullptr && strcmp(player->translation_type[l], player->type) == 0)
-			{
-				delete[] player->translation_type[l]; player->translation_type[l] = nullptr;
-			}
-
+			delete[] player->translation_type[l]; player->translation_type[l] = nullptr;
 		}
-		
-		doc.clear();
-		delete[] recvbuf;
-		return 0;
+
+	}
+
+	doc.clear();
+	delete[] recvbuf;
+	return 0;
 
 }
 int getCompetitor(Competitor* competitor, bool b) {
@@ -18334,12 +18997,13 @@ int getCompetitor(Competitor* competitor, bool b) {
 	int j = 0;
 	int i = 0;
 
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
 
 	//printf(((char*)((char*)recvbuf + j + 4)));
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 
-	
+
 
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
@@ -18524,9 +19188,10 @@ int getCompetitorTranslate(Competitor* competitor, int l) {
 	int j = 0;
 	int i = 0;
 
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("competitor_profile");
@@ -18535,7 +19200,7 @@ int getCompetitorTranslate(Competitor* competitor, int l) {
 
 	if (competitor_node->first_attribute("name")) {
 
-		competitor->translation_name[l] = new char[strlen(competitor_node->first_attribute("name")->value()) + 1]; 
+		competitor->translation_name[l] = new char[strlen(competitor_node->first_attribute("name")->value()) + 1];
 		std::strcpy(competitor->translation_name[l], competitor_node->first_attribute("name")->value());
 		if (l > 0 && competitor->name != nullptr && strcmp(competitor->name, competitor->translation_name[l]) == 0)
 		{
@@ -18545,9 +19210,9 @@ int getCompetitorTranslate(Competitor* competitor, int l) {
 	}
 
 	if (competitor_node->first_attribute("country")) {
-		competitor->translation_country_name[l] = new char[strlen(competitor_node->first_attribute("country")->value()) + 1]; 
+		competitor->translation_country_name[l] = new char[strlen(competitor_node->first_attribute("country")->value()) + 1];
 		std::strcpy(competitor->translation_country_name[l], competitor_node->first_attribute("country")->value());
-		
+
 		if (l > 0 && competitor->country_name != nullptr && strcmp(competitor->country_name, competitor->translation_country_name[l]) == 0)
 		{
 			delete[] competitor->translation_country_name[l]; competitor->translation_country_name[l] = nullptr;
@@ -18569,13 +19234,18 @@ int getEventFixture(Event* event, bool b) {
 	//if (event->type_radar == 1) return;
 	_itoa(event->id, buf, 10);
 	if (event->type_radar == 0 || event->type_radar == 2) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
-	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:race_event:");
+	//else std::strcpy(buffer, "/v1/unified/betradar/en/sport_events/sr:stage:");
+	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:stage:");
 	std::strcat(buffer, buf);
 	std::strcat(buffer, "/fixture.xml");
 	//printf("getEventFixture0=%s\r\n", buffer);
 	//printf("start getEventFixture b=%d\r\n", b);
 	//if (event->id != 13422295) return 0;
 	while (httpsRequest("api.betradar.com", buffer, recvbuf, 0) == -1) Sleep(1000);
+	//while (httpRequest("bsa-staging.betradar.com", buffer, recvbuf, 0) == -1) Sleep(1000);
+
+	//printf(recvbuf);
+	//printf("\r\n");
 
 	//printf("event->id=%d event->type_radar=%d \r\n",event->id, event->type_radar);
 
@@ -18640,8 +19310,9 @@ int getEventFixture(Event* event, bool b) {
 	using namespace std;
 	int j = 0;
 	int i = 0;
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 
 	//printf("getEventFixture01\r\n");
 	root_node = doc.first_node("fixtures_fixture");
@@ -18669,6 +19340,22 @@ int getEventFixture(Event* event, bool b) {
 		event->next_live_time = (int)start;
 	}
 	//printf("3 getEventFixture b=%d\r\n", b);;
+
+
+	if (event->type_radar == 1 && root_node->first_node("fixture")->first_attribute("scheduled_end")) {
+		int x1;
+		int x2;
+		printf("scheduled_end\r\n");
+		strcpy(buf, root_node->first_node("fixture")->first_attribute("scheduled_end")->value());
+		st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
+		sscanf(buf, "%d-%d-%dT%d:%d:%d+%d:%d", &st.wYear, &st.wMonth, &st.wDay, &st.wHour, &st.wMinute, &st.wSecond, &x1, &x2);
+
+		tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
+		tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
+		start = mktime(&tm);
+		event->start_time = (int)start;
+		printf("event->start_time=%d\r\n", event->start_time);
+	}
 
 	//printf("getEventFixture03\r\n");
 
@@ -19150,8 +19837,9 @@ int getEventSummary(Event* event) {
 	xml_document<> doc;
 	xml_node<> * root_node;
 	int j = 0;
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 
 	root_node = doc.first_node("match_summary");
 	if (root_node == nullptr) { delete[] recvbuf; doc.clear(); return -1; }
@@ -19174,8 +19862,9 @@ int getBetstops() {
 	//using namespace std;
 	int j = 0;
 	int i = 0;
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("betstop_reasons_descriptions");
@@ -19223,9 +19912,10 @@ int getVoidreasons() {
 	//using namespace std;
 	int j = 0;
 	int i = 0;
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("void_reasons_descriptions");
@@ -19233,7 +19923,7 @@ int getVoidreasons() {
 	voidreasons_l = 0;
 
 	if (root_node->first_node("void_reason"))
-		for (xml_node<> * void_reason = root_node->first_node("void_reason"); void_reason; void_reason = void_reason->next_sibling())
+		for (xml_node<> * void_reason = root_node->first_node("	"); void_reason; void_reason = void_reason->next_sibling())
 		{
 
 			if (voidreasons[i].description != nullptr) {
@@ -19273,9 +19963,10 @@ int getMatchstatus() {
 	//using namespace std;
 	int j = 0;
 	int i = 0;
-	int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
-	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 	//printf(((char*)((char*)recvbuf + j + 4)));
 	//printf("\r\n\r\n");
 	root_node = doc.first_node("match_status_descriptions");
@@ -19388,8 +20079,9 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 				xml_node<> * root_node;
 				int i = 0;
 				int j = 0;
-				int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
-				try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+				int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+				try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+				catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 				root_node = doc.first_node("tournament_info");
 
 				if (root_node == nullptr) {
@@ -19647,8 +20339,8 @@ int getTournamentTranslate(Tournament* tournament, int l) {
 
 	std::strcpy(buffer, "/v1/sports/");
 	std::strcat(buffer, lang[l].c_str());
-	std::strcat(buffer,"/tournaments/");
- if (tournament->type_radar == 0 && tournament->id >0) 	std::strcat(buffer, "sr:tournament:"); else
+	std::strcat(buffer, "/tournaments/");
+	if (tournament->type_radar == 0 && tournament->id >0) 	std::strcat(buffer, "sr:tournament:"); else
 		if (tournament->type_radar == 1) 	std::strcat(buffer, "sr:race_tournament:"); else
 			if (tournament->type_radar == 2) 	std::strcat(buffer, "sr:simple_tournament:"); else
 				if (tournament->type_radar == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:");
@@ -19667,8 +20359,9 @@ int getTournamentTranslate(Tournament* tournament, int l) {
 				xml_node<> * root_node;
 				int i = 0;
 				int j = 0;
-				int recv_length = strlen(recvbuf)- 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length ; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
-				try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); } catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+				int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+				try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
+				catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
 				root_node = doc.first_node("tournament_info");
 
 				if (root_node == nullptr) {
@@ -19680,27 +20373,27 @@ int getTournamentTranslate(Tournament* tournament, int l) {
 				xml_node<> * tournament_node = root_node->first_node("tournament"); if (tournament_node == nullptr) {
 					delete[] recvbuf; doc.clear(); return -1;
 				}
-				
+
 				int id = 0;
 				int simple_id = 0;
 				if (tournament_node->first_attribute("id")) {
 					if (tournament->type_radar == 0)  id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14)); else
 						if (tournament->type_radar == 1) id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));//sr:stage:
-																																					 // tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
+																																		// tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
 					if (tournament->type_radar == 2)  simple_id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
 				}
 
-			
+
 				if (tournament_node->first_attribute("name")) {
 					tournament->translation_name[l] = new char[strlen(tournament_node->first_attribute("name")->value()) + 1]; std::strcpy(tournament->translation_name[l], tournament_node->first_attribute("name")->value());
 					if (l > 0 && tournament->name != nullptr && strcmp(tournament->translation_name[l], tournament->name) == 0) {
 						delete[] tournament->translation_name[l]; tournament->translation_name[l] = nullptr;
 					}
 				}
-				
-		
 
-;
+
+
+				;
 
 
 				if (tournament_node->first_node("current_season")) {
@@ -19800,6 +20493,25 @@ void replace_competitor(char* & specifier_value) {
 
 
 		strcpy(specifier_value, competitors_id[competitor_id]->name);
+		return;
+	}
+
+}
+void replace_player(char* & specifier_value) {
+	if (specifier_value == nullptr || strlen(specifier_value) < 11) return;
+	if (specifier_value[0] == 's' && specifier_value[1] == 'r'&& specifier_value[3] == 'p') {
+		int player_id = atoi((char*)((char*)specifier_value + 10));
+
+		if (player_id >= MAX_PLAYERS) {
+			return;
+		}
+
+		if (players_id[player_id] == nullptr) {
+			return;
+		}
+
+		if (players_id[player_id]->full_name != nullptr) strcpy(specifier_value, players_id[player_id]->full_name);
+		else strcpy(specifier_value, players_id[player_id]->name);
 		return;
 	}
 
@@ -20088,85 +20800,89 @@ void saveEventToDB(Event* event, bool translate) {
 
 
 };
-void loadEventsFromDB(bool loadFromDB) {
+void loadEventsFromDB() {
 	using namespace bsoncxx::builder;
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["events"];
-		auto query_doc = stream::document{}
-			<< "start_time" << stream::open_document << "$gte" << (time(nullptr) - 20 * 24 * 60 * 60)
-			<< stream::close_document
-			<< stream::finalize;
-		mongocxx::cursor cursor = coll.find(query_doc.view());   // query is db.events.find({ start_time: {$gte: ...}})
-		int i = 0;
-		events_l = bevents_l = 0;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
+	auto coll = db["events"];
+	auto query_doc = stream::document{}
+		<< "start_time" << stream::open_document << "$gte" << (time(nullptr) - 20 * 24 * 60 * 60)
+		<< stream::close_document
+		<< stream::finalize;
+	mongocxx::cursor cursor = coll.find(query_doc.view());   // query is db.events.find({ start_time: {$gte: ...}})
+	int i = 0;
+	events_l = bevents_l = 0;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
 
-			// int fields
-			events[i].id = doc["_id"].get_int32();
-			events[i].type_radar = doc["type_radar"].get_int32();
-			events[i].sport_id = doc["sport_id"].get_int32();
-			events[i].category_id = doc["category_id"].get_int32();
-			if (events[i].type_radar == 2) {
-				events[i].simple_id = doc["simple_id"].get_int32();
-			}
-			else {
-				events[i].tournament_id = doc["tournament_id"].get_int32();
-			}
-			events[i].home_id = doc["home_id"].get_int32();
-			events[i].home_reference_id = doc["home_reference_id"].get_int32();
-			events[i].away_id = doc["away_id"].get_int32();
-			events[i].away_reference_id = doc["away_reference_id"].get_int32();
-			events[i].winner_id = doc["winner_id"].get_int32();
-			events[i].bo = doc["bo"].get_int32();
-			events[i].parent_id = doc["parent_id"].get_int32();
-			events[i].start_time = doc["start_time"].get_int32();
-			events[i].period_length = doc["period_length"].get_int32();
-			events[i].overtime_length = doc["overtime_length"].get_int32();
-			events[i].status = doc["status"].get_int32();
-			events[i].timestamp = doc["timestamp"].get_int32();
-			events[i].neutral_ground = doc["neutral_ground"].get_int32();
-			events[i].austrian_district = doc["austrian_district"].get_int32();
-			events[i].booked = doc["booked"].get_int32();
-			events[i].delayed_id = doc["delayed_id"].get_int32();
-			events[i].current_server = doc["current_server"].get_int32();
-			events[i].next_live_time = doc["next_live_time"].get_int32();
+		// int fields
+		events[i].id = doc["_id"].get_int32();
+		events[i].type_radar = doc["type_radar"].get_int32();
+		events[i].sport_id = doc["sport_id"].get_int32();
+		events[i].category_id = doc["category_id"].get_int32();
+		if (events[i].type_radar == 2) {
+			events[i].simple_id = doc["simple_id"].get_int32();
+		}
+		else {
+			events[i].tournament_id = doc["tournament_id"].get_int32();
+		}
+		events[i].home_id = doc["home_id"].get_int32();
+		events[i].home_reference_id = doc["home_reference_id"].get_int32();
+		events[i].away_id = doc["away_id"].get_int32();
+		events[i].away_reference_id = doc["away_reference_id"].get_int32();
+		events[i].winner_id = doc["winner_id"].get_int32();
+		events[i].bo = doc["bo"].get_int32();
+		events[i].parent_id = doc["parent_id"].get_int32();
+		events[i].start_time = doc["start_time"].get_int32();
+		events[i].period_length = doc["period_length"].get_int32();
+		events[i].overtime_length = doc["overtime_length"].get_int32();
+		events[i].status = doc["status"].get_int32();
+		events[i].timestamp = doc["timestamp"].get_int32();
+		events[i].neutral_ground = doc["neutral_ground"].get_int32();
+		events[i].austrian_district = doc["austrian_district"].get_int32();
+		events[i].booked = doc["booked"].get_int32();
+		events[i].delayed_id = doc["delayed_id"].get_int32();
+		events[i].current_server = doc["current_server"].get_int32();
+		events[i].next_live_time = doc["next_live_time"].get_int32();
 
-			// string fields
-			mongo_str_to_buffer(doc["home_name"], events[i].home_name);
-			mongo_str_to_buffer(doc["away_name"], events[i].away_name);
-			mongo_str_to_buffer(doc["delayed_description"], events[i].delayed_description);
-			mongo_str_to_buffer(doc["venue"], events[i].venue);
-			mongo_str_to_buffer(doc["tv_channels"], events[i].tv_channels);
+		// string fields
+		mongo_str_to_buffer(doc["home_name"], events[i].home_name);
+		mongo_str_to_buffer(doc["away_name"], events[i].away_name);
+		mongo_str_to_buffer(doc["delayed_description"], events[i].delayed_description);
+		mongo_str_to_buffer(doc["venue"], events[i].venue);
+		mongo_str_to_buffer(doc["tv_channels"], events[i].tv_channels);
 
-			if (!doc["translations"]) {} else
-				for (int l = 0; l < events[i].translation_num; l++) if (!doc["translations"][lang[l]]) {} else
-				{
-					if (!doc["translations"][lang[l]]["home_name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["home_name"], events[i].translation_home_name[l]);
-					if (!doc["translations"][lang[l]]["away_name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["away_name"], events[i].translation_away_name[l]);
-					if (!doc["translations"][lang[l]]["tv_channels"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["tv_channels"], events[i].translation_tv_channels[l]);
-				}
-				
-			bevents[i] = events[i];
-			if (!(events[i].type_radar == 2 && events[i].simple_id == 0)) {
-				events_id[events[i].id] = &events[i];
-				bevents_id[bevents[i].id] = &bevents[i];
-				i++;
+		if (!doc["translations"]) {}
+		else
+			for (int l = 0; l < events[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else
+			{
+				if (!doc["translations"][lang[l]]["home_name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["home_name"], events[i].translation_home_name[l]);
+				if (!doc["translations"][lang[l]]["away_name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["away_name"], events[i].translation_away_name[l]);
+				if (!doc["translations"][lang[l]]["tv_channels"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["tv_channels"], events[i].translation_tv_channels[l]);
 			}
 
+		bevents[i] = events[i];
+		if (!(events[i].type_radar == 2 && events[i].simple_id == 0)) {
+			events_id[events[i].id] = &events[i];
+			bevents_id[bevents[i].id] = &bevents[i];
+			i++;
 		}
 
-		events_l = bevents_l = i;
-
-		/*
-		for (int i = 0; i < events_l; i++) {
-		cout << events[i].id << ";" << events[i].home_name << "-" << events[i].away_name << ";"
-		<< endl;
-		}
-		*/
-		printf("Events loaded from Mongo succes. Number of loaded events: %d\r\n", events_l);
-		return;
 	}
+
+	events_l = bevents_l = i;
+
+	/*
+	for (int i = 0; i < events_l; i++) {
+	cout << events[i].id << ";" << events[i].home_name << "-" << events[i].away_name << ";"
+	<< endl;
+	}
+	*/
+	printf("Events loaded from Mongo succes. Number of loaded events: %d\r\n", events_l);
+	return;
+
 
 };
 void processLoadedMarkets() {
@@ -20337,135 +21053,191 @@ void saveMarketToDB(Market* market, bool translate) {
 
 		return;
 	}
-	
+
 };
-void loadMarketsFromDB(bool loadFromDB) {
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["markets"];
-		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
-		int i = 0;
-		markets_l = bmarkets_l = 0;
-		int outcome_index, specifier_index;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
-			markets[i].id = doc["market_id"].get_int32();
-			markets[i].type = doc["type"].get_int32();
-			markets[i].variant = doc["variant"].get_int32();
-			mongo_str_to_buffer(doc["name"], markets[i].name);
-			// optional values
-			// if (doc["variable_text"] == false) {
-			mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
-
-	
-			// outcomes array
-			bsoncxx::document::element outcomes_elem = doc["outcomes"];
-			bsoncxx::array::view outcomes{ outcomes_elem.get_array().value };
-
-			if (outcomes.empty()) {
-				markets[i].outcome_id = nullptr;
-				markets[i].outcome_name = nullptr;
-			}
-			else {
-				auto num_outcomes = std::distance(std::begin(outcomes), std::end(outcomes));
-				markets[i].outcome_number = num_outcomes;
-				markets[i].outcome_id = new int[markets[i].outcome_number];
-				markets[i].outcome_name = new char*[markets[i].outcome_number];
-				outcome_index = 0;
-				for (auto elt : outcomes) {
-					bsoncxx::document::view subdoc = elt.get_document().value;
-					markets[i].outcome_id[outcome_index] = subdoc["id"].get_int32();
-					markets[i].outcome_name[outcome_index] = nullptr;
-					mongo_str_to_buffer(subdoc["name"], markets[i].outcome_name[outcome_index]);
-					outcome_index++;
-				}
-			}
 
 
+void deleteTournamentFromDB(Tournament* tournament) {
 
-			if (!doc["translations"]) {}
-			else
-				for (int l = 0; l < markets[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
-				else
-				{
-					if (!doc["translations"][lang[l]]["name"]) {}
-					else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], markets[i].translation_name[l]);
-					if (!doc["translations"][lang[l]]["outcomes_name"]) {}
-					else {
-						int j = 0;
-						markets[i].translation_outcome_name[l] = new char*[markets[i].outcome_number];
-						bsoncxx::array::view outcomes_name{ doc["translations"][lang[l]]["outcomes_name"].get_array().value };
-						for (auto elt : outcomes_name) {
-							markets[i].translation_outcome_name[l][j] = nullptr;
-							mongo_str_to_buffer(elt, markets[i].translation_outcome_name[l][j]); j++;
-						}
-
-					}
-
-				}
+	if (WRITE_NEW_DATA_TO_MONGO && REPLAY == 0) {
+		auto coll = db["tournaments"];
 
 
+		try {
+			//if (market->variant > -1 && market->variable_text != nullptr) 
+			coll.delete_one(bsoncxx::builder::stream::document{} << "tournament_id" << tournament->id << "simple_id" << tournament->simple_id << bsoncxx::builder::stream::finalize);
 
-
-			// specifiers array
-			bsoncxx::document::element specifiers_elem = doc["specifiers"];
-			bsoncxx::array::view specifiers{ specifiers_elem.get_array().value };
-
-			if (specifiers.empty()) {
-				markets[i].specifier_type = nullptr;
-				markets[i].specifier_name = nullptr;
-				markets[i].specifier_description = nullptr;
-			}
-			else {
-				auto num_specifiers = std::distance(std::begin(specifiers), std::end(specifiers));
-				markets[i].specifier_number = num_specifiers;
-				markets[i].specifier_type = new int[markets[i].specifier_number];
-				markets[i].specifier_name = new char*[markets[i].specifier_number];
-				markets[i].specifier_description = new char*[markets[i].specifier_number];
-				specifier_index = 0;
-				for (auto elt : specifiers) {
-					bsoncxx::document::view subdoc = elt.get_document().value;
-					// std::cout << bsoncxx::to_json(subdoc) << "\n";
-					markets[i].specifier_type[specifier_index] = subdoc["type"].get_int32();
-					markets[i].specifier_name[specifier_index] = nullptr;
-					mongo_str_to_buffer(subdoc["name"], markets[i].specifier_name[specifier_index]);
-					if (subdoc["description"]) {
-						markets[i].specifier_description[specifier_index] = nullptr;
-						mongo_str_to_buffer(subdoc["description"], markets[i].specifier_description[specifier_index]);
-					}
-					else {
-						markets[i].specifier_description[specifier_index] = nullptr;
-					}
-					specifier_index++;
-				}
-			}
-
-			bmarkets[i] = markets[i];
-			i++;
-
-
+			//else coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << bsoncxx::builder::stream::finalize,
+			//bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
 		}
 
-		markets_l = bmarkets_l = i;
-		// to test if loading was succesful. may be deleted in the future.
-		/*
-		for (int i = 0; i < markets_l; i++) {
-		cout << markets[i].id << ";" << markets[i].name << ";" << markets[i].outcome_number << ";" << markets[i].specifier_number << endl;
-		for (int k = 0; k < markets[i].outcome_number; k++) {
-		cout << "\t" << markets[i].outcome_id[k] << ": " << markets[i].outcome_name[k] << endl;
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one market: " << e.what() << std::endl;
 		}
-		for (int k = 0; k < markets[i].specifier_number; k++) {
-		cout << "\t\t" << markets[i].specifier_name[k] << ": " << markets[i].specifier_type[k];
-		if (markets[i].specifier_description[k] != nullptr) {
-		cout << " :: " << markets[i].specifier_description[k];
-		}
-		cout << endl;
-		}
-		}
-		*/
-		processLoadedMarkets();
-		printf("Markets loaded from Mongo succes. Number of loaded markets: %d\r\n", markets_l);
+
+
 		return;
 	}
+
+
+
+};
+
+
+void deleteMarketFromDB(Market* market) {
+
+	if (WRITE_NEW_DATA_TO_MONGO && REPLAY == 0) {
+		auto coll = db["markets"];
+		//printf("WRITE_NEW_DATA_TO_MONGO=");
+		//coll.insert_one(buildMarketDoc(market));
+
+		string variable_text = market->variable_text == nullptr ? "" : market->variable_text;
+
+
+		try {
+			//if (market->variant > -1 && market->variable_text != nullptr) 
+			coll.delete_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << "variable_text" << variable_text << bsoncxx::builder::stream::finalize);
+
+			//else coll.update_one(bsoncxx::builder::stream::document{} << "market_id" << market->id << bsoncxx::builder::stream::finalize,
+			//bsoncxx::builder::stream::document {} << "$set" << buildMarketDoc(market) << bsoncxx::builder::stream::finalize, *update);
+		}
+
+
+		catch (const mongocxx::exception& e) {
+			std::cout << "An exception occurred in update_one market: " << e.what() << std::endl;
+		}
+
+
+		return;
+	}
+
+};
+void loadMarketsFromDB() {
+	auto coll = db["markets"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	int i = 0;
+	markets_l = bmarkets_l = 0;
+	int outcome_index, specifier_index;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		markets[i].id = doc["market_id"].get_int32();
+		markets[i].type = doc["type"].get_int32();
+		markets[i].variant = doc["variant"].get_int32();
+		mongo_str_to_buffer(doc["name"], markets[i].name);
+		// optional values
+		// if (doc["variable_text"] == false) {
+		mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
+
+
+		// outcomes array
+		bsoncxx::document::element outcomes_elem = doc["outcomes"];
+		bsoncxx::array::view outcomes{ outcomes_elem.get_array().value };
+
+		if (outcomes.empty()) {
+			markets[i].outcome_id = nullptr;
+			markets[i].outcome_name = nullptr;
+		}
+		else {
+			auto num_outcomes = std::distance(std::begin(outcomes), std::end(outcomes));
+			markets[i].outcome_number = num_outcomes;
+			markets[i].outcome_id = new int[markets[i].outcome_number];
+			markets[i].outcome_name = new char*[markets[i].outcome_number];
+			outcome_index = 0;
+			for (auto elt : outcomes) {
+				bsoncxx::document::view subdoc = elt.get_document().value;
+				markets[i].outcome_id[outcome_index] = subdoc["id"].get_int32();
+				markets[i].outcome_name[outcome_index] = nullptr;
+				mongo_str_to_buffer(subdoc["name"], markets[i].outcome_name[outcome_index]);
+				outcome_index++;
+			}
+		}
+
+
+
+		if (!doc["translations"]) {}
+		else
+			for (int l = 0; l < markets[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else
+			{
+				if (!doc["translations"][lang[l]]["name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], markets[i].translation_name[l]);
+				if (!doc["translations"][lang[l]]["outcomes_name"]) {}
+				else {
+					int j = 0;
+					markets[i].translation_outcome_name[l] = new char*[markets[i].outcome_number];
+					bsoncxx::array::view outcomes_name{ doc["translations"][lang[l]]["outcomes_name"].get_array().value };
+					for (auto elt : outcomes_name) {
+						markets[i].translation_outcome_name[l][j] = nullptr;
+						mongo_str_to_buffer(elt, markets[i].translation_outcome_name[l][j]); j++;
+					}
+
+				}
+
+			}
+
+
+
+
+		// specifiers array
+		bsoncxx::document::element specifiers_elem = doc["specifiers"];
+		bsoncxx::array::view specifiers{ specifiers_elem.get_array().value };
+
+		if (specifiers.empty()) {
+			markets[i].specifier_type = nullptr;
+			markets[i].specifier_name = nullptr;
+			markets[i].specifier_description = nullptr;
+		}
+		else {
+			auto num_specifiers = std::distance(std::begin(specifiers), std::end(specifiers));
+			markets[i].specifier_number = num_specifiers;
+			markets[i].specifier_type = new int[markets[i].specifier_number];
+			markets[i].specifier_name = new char*[markets[i].specifier_number];
+			markets[i].specifier_description = new char*[markets[i].specifier_number];
+			specifier_index = 0;
+			for (auto elt : specifiers) {
+				bsoncxx::document::view subdoc = elt.get_document().value;
+				// std::cout << bsoncxx::to_json(subdoc) << "\n";
+				markets[i].specifier_type[specifier_index] = subdoc["type"].get_int32();
+				markets[i].specifier_name[specifier_index] = nullptr;
+				mongo_str_to_buffer(subdoc["name"], markets[i].specifier_name[specifier_index]);
+				if (subdoc["description"]) {
+					markets[i].specifier_description[specifier_index] = nullptr;
+					mongo_str_to_buffer(subdoc["description"], markets[i].specifier_description[specifier_index]);
+				}
+				else {
+					markets[i].specifier_description[specifier_index] = nullptr;
+				}
+				specifier_index++;
+			}
+		}
+
+		bmarkets[i] = markets[i];
+		i++;
+
+
+	}
+
+	markets_l = bmarkets_l = i;
+	// to test if loading was succesful. may be deleted in the future.
+	/*
+	for (int i = 0; i < markets_l; i++) {
+	cout << markets[i].id << ";" << markets[i].name << ";" << markets[i].outcome_number << ";" << markets[i].specifier_number << endl;
+	for (int k = 0; k < markets[i].outcome_number; k++) {
+	cout << "\t" << markets[i].outcome_id[k] << ": " << markets[i].outcome_name[k] << endl;
+	}
+	for (int k = 0; k < markets[i].specifier_number; k++) {
+	cout << "\t\t" << markets[i].specifier_name[k] << ": " << markets[i].specifier_type[k];
+	if (markets[i].specifier_description[k] != nullptr) {
+	cout << " :: " << markets[i].specifier_description[k];
+	}
+	cout << endl;
+	}
+	}
+	*/
+	processLoadedMarkets();
+	printf("Markets loaded from Mongo succes. Number of loaded markets: %d\r\n", markets_l);
+	return;
 }
 void saveTournamentToDB(Tournament* tournament, bool translate) {
 	using namespace bsoncxx::builder::stream;
@@ -20494,72 +21266,75 @@ void saveTournamentToDB(Tournament* tournament, bool translate) {
 	}
 
 };
-void loadTournamentsFromDB(bool loadFromDB) {
+void loadTournamentsFromDB() {
 	//reload_step_1 = 1;
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["tournaments"];
-		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
-		int i = 0;
-		tournaments_l = btournaments_l = 0;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
-			tournaments[i].id = doc["tournament_id"].get_int32();
-			tournaments[i].type_radar = doc["type_radar"].get_int32();
-			tournaments[i].simple_id = doc["simple_id"].get_int32();
-			tournaments[i].season_id = doc["season_id"].get_int32();
-			tournaments[i].sport_id = doc["sport_id"].get_int32();
-			tournaments[i].category_id = doc["category_id"].get_int32();
-			tournaments[i].sort = doc["sort"].get_int32();
-			// optional values
-			//if (doc["start_date"] == false) {
-			tournaments[i].start_date = doc["start_date"].get_int32();
-			//}
-			//if (doc["end_date"] == false) {
+	auto coll = db["tournaments"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	int i = 0;
+	tournaments_l = btournaments_l = 0;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		tournaments[i].id = doc["tournament_id"].get_int32();
+		tournaments[i].type_radar = doc["type_radar"].get_int32();
+		tournaments[i].simple_id = doc["simple_id"].get_int32();
+		tournaments[i].season_id = doc["season_id"].get_int32();
+		tournaments[i].sport_id = doc["sport_id"].get_int32();
+		tournaments[i].category_id = doc["category_id"].get_int32();
+		tournaments[i].sort = doc["sort"].get_int32();
+		// optional values
+		//if (doc["start_date"] == false) {
+		tournaments[i].start_date = doc["start_date"].get_int32();
+		//}
+		//if (doc["end_date"] == false) {
 
-			tournaments[i].end_date = doc["end_date"].get_int32();
-			//}
-			// string types
-			mongo_str_to_buffer(doc["name"], tournaments[i].name);
+		tournaments[i].end_date = doc["end_date"].get_int32();
+		//}
+		// string types
+		mongo_str_to_buffer(doc["name"], tournaments[i].name);
 
-			//if (doc["season_name"] == false) {
-			mongo_str_to_buffer(doc["season_name"], tournaments[i].season_name);
+		//if (doc["season_name"] == false) {
+		mongo_str_to_buffer(doc["season_name"], tournaments[i].season_name);
 
-			if (!doc["translations"]) {} else 
-				for (int l = 0; l < tournaments[i].translation_num; l++) if (!doc["translations"][lang[l]]) {} else
-				{
-					if (!doc["translations"][lang[l]]["name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], tournaments[i].translation_name[l]);
-					if (!doc["translations"][lang[l]]["season_name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["season_name"], tournaments[i].translation_season_name[l]);
-				}
+		if (!doc["translations"]) {}
+		else
+			for (int l = 0; l < tournaments[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else
+			{
+				if (!doc["translations"][lang[l]]["name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], tournaments[i].translation_name[l]);
+				if (!doc["translations"][lang[l]]["season_name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["season_name"], tournaments[i].translation_season_name[l]);
+			}
 
-			//}
-		    btournaments[i] = tournaments[i];
-			if (tournaments[i].id > 0) tournaments_id[tournaments[i].id] = &tournaments[i];
-			if (tournaments[i].season_id > 0) seasons_id[tournaments[i].season_id] = &tournaments[i];
-			if (tournaments[i].simple_id > 0) simples_id[tournaments[i].simple_id] = &tournaments[i];
-    		if (btournaments[i].id > 0) btournaments_id[btournaments[i].id] = &btournaments[i];
-			if (btournaments[i].season_id > 0) bseasons_id[btournaments[i].season_id] = &btournaments[i];
-			if (btournaments[i].simple_id > 0) bsimples_id[btournaments[i].simple_id] = &btournaments[i];
+		//}
+		btournaments[i] = tournaments[i];
+		if (tournaments[i].id > 0) tournaments_id[tournaments[i].id] = &tournaments[i];
+		if (tournaments[i].season_id > 0) seasons_id[tournaments[i].season_id] = &tournaments[i];
+		if (tournaments[i].simple_id > 0) simples_id[tournaments[i].simple_id] = &tournaments[i];
+		if (btournaments[i].id > 0) btournaments_id[btournaments[i].id] = &btournaments[i];
+		if (btournaments[i].season_id > 0) bseasons_id[btournaments[i].season_id] = &btournaments[i];
+		if (btournaments[i].simple_id > 0) bsimples_id[btournaments[i].simple_id] = &btournaments[i];
 
-			
 
-			i++;
 
-		}
+		i++;
 
-		tournaments_l = btournaments_l = i;
-		/*
-		for (int i = 0; i < tournaments_l; i++) {
-		cout << tournaments[i].id << ":" << tournaments[i].name;
-		if (tournaments[i].season_name != nullptr)
-		cout << ":" << tournaments[i].season_name;
-		cout << endl;
-		}
-		*/
-		printf("Tournaments loaded from Mongo succes. Number of loaded tournaments: %d\r\n", tournaments_l);
-		return;
 	}
-	
-};;
+
+	tournaments_l = btournaments_l = i;
+	/*
+	for (int i = 0; i < tournaments_l; i++) {
+	cout << tournaments[i].id << ":" << tournaments[i].name;
+	if (tournaments[i].season_name != nullptr)
+	cout << ":" << tournaments[i].season_name;
+	cout << endl;
+	}
+	*/
+	printf("Tournaments loaded from Mongo succes. Number of loaded tournaments: %d\r\n", tournaments_l);
+	return;
+
+
+};
 void saveCategoryToDB(Category* category, bool translate) {
 	if (WRITE_NEW_DATA_TO_MONGO && REPLAY == 0) {
 		auto coll = db["categories"];
@@ -20585,45 +21360,43 @@ void saveCategoryToDB(Category* category, bool translate) {
 	}
 
 };
-void loadCategoriesFromDB(bool loadFromDB) {
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["categories"];
-		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
-		int i = 0;
-		categories_l = bcategories_l = 0;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
-			categories[i].id = doc["_id"].get_int32();
-			categories[i].sport_id = doc["sport_id"].get_int32();
-			categories[i].sort = doc["sort"].get_int32();
-			mongo_str_to_buffer(doc["name"], categories[i].name);
-			
+void loadCategoriesFromDB() {
+	auto coll = db["categories"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	int i = 0;
+	categories_l = bcategories_l = 0;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		categories[i].id = doc["_id"].get_int32();
+		categories[i].sport_id = doc["sport_id"].get_int32();
+		categories[i].sort = doc["sort"].get_int32();
+		mongo_str_to_buffer(doc["name"], categories[i].name);
 
-			if (!doc["translations"]) { }else {	
-				for (int l = 0; l < categories[i].translation_num; l++) if (!doc["translations"][lang[l]]) { }
-				else { if (!doc["translations"][lang[l]]["name"]) { } else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], categories[i].translation_name[l]); }
 
-			}
-			
-
-			bcategories[i] = categories[i];
-			categories_id[categories[i].id] = &categories[i];
-			bcategories_id[bcategories[i].id] = &bcategories[i];
-			i++;
+		if (!doc["translations"]) {}
+		else {
+			for (int l = 0; l < categories[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else { if (!doc["translations"][lang[l]]["name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], categories[i].translation_name[l]); }
 
 		}
 
-		categories_l = bcategories_l = i;
 
-		/*
-		for (int i = 0; i < categories_l; i++) {
-		cout << categories[i].id << ";" << categories[i].name << ";" << categories[i].sort << ";"
-		<< categories[i].sport_id << ";" << endl;
-		}
-		*/
-		printf("Categories loaded from Mongo succes. Number of loaded categories: %d\r\n", categories_l);
-		return;
+		bcategories[i] = categories[i];
+		categories_id[categories[i].id] = &categories[i];
+		bcategories_id[bcategories[i].id] = &bcategories[i];
+		i++;
+
 	}
+	categories_l = bcategories_l = i;
+	/*
+	for (int i = 0; i < categories_l; i++) {
+	cout << categories[i].id << ";" << categories[i].name << ";" << categories[i].sort << ";"
+	<< categories[i].sport_id << ";" << endl;
+	}
+	*/
+	printf("Categories loaded from Mongo succes. Number of loaded categories: %d\r\n", categories_l);
+	return;
+
 };
 void saveSportToDB(Sport* s, bool translate) {
 	if (WRITE_NEW_DATA_TO_MONGO && REPLAY == 0) {
@@ -20644,46 +21417,44 @@ void saveSportToDB(Sport* s, bool translate) {
 		delete update;
 
 
-	
+
 	}
-	
+
 };
-void loadSportsFromDB(bool loadFromDB) {
+void loadSportsFromDB() {
 	reload_step_1 = 1;
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["sports"];
-		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
-		int i = 0;
-		sports_l = bsports_l = 0;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
-			sports[i].id = doc["_id"].get_int32();
-			sports[i].sort = doc["sort"].get_int32();
-			mongo_str_to_buffer(doc["name"], sports[i].name);
+	auto coll = db["sports"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	int i = 0;
+	sports_l = bsports_l = 0;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		sports[i].id = doc["_id"].get_int32();
+		sports[i].sort = doc["sort"].get_int32();
+		mongo_str_to_buffer(doc["name"], sports[i].name);
 
-			if (!doc["translations"]) {} else {
-				for (int l = 0; l < sports[i].translation_num; l++) if (!doc["translations"][lang[l]]) {} else
-				{
-					if (!doc["translations"][lang[l]]["name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], sports[i].translation_name[l]);
-				}
-
+		if (!doc["translations"]) {}
+		else {
+			for (int l = 0; l < sports[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else
+			{
+				if (!doc["translations"][lang[l]]["name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], sports[i].translation_name[l]);
 			}
-
-			bsports[i] = sports[i];
-			sports_id[sports[i].id] = &sports[i];
-			bsports_id[bsports[i].id] = &bsports[i];
-			i++;
 
 		}
 
-		sports_l = bsports_l = i;
-		
-		printf("Sports loaded from Mongo succes. Number of loaded sports: %d\r\n", sports_l);
-		return;
+		bsports[i] = sports[i];
+		sports_id[sports[i].id] = &sports[i];
+		bsports_id[bsports[i].id] = &bsports[i];
+		i++;
+
 	}
-	
-	
-	
+
+	sports_l = bsports_l = i;
+
+	printf("Sports loaded from Mongo succes. Number of loaded sports: %d\r\n", sports_l);
+	return;
 
 };
 void saveCompetitorToDB(Competitor* competitor, bool translate) {
@@ -20697,7 +21468,7 @@ void saveCompetitorToDB(Competitor* competitor, bool translate) {
 
 		try {
 			coll.update_one(bsoncxx::builder::stream::document{} << "_id" << competitor->id << bsoncxx::builder::stream::finalize,
-				bsoncxx::builder::stream::document{} << "$set" << buildCompetitorDoc(competitor,translate) << bsoncxx::builder::stream::finalize, *update);
+				bsoncxx::builder::stream::document{} << "$set" << buildCompetitorDoc(competitor, translate) << bsoncxx::builder::stream::finalize, *update);
 		}
 
 
@@ -20710,49 +21481,50 @@ void saveCompetitorToDB(Competitor* competitor, bool translate) {
 
 		// return;
 	}
-	};
-void loadCompetitorsFromDB(bool loadFromDB) {
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["competitors"];
-		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
-		int i = 0;
-		competitors_l = bcompetitors_l = 0;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
-			competitors[i].id = doc["_id"].get_int32();
-			competitors[i].sport_id = doc["sport_id"].get_int32();
-			competitors[i].category_id = doc["category_id"].get_int32();
-			competitors[i].reference_id = doc["reference_id"].get_int32();
-			mongo_str_to_buffer(doc["name"], competitors[i].name);
-			mongo_str_to_buffer(doc["country_name"], competitors[i].country_name);
+};
+void loadCompetitorsFromDB() {
 
-			if (!doc["translations"]) {} else
-				for (int l = 0; l < competitors[i].translation_num; l++) if (!doc["translations"][lang[l]]) {} else  
-				{
-					if (!doc["translations"][lang[l]]["name"]) {} else   mongo_str_to_buffer(doc["translations"][lang[l]]["name"], competitors[i].translation_name[l]);
-				
-					if (!doc["translations"][lang[l]]["country_name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["country_name"], competitors[i].translation_country_name[l]);
+	auto coll = db["competitors"];
 
-				
-				}
-			bcompetitors[i] = competitors[i];
-			competitors_id[competitors[i].id] = &competitors[i];
-			bcompetitors_id[bcompetitors[i].id] = &bcompetitors[i];
-			i++;
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	int i = 0;
 
-		}
+	competitors_l = bcompetitors_l = 0;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		competitors[i].id = doc["_id"].get_int32();
+		competitors[i].sport_id = doc["sport_id"].get_int32();
+		competitors[i].category_id = doc["category_id"].get_int32();
+		competitors[i].reference_id = doc["reference_id"].get_int32();
+		mongo_str_to_buffer(doc["name"], competitors[i].name);
+		mongo_str_to_buffer(doc["country_name"], competitors[i].country_name);
 
-		competitors_l = bcompetitors_l = i;
-		/* for (int i = 0; i < competitors_l; i++) {
-		if (competitors[i].country_name == nullptr) continue;
-		cout << competitors[i].id << ":" << competitors[i].name << ":" << competitors[i].country_name << endl;
-		} */
+		if (!doc["translations"]) {}
+		else
+			for (int l = 0; l < competitors[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else
+			{
+				if (!doc["translations"][lang[l]]["name"]) {}
+				else   mongo_str_to_buffer(doc["translations"][lang[l]]["name"], competitors[i].translation_name[l]);
+				if (!doc["translations"][lang[l]]["country_name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["country_name"], competitors[i].translation_country_name[l]);
 
-		printf("Competitors loaded from Mongo succes. Number of loaded competitors: %d\r\n", competitors_l);
-		return;
+			}
+		bcompetitors[i] = competitors[i];
+		competitors_id[competitors[i].id] = &competitors[i];
+		bcompetitors_id[bcompetitors[i].id] = &bcompetitors[i];
+		i++;
+
 	}
-	
 
+	competitors_l = bcompetitors_l = i;
+	/* for (int i = 0; i < competitors_l; i++) {
+	if (competitors[i].country_name == nullptr) continue;
+	cout << competitors[i].id << ":" << competitors[i].name << ":" << competitors[i].country_name << endl;
+	} */
+
+	printf("Competitors loaded from Mongo succes. Number of loaded competitors: %d\r\n", competitors_l);
+	return;
 
 };
 void savePlayerToDB(Player* player, bool translate) {
@@ -20779,62 +21551,77 @@ void savePlayerToDB(Player* player, bool translate) {
 	}
 
 };
-void loadPlayersFromDB(bool loadFromDB) {
-	if (LOAD_FROM_MONGO || loadFromDB) {
-		auto coll = db["players"];
-		mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
-		int i = 0;
-		players_l = bplayers_l = 0;
-		for (auto doc : cursor) {
-			// std::cout << bsoncxx::to_json(doc) << "\n";
-			players[i].id = doc["_id"].get_int32();
-			players[i].competitor_id = doc["competitor_id"].get_int32();
-			players[i].number = doc["number"].get_int32();
-			players[i].manager = doc["manager"].get_int32();
-			players[i].date_of_birth = doc["date_of_birth"].get_int32();
-			players[i].weight = doc["weight"].get_int32();
-			players[i].height = doc["height"].get_int32();
+void loadPlayersFromDB() {
 
-			mongo_str_to_buffer(doc["name"], players[i].name);
-			mongo_str_to_buffer(doc["full_name"], players[i].full_name);
-			mongo_str_to_buffer(doc["nationality"], players[i].nationality);
-			mongo_str_to_buffer(doc["type"], players[i].type);
-			mongo_str_to_buffer(doc["country_code"], players[i].country_code);
-			if (!doc["translations"]) {} else 
-				for (int l = 0; l < players[i].translation_num; l++) if (!doc["translations"][lang[l]]) {} else
-				{
-					if (!doc["translations"][lang[l]]["type"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["type"], players[i].translation_type[l]);
+	auto coll = db["players"];
+	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
+	int i = 0;
+	players_l = bplayers_l = 0;
+	for (auto doc : cursor) {
+		// std::cout << bsoncxx::to_json(doc) << "\n";
+		players[i].id = doc["_id"].get_int32();
+		players[i].competitor_id = doc["competitor_id"].get_int32();
+		players[i].number = doc["number"].get_int32();
+		players[i].manager = doc["manager"].get_int32();
+		players[i].date_of_birth = doc["date_of_birth"].get_int32();
+		players[i].weight = doc["weight"].get_int32();
+		players[i].height = doc["height"].get_int32();
 
-					if (!doc["translations"][lang[l]]["name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], players[i].translation_name[l]);
+		mongo_str_to_buffer(doc["name"], players[i].name);
+		mongo_str_to_buffer(doc["full_name"], players[i].full_name);
+		mongo_str_to_buffer(doc["nationality"], players[i].nationality);
+		mongo_str_to_buffer(doc["type"], players[i].type);
+		mongo_str_to_buffer(doc["country_code"], players[i].country_code);
+		if (!doc["translations"]) {}
+		else
+			for (int l = 0; l < players[i].translation_num; l++) if (!doc["translations"][lang[l]]) {}
+			else
+			{
+				if (!doc["translations"][lang[l]]["type"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["type"], players[i].translation_type[l]);
 
-					if (!doc["translations"][lang[l]]["full_name"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["full_name"], players[i].translation_full_name[l]);
+				if (!doc["translations"][lang[l]]["name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["name"], players[i].translation_name[l]);
 
-					if (!doc["translations"][lang[l]]["nationality"]) {} else mongo_str_to_buffer(doc["translations"][lang[l]]["nationality"], players[i].translation_nationality[l]);
+				if (!doc["translations"][lang[l]]["full_name"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["full_name"], players[i].translation_full_name[l]);
 
-				}
+				if (!doc["translations"][lang[l]]["nationality"]) {}
+				else mongo_str_to_buffer(doc["translations"][lang[l]]["nationality"], players[i].translation_nationality[l]);
 
-			bplayers[i] = players[i];
-			players_id[players[i].id] = &players[i];
-			bplayers_id[bplayers[i].id] = &bplayers[i];
-			i++;
+			}
 
-		}
+		bplayers[i] = players[i];
+		players_id[players[i].id] = &players[i];
+		bplayers_id[bplayers[i].id] = &bplayers[i];
+		i++;
 
-		players_l = bplayers_l = i;
-
-		/*
-		for (int i = 0; i < players_l; i++) {
-		cout << players[i].id << ":" << players[i].name  << endl;
-		}
-		*/
-		printf("Players loaded from Mongo succes. Number of loaded players: %d\r\n", players_l);
-		return;
 	}
+
+	players_l = bplayers_l = i;
+
+	/*
+	for (int i = 0; i < players_l; i++) {
+	cout << players[i].id << ":" << players[i].name  << endl;
+	}
+	*/
+	printf("Players loaded from Mongo succes. Number of loaded players: %d\r\n", players_l);
+	return;
+
 
 };
 void loadClientsFromDB() {
 	auto coll = db["clients"];
 	using namespace bsoncxx::builder;
+	/*	Client* c = new Client();
+	c->client_id = 1011478;
+	c->currency = Currency::USD;
+	c->phone = "+905051872213";
+
+	c->anonymous = 1;
+	c->timezone = 3;
+	c->email_newsletter = 1;
+	updateClientToDB(c);*/
 
 
 	mongocxx::cursor cursor = coll.find(bsoncxx::builder::stream::document{} << bsoncxx::builder::stream::finalize);  // get all docs
@@ -20858,11 +21645,13 @@ void loadClientsFromDB() {
 			c->address = doc["address"].get_utf8().value.to_string();
 		}
 
+
 		c->phone = doc["phone"].get_utf8().value.to_string();
-		//if (doc["email_newsletter"] == false) 
 		c->email_newsletter = doc["email_newsletter"].get_int32(); //else c->email_newsletter = 0;
 		c->currency = static_cast<Currency>((int)doc["currency"].get_int32());
+
 		c->password = doc["password"].get_utf8().value.to_string();
+
 		c->balance = doc["balance"].get_double();
 		c->bets_amount = doc["bets_amount"].get_double();
 		c->group = doc["group"].get_int32();
@@ -20870,6 +21659,7 @@ void loadClientsFromDB() {
 		c->timezone = doc["timezone"].get_int32();
 		c->last_timezone = doc["last_timezone"].get_int32();
 		c->domain = doc["domain"].get_utf8().value.to_string();
+
 		c->last_domain = doc["last_domain"].get_utf8().value.to_string();
 
 		// outcomes array
@@ -21045,6 +21835,10 @@ char* CreateStep_1(int& len) {
 	len = 0;
 	char* buffer = new char[2097152];
 	size_t offset = 0;
+	size_t retry_offset = 0;
+	int markets_length = 0;
+
+	writeInteger(buffer, offset, 0, 1);//system request_id
 	writeInteger(buffer, offset, sports_l, 2);
 	for (i = 0; i < sports_l; i++) {
 		writeInteger(buffer, offset, sports[i].id, 2);
@@ -21070,14 +21864,18 @@ char* CreateStep_1(int& len) {
 		writeInteger(buffer, offset, tournaments[i].sort, 2);
 		writeString(buffer, offset, tournaments[i].name);
 	}
-	writeInteger(buffer, offset, markets_l, 2);
+	//writeInteger(buffer, offset, markets_l, 2);
+	retry_offset = offset;
+	offset += 2;
 	for (i = 0; i < markets_l; i++) {
+		if (markets[i].type > 2 && markets[i].variable_text != nullptr) continue;
+		markets_length++;
 		writeInteger(buffer, offset, markets[i].id, 2);
 		writeInteger(buffer, offset, markets[i].type, 1);
 		writeInteger(buffer, offset, markets[i].line_type, 1);
 		writeString(buffer, offset, markets[i].name);
 		writeInteger(buffer, offset, markets[i].variant, 1);
-		if (markets[i].variant>-1) writeString(buffer, offset, markets[i].variable_text);
+		if (markets[i].variant > -1) writeString(buffer, offset, markets[i].variable_text);
 		//if(markets[i].variant>-1 && markets[i].variable_text!=nullptr)
 		//writeString(buffer, offset, markets[i].variable_text);
 		writeInteger(buffer, offset, markets[i].outcome_number, 2);
@@ -21090,6 +21888,9 @@ char* CreateStep_1(int& len) {
 		for (j = 0; j < markets[i].specifier_number; j++) 	writeString(buffer, offset, markets[i].specifier_name[j]);
 
 	}
+	writeInteger(buffer, retry_offset, markets_length, 2);
+
+
 	char* zip_message = nullptr;
 	int zip_len = gzip(buffer, offset, zip_message, 1);
 	delete[] buffer;
@@ -21099,23 +21900,52 @@ char* CreateStep_1(int& len) {
 	return encode_message;
 
 };
+int create_step2_count = 0;
 char* CreateStep_2(int& len) {
 	int i, j, l, k = 0;
 	int events_send_l = 0;
 	int event_lines_l = 0;
 
 	char* buffer = new char[LARGE];
+	char* buffer_stop = new char[SMALL];
 	char* specifier_value = new char[MAX_PATH];
 	len = 0;
 	size_t offset = 0;
 	size_t retry_offset = 0;
-
-	offset += 2;
+	size_t t_offset = 0;
+	char* zip_message = nullptr;
+	int zip_len = 0;
+	char* encode_message = nullptr;// = SendframeEncode(zip_message, zip_len, l
+	int encode_message_len = 0;
+	offset += 3;
 
 
 	for (i = 0; i < events_show_l; i++) {
 		if (events_show[i]->status == 4 || events_show[i]->status == 3) continue;
 		if (events_show[i]->status == 0 && events_show[i]->bet_stop == 1) continue;
+		if (events_show[i]->status == 0 && events_show[i]->start_time < time(nullptr) + 200) {
+
+			events_show[i]->bet_stop = 1;
+			if (create_step2_count > 0) {
+				t_offset = 0;
+				writeInteger(buffer_stop, t_offset, 0, 1);//sistem request_id
+				writeInteger(buffer_stop, t_offset, events_show[i]->id, 4);
+				zip_len = gzip(buffer_stop, t_offset, zip_message, 8);
+				if (zip_len > 1)
+				{
+					encode_message = SendframeEncode(zip_message, zip_len, encode_message_len);
+					radarMessageHandler(encode_message, encode_message_len);
+					encode_message = nullptr;
+
+				}
+				delete[] zip_message;
+				zip_message = nullptr;
+
+			}
+			create_step2_count = 1;
+			continue;
+		}
+
 		events_send_l++;
 		writeInteger(buffer, offset, 0, 1);
 		writeInteger(buffer, offset, events_show[i]->id, 4);
@@ -21260,15 +22090,17 @@ char* CreateStep_2(int& len) {
 			writeInteger(buffer, offset, lines[*(it)].favourite, 1);
 			if (events_show[i]->bet_stop == 1 && lines[*(it)].status == 1) writeInteger(buffer, offset, -1, 1); else
 				writeInteger(buffer, offset, lines[*(it)].status, 1);
+			if (lines[*(it)].type == 3) writeString(buffer, offset, lines[*(it)].name);
 
 			//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
 			writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
 			for (j = 0; j < lines[*(it)].outcome_number; j++) {
 				writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 4);
 				writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
-				if (lines[*(it)].type == 1 || lines[*(it)].type == 2) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
-				if ((lines[*(it)].type == 1 || lines[*(it)].type == 2) && lines[*(it)].outcome_team[j] != 3)
-					writeString(buffer, offset, lines[*(it)].outcome_name[j]);
+				if (lines[*(it)].type == 1 || lines[*(it)].type == 2 || lines[*(it)].type == 4) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+				//if ((lines[*(it)].type == 1 || lines[*(it)].type == 2) && lines[*(it)].outcome_team[j] != 3)
+				//if (lines[*(it)].type == 1 || lines[*(it)].type == 2 || lines[*(it)].type == 4)
+				if (lines[*(it)].type > 0) writeString(buffer, offset, lines[*(it)].outcome_name[j]);
 
 				//writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j] * 10000), 4);
 				writeFloat(buffer, offset, lines[*(it)].outcome_odds[j]);
@@ -21280,6 +22112,10 @@ char* CreateStep_2(int& len) {
 			for (j = 0; j < lines[*(it)].specifier_number; j++) {
 				if (lines[*(it)].market_id == 215 && j == 2) {
 					strcpy(specifier_value, lines[*(it)].specifier_value[j]); replace_competitor(specifier_value);
+					writeString(buffer, offset, specifier_value);
+				}
+				else 	if (lines[*(it)].market_id == 882 && j == 0) {
+					strcpy(specifier_value, lines[*(it)].specifier_value[j]); replace_player(specifier_value);
 					writeString(buffer, offset, specifier_value);
 				}
 				else 	writeString(buffer, offset, lines[*(it)].specifier_value[j]);
@@ -21299,14 +22135,16 @@ char* CreateStep_2(int& len) {
 	retry_offset = 0;
 
 
+	writeInteger(buffer, retry_offset, 0, 1); //system request_id = 0;
 	writeInteger(buffer, retry_offset, events_send_l, 2);
 
-	char* zip_message = nullptr;
-	int zip_len = gzip(buffer, offset, zip_message, 2);
+	zip_message = nullptr;
+	zip_len = gzip(buffer, offset, zip_message, 2);
 	delete[] buffer;
+	delete[] buffer_stop;
 	delete[] specifier_value;
 	if (zip_len < 1) return nullptr;
-	char* encode_message = SendframeEncode(zip_message, zip_len, len);
+	encode_message = SendframeEncode(zip_message, zip_len, len);
 	delete[] zip_message;
 	return encode_message;
 
@@ -21340,8 +22178,9 @@ void CreatePlus_2(wsClient* client) {
 	if (events_id[event_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
 	if (event2lines.find(event_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
 	events_send_l = 1;
+	writeInteger(buffer, offset, client->plus_request_id, 1);
 	writeInteger(buffer, offset, events_send_l, 2);
-	writeInteger(buffer, offset, 5, 1); //4 response for rospis command
+	writeInteger(buffer, offset, 5, 1); //5 response for rospis command
 	writeInteger(buffer, offset, event_id, 4);
 	//writeInteger(buffer, offset, event2lines[event_id]->size(), 2);
 	event_lines_l = 0;
@@ -21361,13 +22200,15 @@ void CreatePlus_2(wsClient* client) {
 		if (events_id[event_id]->bet_stop == 1 && lines[*(it)].status == 1) writeInteger(buffer, offset, -1, 1); else
 			writeInteger(buffer, offset, lines[*(it)].status, 1);
 		//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
+		if (lines[*(it)].type == 3) writeString(buffer, offset, lines[*(it)].name);
 		writeInteger(buffer, offset, lines[*(it)].outcome_number, 2);
 		for (j = 0; j < lines[*(it)].outcome_number; j++) {
 			writeInteger(buffer, offset, lines[*(it)].outcome_id[j], 4);
 			writeInteger(buffer, offset, lines[*(it)].outcome_active[j], 1);
-			if (lines[*(it)].type == 1 || lines[*(it)].type == 2) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
-			if ((lines[*(it)].type == 1 || lines[*(it)].type == 2) && lines[*(it)].outcome_team[j] != 3)
-				writeString(buffer, offset, lines[*(it)].outcome_name[j]);
+			if (lines[*(it)].type == 1 || lines[*(it)].type == 2 || lines[*(it)].type == 4) writeInteger(buffer, offset, lines[*(it)].outcome_team[j], 1);
+			//if ((lines[*(it)].type == 1 || lines[*(it)].type == 2) && lines[*(it)].outcome_team[j] != 3)
+			//if (lines[*(it)].type == 1 || lines[*(it)].type == 2 || lines[*(it)].type == 4)
+			if (lines[*(it)].type > 0) writeString(buffer, offset, lines[*(it)].outcome_name[j]);
 			//writeInteger(buffer, offset, (int)(lines[*(it)].outcome_odds[j] * 10000), 4);
 			writeFloat(buffer, offset, lines[*(it)].outcome_odds[j]);
 			if (PROBABILITIES == 1) writeInteger(buffer, offset, (int)(lines[*(it)].outcome_probabilities[j] * 100000 + 0.5), 4);
@@ -21379,6 +22220,10 @@ void CreatePlus_2(wsClient* client) {
 		for (j = 0; j < lines[*(it)].specifier_number; j++) {
 			if (lines[*(it)].market_id == 215 && j == 2) {
 				strcpy(specifier_value, lines[*(it)].specifier_value[j]); replace_competitor(specifier_value);
+				writeString(buffer, offset, specifier_value);
+			}
+			else 	if (lines[*(it)].market_id == 882 && j == 0) {
+				strcpy(specifier_value, lines[*(it)].specifier_value[j]); replace_player(specifier_value);
 				writeString(buffer, offset, specifier_value);
 			}
 			else 	writeString(buffer, offset, lines[*(it)].specifier_value[j]);
@@ -21446,7 +22291,7 @@ void CreateOutright_2(wsClient* client) {
 
 	event_lines_l = 0;
 	retry_offset = offset;
-	offset += 2;
+	offset += 3;
 
 
 	for (i = 0; i < categories_id[category_id]->outrights_id.size(); i++)
@@ -21484,13 +22329,15 @@ void CreateOutright_2(wsClient* client) {
 		//if (events_show[i]->bet_stop == 1 && lines[*(it)].status == 0) writeInteger(buffer, offset, -1, 1); else
 		writeInteger(buffer, offset, _line->status, 1);
 		//if (_line->outcome_number == 0) printf("_line->outcome_number=0 _line->id=%d  _line->market_id=%d\r\n", _line->id, _line->market_id);
+		if (_line->type == 3) writeString(buffer, offset, _line->name);
 		writeInteger(buffer, offset, _line->outcome_number, 2);
 		for (int j = 0; j < _line->outcome_number; j++) {
 			writeInteger(buffer, offset, _line->outcome_id[j], 4);
 			writeInteger(buffer, offset, _line->outcome_active[j], 1);
-			if (_line->type == 1 || _line->type == 2) writeInteger(buffer, offset, _line->outcome_team[j], 1);
-			if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
-				writeString(buffer, offset, _line->outcome_name[j]);
+			if (_line->type == 1 || _line->type == 2 || _line->type == 4) writeInteger(buffer, offset, _line->outcome_team[j], 1);
+			//if ((_line->type == 1 || _line->type == 2) && _line->outcome_team[j] != 3)
+			//if (_line->type == 1 || _line->type == 2 || _line->type == 4) 
+			if (_line->type > 0)  writeString(buffer, offset, _line->outcome_name[j]);
 			//writeInteger(buffer, offset, (int)(_line->outcome_odds[j] * 10000), 4);
 			writeFloat(buffer, offset, _line->outcome_odds[j]);
 			if (PROBABILITIES == 1) writeInteger(buffer, offset, (int)(_line->outcome_probabilities[j] * 100000 + 0.5), 4);
@@ -21503,6 +22350,10 @@ void CreateOutright_2(wsClient* client) {
 				strcpy(specifier_value, _line->specifier_value[j]); replace_competitor(specifier_value);
 				writeString(buffer, offset, specifier_value);
 			}
+			else 	if (_line->market_id == 882 && j == 0) {
+				strcpy(specifier_value, _line->specifier_value[j]); replace_player(specifier_value);
+				writeString(buffer, offset, specifier_value);
+			}
 			else 	writeString(buffer, offset, _line->specifier_value[j]);
 
 
@@ -21510,6 +22361,7 @@ void CreateOutright_2(wsClient* client) {
 
 	}
 
+	writeInteger(buffer, retry_offset, client->outright_request_id, 1);
 	writeInteger(buffer, retry_offset, events_send_l, 2);
 
 
@@ -21877,7 +22729,7 @@ int httpsServer() {
 	WSACleanup();
 	return 0;
 }
-int https_request_failed_counter = 0;
+atomic_int https_request_failed_counter = 0;
 int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	https_request_failed_counter++;
 	if (https_request_failed_counter > 2) {
@@ -22008,7 +22860,9 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 	strcat(sendBuf, path);
 	strcat(sendBuf, " HTTP/1.0\nHost: ");
 	strcat(sendBuf, domain);
-	strcat(sendBuf, "\r\nx-access-token: YaNJ9uwq8GHe953XQD\r\nUser-Agent: Webclient\r\nAccept:*/*\r\n\r\n");
+	strcat(sendBuf, "\r\nx-access-token: ");
+	strcat(sendBuf, TOKEN);
+	strcat(sendBuf, "\r\nUser-Agent: Webclient\r\nAccept:*/*\r\n\r\n");
 	iResult = SSL_write(ssl, sendBuf, strlen(sendBuf));
 
 
@@ -22032,6 +22886,80 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 
 	https_request_status = 0;
 	https_request_failed_counter = 0;
+	return readBytes;
+
+};
+int httpRequest(char* domain, char* path, char* recv_buf, int mode) {
+
+	int iResult = 0;
+	SOCKET sdkSocket;
+	sockaddr_in sdkService;
+	char *sendBuf;
+	DWORD dwError;
+	int i = 0;
+	struct hostent *remoteHost;
+	char *host_name;
+	struct in_addr addr;
+	char **pAlias;
+	char* str;
+	int buflen = EXTRA;
+	int readBytes = 0;
+
+	remoteHost = gethostbyname(domain);
+	if (remoteHost == nullptr) {
+		dwError = WSAGetLastError(); if (dwError != 0) {
+			if (dwError == WSAHOST_NOT_FOUND) { std::printf("Host not found\n"); return -1; }
+			else if (dwError == WSANO_DATA) { std::printf("No data record found\n");  return -1; }
+			else {
+				printf("Function failed with error: %ld\n", dwError);
+				return -1;
+			}
+		}
+	}
+
+
+	sdkSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	if (sdkSocket == INVALID_SOCKET) { wprintf(L"socket function failed with error: %ld\n", WSAGetLastError()); return -1; }
+	sdkService.sin_family = AF_INET;
+	sdkService.sin_addr.s_addr = inet_addr(inet_ntoa(*(struct in_addr *)*remoteHost->h_addr_list));
+	sdkService.sin_port = htons(80);
+	iResult = connect(sdkSocket, (SOCKADDR *)& sdkService, sizeof(sdkService));
+
+	if (iResult == SOCKET_ERROR) {
+		wprintf(L"connect function failed with error: %ld\n", WSAGetLastError()); iResult = closesocket(sdkSocket);
+		if (iResult == SOCKET_ERROR) wprintf(L"closesocket function failed with error: %ld\n", WSAGetLastError());
+		return -1;
+	}
+
+	sendBuf = new char[1024];
+	if (mode == 0) strcpy(sendBuf, "GET ");
+	else if (mode == 1) strcpy(sendBuf, "POST ");
+	else if (mode == 2) strcpy(sendBuf, "PUT ");
+	else if (mode == 3) strcpy(sendBuf, "DELETE ");
+	else strcpy(sendBuf, "GET ");
+	strcat(sendBuf, path);
+	strcat(sendBuf, " HTTP/1.0\nHost: ");
+	strcat(sendBuf, domain);
+	strcat(sendBuf, "\r\nx-access-token: ");
+	strcat(sendBuf, TOKEN);
+	strcat(sendBuf, "\r\nUser-Agent: Webclient\r\nAccept:*/*\r\n\r\n");
+	iResult = send(sdkSocket, sendBuf, strlen(sendBuf), 0);
+
+
+	printf(sendBuf);
+
+	do {
+
+		iResult = recv(sdkSocket, (char*)recv_buf + readBytes, buflen - readBytes, 0);
+		if (iResult > 0) {
+			readBytes = readBytes + iResult;
+
+		}
+
+	} while (iResult > 0);
+	recv_buf[readBytes] = '\0';
+	delete[] sendBuf;
+	closesocket(sdkSocket);
 	return readBytes;
 
 };
@@ -22481,8 +23409,10 @@ void rabbitmqssl() {
 		//die("opening SSL/TLS connection");
 	}
 
-	if (die_on_amqp_error(amqp_login(conn, "/unifiedfeed/19751", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, "YaNJ9uwq8GHe953XQD", ""),
+	if (die_on_amqp_error(amqp_login(conn, UOF_URL, 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, TOKEN, ""),
 		"Logging in") == -1) return;
+
+
 
 	amqp_channel_open(conn, 1);
 
@@ -22576,26 +23506,26 @@ static void send_batch(amqp_connection_state_t conn, char const *queue_name, int
 	}
 }
 static void run_mts()
-{   
+{//char const *exchangetype[] = { "fanout","topic","topic" ,"topic" ,"topic" };
 	char const *hostname;
 	int port, status;
-	string queuename[] = { "passionbettest_19751-Submit-Node", "passionbettest_19751-Control-Node", "passionbettest_19751-Confirm-Node", "passionbettest_19751-Reply-Node", "passionbettest_19751-Ack" };
-	for (int i = 0; i < 4; i++) queuename[i] = queuename[i] + to_string(run_mts_num);
-	int run_mts_num_consume = run_mts_num % 20;
+	int run_mts_num_consume = run_mts_num % 10;
+	string queuename[] = { "-Submit-Node", "-Control-Node", "-Confirm-Node", "-Reply-Node", "-Ack" };
+	for (int i = 0; i < 4; i++) if (i < 3)	queuename[i] = MTS_NAME + queuename[i] + to_string(run_mts_num_consume);
+	else queuename[i] = MTS_NAME + queuename[i];
 
-	//char const *bindingkey = "Node3.ticket.confirm";
-	//char const *exchangetype[] = { "fanout","topic","topic" ,"topic" ,"topic" };
 	amqp_socket_t *socket;
 	amqp_connection_state_t conn;
-	string  routingkey[] = { "Node3.ticket.confirm", "passionbettest_19751-Control", "passionbettest_19751-Confirm", "passionbettest_19751-Reply", "ack.ticket"
-	}; 
-     routingkey[0] = "Node" + to_string(run_mts_num) + ".ticket.confirm";
-
+	string  routingkey[5];
+	routingkey[0] = "Node" + to_string(run_mts_num_consume) + ".ticket.confirm";
+	routingkey[1] = "ack.ticket";
+	routingkey[2] = "Node" + to_string(run_mts_num_consume) + ".cancel.confirm";
+	routingkey[3] = "cancel";
+	routingkey[4] = "ack.cancel";
 	amqp_bytes_t amqp_queuename;
-	char* username = "passionbettest_19751";
-	char const *exchange[] = { "passionbettest_19751-Submit", "passionbettest_19751-Control", "passionbettest_19751-Confirm", "passionbettest_19751-Reply", "passionbettest_19751-Ack"
-	};
-
+	amqp_bytes_t amqp_queuename_cancel;
+	string exchange[] = { "-Submit", "-Control", "-Confirm", "-Reply", "-Ack" };
+	for (int i = 0; i < 5; i++) exchange[i] = MTS_NAME + exchange[i];
 
 
 
@@ -22604,7 +23534,7 @@ static void run_mts()
 	char* publish_buf = new char[8192];
 	char* time_buf = new char[65];
 
-	hostname = "integration-mts.betradar.com";// argv[1];
+	hostname = MTS_HOSTNAME;// argv[1];
 	port = 5671;//atoi(argv[2]);
 
 	conn = amqp_new_connection();
@@ -22633,7 +23563,7 @@ static void run_mts()
 
 
 
-	if (die_on_amqp_error(amqp_login(conn, "/passionbettest_19751", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, "passionbettest_19751", "7IdKP1jwq1"),
+	if (die_on_amqp_error(amqp_login(conn, MTS_URL, 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, MTS_NAME, MTS_TOKEN),
 		"Logging in") == -1) {
 		mts_error[run_mts_num_consume] = 1; return;
 	}
@@ -22642,6 +23572,8 @@ static void run_mts()
 	amqp_channel_open(conn, 1);
 	amqp_confirm_select(conn, 1);
 
+	amqp_channel_open(conn, 2);
+	amqp_confirm_select(conn, 2);
 
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Opening channel") == -1) {
 		mts_error[run_mts_num_consume] = 1; return;
@@ -22654,12 +23586,14 @@ static void run_mts()
 	}
 	*/
 
-	amqp_queue_declare_ok_t *r = amqp_queue_declare(conn, 1, amqp_cstring_bytes(queuename[2].c_str()), 0, 1, 0, 0,
+
+	amqp_queue_declare_ok_t *r = amqp_queue_declare(conn, 2, amqp_cstring_bytes(queuename[2].c_str()), 0, 1, 0, 1,
 		amqp_empty_table);
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Declaring queue") == -1) {
 		mts_error[run_mts_num_consume] = 1; return;
 	}
 	amqp_queuename = amqp_bytes_malloc_dup(r->queue);
+
 	//printf((char*)queuename.bytes);
 
 
@@ -22671,10 +23605,37 @@ static void run_mts()
 	}
 
 
-	amqp_queue_bind(conn, 1,
+	amqp_queue_bind(conn, 2,
 		amqp_cstring_bytes(queuename[2].c_str()),
-		amqp_cstring_bytes(exchange[2]),
+		amqp_cstring_bytes(exchange[2].c_str()),
 		amqp_cstring_bytes(routingkey[0].c_str()),
+		amqp_empty_table);
+	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue") == -1) {
+		mts_error[run_mts_num_consume] = 1; return;
+	}
+
+
+	amqp_queue_declare_ok_t *rc = amqp_queue_declare(conn, 1, amqp_cstring_bytes(queuename[3].c_str()), 0, 1, 0, 1,
+		amqp_empty_table);
+	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Declaring queue") == -1) {
+		mts_error[run_mts_num_consume] = 1; return;
+	}
+	amqp_queuename_cancel = amqp_bytes_malloc_dup(rc->queue);
+	//printf((char*)queuename.bytes);
+
+
+
+	if (amqp_queuename_cancel.bytes == nullptr) {
+		fprintf(stderr, "Out of memory while copying queue name");
+		mts_error[run_mts_num_consume] = 1;
+		return;
+	}
+
+
+	amqp_queue_bind(conn, 1,
+		amqp_cstring_bytes(queuename[3].c_str()),
+		amqp_cstring_bytes(exchange[3].c_str()),
+		amqp_cstring_bytes(routingkey[2].c_str()),
 		amqp_empty_table);
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue") == -1) {
 		mts_error[run_mts_num_consume] = 1; return;
@@ -22719,11 +23680,15 @@ static void run_mts()
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
 	*/
 
-	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[2].c_str()), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
+	amqp_basic_consume(conn, 2, amqp_cstring_bytes(queuename[2].c_str()), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming") == 1) {
 		mts_error[run_mts_num_consume] = 1; return;
 	}
 
+	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[3].c_str()), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
+	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming") == 1) {
+		mts_error[run_mts_num_consume] = 1; return;
+	}
 
 	//std:printf("run_mts\r\n");
 	uint64_t start_time = now_microseconds();
@@ -22733,16 +23698,109 @@ static void run_mts()
 	uint64_t next_summary_time = start_time + SUMMARY_EVERY_US;
 	amqp_frame_t frame;	uint64_t now;
 	int res;
-	using namespace rapidjson; 
+	using namespace rapidjson;
 	Document document;
-	
+	char* document_message = new char[SMALL];
 	char* acknowledgment = new char[SMALL];
 	char* int_buf = new char[65];
 	struct timeval timeout;
-	timeout.tv_sec = 5;
+	timeout.tv_sec = 10;
 	timeout.tv_usec = 0;
 
+	int mts_count = 0;
+	int heartbeat = time(nullptr);
+	mts_disconnect++;
+
 	for (;;) {
+
+
+		/*
+		if (recovery_state == 0) {
+
+		clientIDs.clear();
+		clientIDs = server.getClientIDs();
+
+		for (int i = 0; i < clientIDs.size(); i++) {
+		if (run_mts_num_consume != run_mts_num % 10)  break;
+		if (mts_error[run_mts_num_consume] == 1)  break;
+
+		if (server.wsClients[clientIDs[i]] == nullptr || server.wsClients[clientIDs[i]]->timestamp > 0)  continue;
+		wsclient = server.wsClients[clientIDs[i]];
+
+		if (wsclient->mts_process == 2 && wsclient->ticket_process == true && time(nullptr) - wsclient->tickets[0]->timestamp / 1000 > 15) {
+		for (int j = 0; j < wsclient->tickets_number; j++) {
+		Ticket* ticket = wsclient->tickets[j];
+		if (ticket->accept_code < 0) continue;
+		amqp_basic_properties_t props;
+		props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
+		props.content_type = amqp_cstring_bytes("application/json");
+		//props.reply_to = amqp_bytes_malloc_dup(reply_to_queue);
+
+		//props.headers = "replyRoutingKey:\"Node3.ticket.confirm\"";
+		//amqp_table_t *table = &props.headers;
+		//props.headers.num_entries = 1;
+		//props.headers.entries = calloc(props.headers.num_entries, sizeof(amqp_table_entry_t));
+		amqp_table_entry_t entries[1];
+		amqp_table_t table;
+
+
+		entries[0].key = amqp_cstring_bytes("replyRoutingKey");
+		entries[0].value.kind = AMQP_FIELD_KIND_UTF8;
+		entries[0].value.value.bytes = amqp_cstring_bytes(routingkey[2].c_str());
+		table.num_entries = 1;
+		table.entries = entries;
+
+		qsort(table.entries, table.num_entries, sizeof(amqp_table_entry_t),
+		&amqp_table_entry_cmp);
+		props.headers = table;
+
+		//amqp_cstring_bytes("replyRoutingKey:\"Node3.ticket.confirm\"");
+		props.delivery_mode = 1; // persistent delivery mode
+
+		_i64toa(timestamp(), time_buf, 10);
+		strcpy(publish_buf, "{ \"timestampUtc\": ");
+		strcat(publish_buf, time_buf);
+		strcat(publish_buf, ", \"ticketId\" :\"");
+		strcat(publish_buf, ticket->mts_id.c_str());
+		strcat(publish_buf, "\", sender\": { \"bookmakerId\": 19751 }, \"code\": 102, \"version\": \"2.1\" }");
+
+		printf(publish_buf);
+
+
+		if (die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(exchange[1]), amqp_cstring_bytes("cancel"), 0, 0, &props, amqp_cstring_bytes(publish_buf)), "Publishing") == -1) { mts_error[run_mts_num_consume] = 1; break; }
+		ticket->accept_code = -102;
+		}
+
+		wsclient->mts_process = 3;
+		}
+
+		if (mts_error[run_mts_num_consume] == 1)  break;
+
+
+
+
+		}
+
+		}
+		*/
+		amqp_frame_t hb;
+		hb.channel = 0;
+		hb.frame_type = AMQP_FRAME_HEARTBEAT;
+
+		if (time(nullptr) - heartbeat > 30) {
+			heartbeat = time(nullptr);
+			int err;
+			if ((err = amqp_send_frame(conn, &hb)))
+			{
+				const char* errstr = amqp_error_string(err);
+				printf("Error read thread is: %s %d\n", errstr, err);
+				mts_error[run_mts_num_consume] = 1;
+				break;
+			}
+			//printf("Heartbeat read thread sent\n");
+		}
+
+
 		amqp_rpc_reply_t ret;
 		amqp_envelope_t envelope;
 		now = now_microseconds();
@@ -22757,15 +23815,14 @@ static void run_mts()
 		}
 
 
-
 		amqp_maybe_release_buffers(conn);
 		ret = amqp_consume_message(conn, &envelope, &timeout, 0);
-		
+		//ret = amqp_consume_message(conn, &envelope, nullptr, 0);
 		if (mts_error[run_mts_num_consume] == 1) break;
-		if (run_mts_num_consume != run_mts_num % 20) break;
+		if (run_mts_num_consume != run_mts_num % 10) break;
 
 
-	//	printf("Delivery %u, exchange %.*s routingkey %.*s\n", (unsigned)envelope.delivery_tag, 	(int)envelope.exchange.len, (char *)envelope.exchange.bytes,			(int)envelope.routing_key.len, (char *)envelope.routing_key.bytes);
+		//	printf("Delivery %u, exchange %.*s routingkey %.*s\n", (unsigned)envelope.delivery_tag, 	(int)envelope.exchange.len, (char *)envelope.exchange.bytes,(int)envelope.routing_key.len, (char *)envelope.routing_key.bytes);
 
 
 
@@ -22773,91 +23830,227 @@ static void run_mts()
 		{
 			amqp_basic_get_ok_t * d = (amqp_basic_get_ok_t *)
 				ret.reply.decoded;
-			printf("Message of type %s on queue %s delivery tag %ld.\n", (char *)
-				d->routing_key.bytes, queuename, d->delivery_tag);
+			//	printf("Message of type %s on queue %s delivery tag %ld.\n", (char *) d->routing_key.bytes, queuename, d->delivery_tag);
 		}
 
 
 
 		if (envelope.message.properties._flags & AMQP_BASIC_CONTENT_TYPE_FLAG) {
-			printf("Content-type: %.*s\n",
-				(int)envelope.message.properties.content_type.len,
-				(char *)envelope.message.properties.content_type.bytes);
+			//printf("Content-type: %.*s\n",	(int)envelope.message.properties.content_type.len, (char *)envelope.message.properties.content_type.bytes);
 		}
 		//printf("\n");
 		if (envelope.message.body.len > 0) {
-			((char*)envelope.message.body.bytes)[envelope.message.body.len] = 0;
-			printf((char*)envelope.message.body.bytes);
-			printf("\n");
+			//((char*)envelope.message.body.bytes)[envelope.message.body.len] = 0;
+			//printf((char*)envelope.message.body.bytes);
+			//	printf("\r\n");
 
-			//printf("send amqp_basic_ack\r\n");
 			res = amqp_basic_ack(conn, envelope.channel, envelope.delivery_tag, 0);
 			if (AMQP_STATUS_OK != res) {
 				fprintf(stderr, "Failed ack: %s\n", amqp_error_string2(res));
 			}
 
 
-			document.Parse((char*)((char*)envelope.message.body.bytes));
-			if (document.HasParseError()) { printf("error parse json envelope\r\n"); continue; }
-			if (document.IsObject() == 0) { printf("error parse json envelope\r\n"); continue; }
-			if (document.HasMember("result") == 0) { printf("error parse json envelope.  result member not found\r\n"); continue; }
-			if (document["result"].HasMember("ticketId") == 0 || document["result"]["ticketId"].IsString() == 0) { printf("error parse json envelope.  ticketIdt member \r\n"); continue; }
-			string ticketid = document["result"]["ticketId"].GetString();
-			string ticket_status = document["result"]["status"].GetString();
-			int p1 = ticketid.find("s");
-			int p2 = ticketid.find("r");
-			int socket = atoi(ticketid.substr(p1 + 1, p2 - p1).c_str());
-			if (server.socketIDmap.find(socket) == server.socketIDmap.end()) { printf("mts ticketid not found in socket map \r\n"); continue; }
-			wsClient* wsclient = server.wsClients[server.socketIDmap[socket]];
-			int mts = 0;
-			for (int i = 0; i < wsclient->tickets_number; i++) {
-				if (wsclient->tickets[i]->mts == 1) continue;
-				if (wsclient->tickets[i]->generateId(wsclient->socket, server_id, i) == ticketid) {
-					//printf("ticketId=%s mts response recv\r\n", ticketid.c_str());
-					wsclient->tickets[i]->mts = 1;
-					if (document["result"].HasMember("reason") == 0 || document["result"]["reason"].HasMember("message") == 0 || document["result"]["reason"].HasMember("code") == 0)
-						wsclient->tickets[i]->accept_code = -2; else {
-						string message = document["result"]["reason"]["message"].GetString();
-						wsclient->tickets[i]->accept_code = document["result"]["reason"]["code"].GetInt();
-						wsclient->tickets[i]->mts_message = new char[message.length() + 1];
-						strcpy(wsclient->tickets[i]->mts_message, message.c_str());
+
+			if (envelope.channel == 2) {
+				strncpy(document_message, ((char*)envelope.message.body.bytes), envelope.message.body.len);
+				document_message[envelope.message.body.len] = 0;
+				//	printf(document_message);
+				//	printf("\r\n");
+				//		printf("\r\n");
+				document.Clear();
+				document.Parse(document_message);
+				if (document.HasParseError()) { printf("error parse json envelope\r\n"); continue; }
+				if (document.IsObject() == 0) { printf("error parse json envelope\r\n"); continue; }
+
+				if (document.HasMember("result") == 0) { printf("error parse json envelope.  result member not found\r\n"); continue; }
+				if (document["result"].IsObject() == 0 || document["result"].HasMember("ticketId") == 0 || document["result"]["ticketId"].IsString() == 0 || document["result"].HasMember("status") == 0) { printf("error parse json envelope.  ticketIdt member \r\n"); continue; }
+
+
+				string ticketid = document["result"]["ticketId"].GetString();
+				string ticket_status = document["result"]["status"].GetString();
+
+				int p1 = ticketid.find("s");
+				int p2 = ticketid.find("r");
+				int socket = atoi(ticketid.substr(p1 + 1, p2 - p1).c_str());
+				if (server.socketIDmap.find(socket) == server.socketIDmap.end()) { printf("mts ticketid not found in socket map \r\n"); continue; }
+				wsClient* wsclient = server.wsClients[server.socketIDmap[socket]];
+				if (wsclient->mts_process == 3 || wsclient->mts_process == 0) { printf("errer response to wsclient->mts_process=%d\r\n", wsclient->mts_process); continue; }
+				int change_mts_process_status = 0;
+				for (int i = 0; i < wsclient->tickets_number; i++) {
+					int alternative_process = 0;
+					Ticket* ticket = wsclient->tickets[i];
+					//if (ticket->alternative_stake > 0) alternative = true;
+					if (time(nullptr) - ticket->timestamp / 1000 > 10) { change_mts_process_status++; continue; }
+					if (ticket->accept_code < 0) continue;
+					if (ticket->mts == 1) continue;
+
+					if (ticket->mts_id == ticketid) {
+
+						if (document["result"].HasMember("reason") == 0 || document["result"]["reason"].HasMember("message") == 0 || document["result"]["reason"].HasMember("code") == 0)
+						{
+							printf("error parse ticket response\r\n");
+							ticket->accept_code = -10;
+							ticket->alternative_count = 0;
+
+						}
+						else {
+							string message = document["result"]["reason"]["message"].GetString();
+							//int accept_code = document["result"]["reason"]["code"].GetInt();
+							if (ticket->mts_message != nullptr) delete[] ticket->mts_message;
+							ticket->mts_message = new char[message.length() + 1];
+							strcpy(ticket->mts_message, message.c_str());
+
+
+							if (ticket->alternative == true && ticket->alternative_count < 4 && document["result"].HasMember("betDetails") != 0 && document["result"]["betDetails"].IsArray() != 0 && document["result"]["betDetails"].GetArray().Size() > 0 && document["result"]["betDetails"].GetArray()[0].HasMember("alternativeStake") != 0 && document["result"]["betDetails"].GetArray()[0]["alternativeStake"].HasMember("stake") != 0)
+							{
+
+								ticket->alternative_stake = document["result"]["betDetails"].GetArray()[0]["alternativeStake"]["stake"].GetInt();
+								ticket->alternative_count++;
+								ticket->mts = 0;
+								ticket->accept_code = 0;
+								alternative_process = 1;
+								change_mts_process_status++;
+
+
+							}
+							else if (ticket->alternative == true && ticket->alternative_count < 4 && document["result"].HasMember("betDetails") != 0 && document["result"]["betDetails"].IsArray() != 0 && document["result"]["betDetails"].GetArray().Size() > 0 && document["result"]["betDetails"].GetArray()[0].HasMember("reoffer") != 0 && document["result"]["betDetails"].GetArray()[0]["reoffer"].HasMember("stake") != 0)
+							{
+
+								ticket->alternative_stake = document["result"]["betDetails"].GetArray()[0]["reoffer"]["stake"].GetInt();
+								ticket->alternative_count++;
+								alternative_process = 2;
+								ticket->mts = 0;
+								ticket->accept_code = 0;
+								change_mts_process_status++;
+
+
+							}
+
+							else {
+
+								ticket->accept_code = document["result"]["reason"]["code"].GetInt();
+								if (ticket->accept_code != 1024 && ticket->accept_code > 0) ticket->accept_code = -ticket->accept_code;
+								if (ticket->accept_code == 0) ticket->accept_code = -10;
+
+								ticket->mts = 1;
+								ticket->alternative_count = 0;
+							}
+
+
+
+							amqp_basic_properties_t props;
+							props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG;// | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
+							props.content_type = amqp_cstring_bytes("application/json");
+							props.delivery_mode = 1;
+
+							strcpy(acknowledgment, " { \"sender\": { \"bookmakerId\": ");
+							_itoa(BOOKMAKERID, int_buf, 10);
+							strcat(acknowledgment, int_buf);
+							strcat(acknowledgment, " }, \"ticketId\": \"");
+							strcat(acknowledgment, ticketid.c_str());
+							strcat(acknowledgment, "\", \"ticketStatus\": \"");
+							strcat(acknowledgment, ticket_status.c_str());
+							strcat(acknowledgment, "\", \"code\": 830, \"message\": \"\", \"timestampUtc\": ");
+							_i64toa(timestamp(), int_buf, 10);
+							strcat(acknowledgment, int_buf);
+							strcat(acknowledgment, ", \"version\": \"2.1\"}");
+
+							//printf("acknowledgment = %s\r\n", acknowledgment);
+
+
+							if (die_on_error(amqp_basic_publish(conn, 2, amqp_cstring_bytes(exchange[4].c_str()), amqp_cstring_bytes(routingkey[1].c_str()), 0, 0, &props, amqp_cstring_bytes(acknowledgment)), "Publishing") == -1) {
+
+								mts_error[run_mts_num_consume] = 1;
+								die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+								die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+								die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+								die_on_error(amqp_destroy_connection(conn), "Ending connection");
+								delete[] acknowledgment;
+								delete[] int_buf;
+								printf("acknowledgment publish error\r\n");
+								return;
+							}
+
+
+							if (alternative_process > 0) ticket->alternative_process = alternative_process;
+						}
+						continue;
 					}
 
-					amqp_basic_properties_t props;
-					props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG;// | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
-					props.content_type = amqp_cstring_bytes("application/json");
-					props.delivery_mode = 1;
-
-					strcpy(acknowledgment, " { \"sender\": { \"bookmakerId\": 19751 }, \"ticketId\": \"");
-					strcat(acknowledgment, ticketid.c_str());
-					strcat(acknowledgment, "\", \"ticketStatus\": \"");
-					strcat(acknowledgment, ticket_status.c_str());
-					strcat(acknowledgment, "\", \"code\": 830, \"message\": \"\", \"timestampUtc\": ");
-					_i64toa(timestamp(), int_buf, 10);
-					strcat(acknowledgment, int_buf);
-					strcat(acknowledgment, ", \"version\": \"2.0\"}");
-
-					printf("acknowledgment=%s\r\n", acknowledgment);
-
-					if (die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(exchange[4]), amqp_cstring_bytes(routingkey[4].c_str()), 0, 0, &props, amqp_cstring_bytes(acknowledgment)), "Publishing") == -1) { 
-						
-						mts_error[run_mts_num_consume] = 1;
-						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																											   //if (
-						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																												 //if (
-						die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
-						
-						printf("acknowledgment publish error\r\n"); }
-
-					continue;
+					change_mts_process_status++;
 				}
 
-				mts++;
+
+
+				if (change_mts_process_status == 0) {
+					wsclient->mts_process = 3;
+				}
+
+				//printf("wsclient->mts_process=%d \r\n", wsclient->mts_process);
+
+			}
+			if (envelope.channel == 1) {
+				strncpy(document_message, ((char*)envelope.message.body.bytes), envelope.message.body.len);
+				document_message[envelope.message.body.len] = 0;
+				document.Clear();
+				document.Parse(document_message);
+				if (document.HasParseError()) { printf("error parse json envelope\r\n"); continue; }
+				if (document.IsObject() == 0) { printf("error parse json envelope\r\n"); continue; }
+				if (document.HasMember("result") == 0) { printf("error parse json envelope.  result member not found\r\n"); continue; }
+				if (document["result"].IsObject() == 0 || document["result"].HasMember("ticketId") == 0 || document["result"]["ticketId"].IsString() == 0 || document["result"].HasMember("status") == 0) { printf("error parse json envelope.  ticketIdt member \r\n"); continue; }
+				string ticketid = document["result"]["ticketId"].GetString();
+				string ticket_status = document["result"]["status"].GetString();
+				int accept_code = document["result"]["reason"]["code"].GetInt();
+				if (accept_code != 1024) {
+					if (tickets_oam.find(ticketid) == tickets_oam.end()) printf("error! mts_ticket_cancellation_response has no tickets in oam tickets map\r\n");
+					else {
+						tickets_contact_oam[tickets_contact_oam_count % MAX_OAM] = tickets_oam[ticketid];
+						tickets_contact_oam_count++;
+						//processNewTicket(tickets_oam[ticketid]); 
+
+
+					}
+				}
+
+				amqp_basic_properties_t props;
+				props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG;// | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
+				props.content_type = amqp_cstring_bytes("application/json");
+				props.delivery_mode = 1;
+
+				strcpy(acknowledgment, " { \"sender\": { \"bookmakerId\": ");
+				_itoa(BOOKMAKERID, int_buf, 10);
+				strcat(acknowledgment, int_buf);
+				strcat(acknowledgment, " }, \"ticketId\": \"");
+				strcat(acknowledgment, ticketid.c_str());
+				strcat(acknowledgment, "\", \"ticketStatus\": \"");
+				//strcat(acknowledgment, ticket_status.c_str());
+				if (accept_code == 1024) strcat(acknowledgment, "cancelled"); else  strcat(acknowledgment, "not_cancelled");
+				strcat(acknowledgment, "\", \"code\": 830, \"message\": \"\", \"timestampUtc\": ");
+				_i64toa(timestamp(), int_buf, 10);
+				strcat(acknowledgment, int_buf);
+				strcat(acknowledgment, ", \"version\": \"2.1\"}");
+
+				//printf("acknowledgment=%s\r\n", acknowledgment);
+
+				if (die_on_error(amqp_basic_publish(conn, 2, amqp_cstring_bytes(exchange[4].c_str()), amqp_cstring_bytes(routingkey[4].c_str()), 0, 0, &props, amqp_cstring_bytes(acknowledgment)), "Publishing") == -1) {
+
+					mts_error[run_mts_num_consume] = 1;
+					die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+					die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");																						   //if (
+					die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+					die_on_error(amqp_destroy_connection(conn), "Ending connection");
+					delete[] acknowledgment;
+					delete[] int_buf;
+					printf("acknowledgment publish error\r\n");
+					return;
+				}
+
+
+
+
+
 			}
 
-
-			if (mts == 0) wsclient->mts_process = 3;
 
 		}
 
@@ -22867,19 +24060,19 @@ static void run_mts()
 				if (AMQP_STATUS_OK != amqp_simple_wait_frame(conn, &frame)) {
 					printf("AMQP_STATUS_OK return\n");
 					mts_error[run_mts_num_consume] = 1;
-					//if (
-					die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																										   //if (
-					die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																											 //if (
-					die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
+					die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+					die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+					die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+					die_on_error(amqp_destroy_connection(conn), "Ending connection");
+					delete[] acknowledgment;
+					delete[] int_buf;
 					return;
 				}
 
 				if (AMQP_FRAME_METHOD == frame.frame_type) {
 					switch (frame.payload.method.id) {
 					case AMQP_BASIC_ACK_METHOD:
-						printf("AMQP_BASIC_ACK_METHOD\r\n");
+						//	printf("AMQP_BASIC_ACK_METHOD\r\n");
 
 						/* if we've turned publisher confirms on, and we've published a message
 						* here is a message being confirmed
@@ -22897,12 +24090,12 @@ static void run_mts()
 
 							printf("AMQP_RESPONSE_NORMAL return\n");
 							mts_error[run_mts_num_consume] = 1;
-							//if (
-							die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																												   //if (
-							die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																													 //if (
-							die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
+							die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+							die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+							die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+							die_on_error(amqp_destroy_connection(conn), "Ending connection");
+							delete[] acknowledgment;
+							delete[] int_buf;
 							return;
 						}
 
@@ -22924,11 +24117,12 @@ static void run_mts()
 						//break;
 						mts_error[run_mts_num_consume] = 1;
 						//if (
-						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																											   //if (
-						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																												 //if (
-						die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
+						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+						die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+						die_on_error(amqp_destroy_connection(conn), "Ending connection");
+						delete[] acknowledgment;
+						delete[] int_buf;
 						return;
 
 					case AMQP_CONNECTION_CLOSE_METHOD:
@@ -22939,24 +24133,25 @@ static void run_mts()
 						*/
 						printf("AMQP_CONNECTION_CLOSE_METHOD return\n");
 						mts_error[run_mts_num_consume] = 1;
-						//if (
-						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																											   //if (
-						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																												 //if (
-						die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
+						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+						die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+						die_on_error(amqp_destroy_connection(conn), "Ending connection");
+						delete[] acknowledgment;
+						delete[] int_buf;
 						return;
 
 					default:
 						fprintf(stderr, "An unexpected method was received %u\n", frame.payload.method.id);
 
 						mts_error[run_mts_num_consume] = 1;
-						//if (
-						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																											   //if (
-						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																												 //if (
-						die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
+
+						die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+						die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+						die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+						die_on_error(amqp_destroy_connection(conn), "Ending connection");
+						delete[] acknowledgment;
+						delete[] int_buf;
 						return;
 					}
 				}
@@ -22964,7 +24159,10 @@ static void run_mts()
 
 		}
 		else {
+			//printf("amqp_destroy_envelope\r\n");
 			amqp_destroy_envelope(&envelope);
+			//printf("amqp_destroy_envelope end\r\n");
+
 		}
 
 
@@ -22973,42 +24171,44 @@ static void run_mts()
 
 
 	//if (
-	die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-																						   //if (
-	die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-																							 //if (
-	die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) retu
-
+	die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+	die_on_amqp_error(amqp_channel_close(conn, 2, AMQP_REPLY_SUCCESS), "Closing channel");
+	die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+	die_on_error(amqp_destroy_connection(conn), "Ending connection");
+	delete[] acknowledgment;
+	delete[] int_buf;
+	return;
 
 }
 void rabbitmqssl_mts() {
 	char const *hostname;
 	int port, status;
-	string queuename[] = { "passionbettest_19751-Submit-Node", "passionbettest_19751-Control-Node", "passionbettest_19751-Confirm-Node", "passionbettest_19751-Reply-Node", "passionbettest_19751-Ack" };
-	for (int i = 0; i < 4; i++) queuename[i] = queuename[i] + to_string(run_mts_num);
+	//int run_mts_num_consume = run_mts_num % 10;
+	int run_mts_num_publish = run_mts_num % 10;
+	string queuename[] = { "-Submit-Node", "-Control-Node", "-Confirm-Node", "-Reply-Node", "-Ack" };
+	for (int i = 0; i < 4; i++) if (i < 3)	queuename[i] = MTS_NAME + queuename[i] + to_string(run_mts_num_publish);
+	else queuename[i] = MTS_NAME + queuename[i];
 
-	//char const *bindingkey = "Node3.ticket.confirm";
-	//char const *exchangetype[] = { "fanout","topic","topic" ,"topic" ,"topic" };
 	amqp_socket_t *socket;
 	amqp_connection_state_t conn;
-	string  routingkey[] = { "Node3.ticket.confirm", "passionbettest_19751-Control", "passionbettest_19751-Confirm", "passionbettest_19751-Reply", "ack.ticket"
-	};
-	routingkey[0] = "Node" + to_string(run_mts_num) + ".ticket.confirm";
+	string  routingkey[5];
+	routingkey[0] = "Node" + to_string(run_mts_num_publish) + ".ticket.confirm";
+	routingkey[1] = "ack.ticket";
+	routingkey[2] = "Node" + to_string(run_mts_num_publish) + ".cancel.confirm";
+	routingkey[3] = "cancel";
+	routingkey[4] = "ack.cancel";
+	string exchange[] = { "-Submit", "-Control", "-Confirm", "-Reply", "-Ack" };
+	for (int i = 0; i < 5; i++) exchange[i] = MTS_NAME + exchange[i];
 
-	int run_mts_num_publish = run_mts_num % 20;
 
 
-	amqp_bytes_t amqp_queuename;
-	char* username = "passionbettest_19751";
-	char const *exchange[] = { "passionbettest_19751-Submit", "passionbettest_19751-Control", "passionbettest_19751-Confirm", "passionbettest_19751-Reply", "passionbettest_19751-Ack"
-	};
 	Client* client = nullptr;
 	wsClient* wsclient = nullptr;
 	vector<int> clientIDs;
 	char* publish_buf = new char[8192];
 	char* time_buf = new char[65];
 
-	hostname = "integration-mts.betradar.com";// argv[1];
+	hostname = MTS_HOSTNAME; // argv[1];
 	port = 5671;//atoi(argv[2]);
 
 	conn = amqp_new_connection();
@@ -23037,19 +24237,19 @@ void rabbitmqssl_mts() {
 
 
 
-	if (die_on_amqp_error(amqp_login(conn, "/passionbettest_19751", 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, "passionbettest_19751", "7IdKP1jwq1"),
+	if (die_on_amqp_error(amqp_login(conn, MTS_URL, 0, 131072, 0, AMQP_SASL_METHOD_PLAIN, MTS_NAME, MTS_TOKEN),
 		"Logging in") == -1) {
 		mts_error[run_mts_num_publish] = 1;
 		return;
 	}
 
-	
+
 	amqp_channel_open(conn, 1);
 	amqp_confirm_select(conn, 1);
 
 
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Opening channel") == -1) { mts_error[run_mts_num_publish] = 1; return; }
-	
+
 	/*for (int i = 0; i < 5; i++) {
 	amqp_exchange_declare(conn, 1, amqp_cstring_bytes(exchange[i]), amqp_cstring_bytes(exchangetype[i]),
 	0, 1, 0, 0, amqp_empty_table);
@@ -23059,7 +24259,7 @@ void rabbitmqssl_mts() {
 
 	/*
 	amqp_queue_declare_ok_t *r = amqp_queue_declare(conn, 1, amqp_cstring_bytes(queuename[2]), 0, 1, 0, 0,
-		amqp_empty_table);
+	amqp_empty_table);
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Declaring queue") ==-1) return;
 	amqp_queuename = amqp_bytes_malloc_dup(r->queue);
 	//printf((char*)queuename.bytes);
@@ -23067,16 +24267,16 @@ void rabbitmqssl_mts() {
 
 
 	if (amqp_queuename.bytes == nullptr) {
-		fprintf(stderr, "Out of memory while copying queue name");
-		return;
+	fprintf(stderr, "Out of memory while copying queue name");
+	return;
 	}
 
 
 	amqp_queue_bind(conn, 1,
-		amqp_cstring_bytes(queuename[2]),
-		amqp_cstring_bytes(exchange[2]),
-		amqp_cstring_bytes(bindingkey),
-		amqp_empty_table);
+	amqp_cstring_bytes(queuename[2]),
+	amqp_cstring_bytes(exchange[2]),
+	amqp_cstring_bytes(bindingkey),
+	amqp_empty_table);
 	if (die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue") == -1) return;
 
 	*/
@@ -23118,33 +24318,61 @@ void rabbitmqssl_mts() {
 	die_on_amqp_error(amqp_get_rpc_reply(conn), "Binding queue");
 	*/
 
-//	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[2]), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
-//	if(die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming") == 1) return;
+	//	amqp_basic_consume(conn, 1, amqp_cstring_bytes(queuename[2]), amqp_empty_bytes, 0, 0, 0, amqp_empty_table);  //0,1,0 no_ack
+	//	if(die_on_amqp_error(amqp_get_rpc_reply(conn), "Consuming") == 1) return;
 
-	
+
 	int mts_count = 0;
-
+	int heartbeat = time(nullptr);
+	mts_disconnect++;
 	for (;;) {
+
+		amqp_frame_t hb;
+		hb.channel = 0;
+		hb.frame_type = AMQP_FRAME_HEARTBEAT;
+
+		if (time(nullptr) - heartbeat > 30) {
+			heartbeat = time(nullptr);
+			int err;
+			if ((err = amqp_send_frame(conn, &hb)))
+			{
+				const char* errstr = amqp_error_string(err);
+				printf("Error send thread is: %s %d\n", errstr, err);
+				mts_error[run_mts_num_publish] = 1;
+				break;
+			}
+			//printf("Heartbeat send thread sent\n");
+		}
+
+		//amqp_get_heartbeat(amqp_connection_state_t state);
+
 		if (recovery_state == 0) {
 
 			clientIDs.clear();
 			clientIDs = server.getClientIDs();
 
+
 			for (int i = 0; i < clientIDs.size(); i++) {
-				if (run_mts_num_publish != run_mts_num %20)  break;
+				if (run_mts_num_publish != run_mts_num % 10)  break;
 				if (mts_error[run_mts_num_publish] == 1)  break;
-				
+
 				if (server.wsClients[clientIDs[i]] == nullptr || server.wsClients[clientIDs[i]]->timestamp > 0)  continue;
 				wsclient = server.wsClients[clientIDs[i]];
 				if (wsclient->mts_process == 1 && wsclient->ticket_process == true) {
-					int amqp_error_publish = 0;
 					for (int j = 0; j < wsclient->tickets_number; j++) {
 						Ticket* ticket = wsclient->tickets[j];
-
+						string alternative_mts_id;
 						if (ticket->accept_code < 0) continue;
-						auto it = client_id_hash.find(wsclient->client_id);
-						if (it == client_id_hash.end()) continue;
+						if (ticket->mts == 1) continue;
+						if (wsclient->mts_send_process == 1 && ticket->alternative_process == 0) continue;
+						if (ticket->alternative_process > 0) {
+							alternative_mts_id = ticket->mts_id;
+							ticket->stake = (double)(ticket->alternative_stake) / 10000;
+							ticket->alternative_stake = 0;
+							ticket->timestamp = timestamp();
+							ticket->generateId(wsclient->socket, USER, j);
 
+						}
 
 						amqp_basic_properties_t props;
 						props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
@@ -23173,18 +24401,33 @@ void rabbitmqssl_mts() {
 						//amqp_cstring_bytes("replyRoutingKey:\"Node3.ticket.confirm\"");
 						props.delivery_mode = 1; // persistent delivery mode 
 
+
 						_i64toa(ticket->timestamp, time_buf, 10);
-						strcpy(publish_buf, "{ \"version\": \"2.0\", \"timestampUtc\": ");
+						strcpy(publish_buf, "{ \"version\": \"2.1\", \"timestampUtc\": ");
 						strcat(publish_buf, time_buf);
 						strcat(publish_buf, ", \"ticketId\": \"");
-						strcat(publish_buf, ticket->generateId(wsclient->socket, server_id, j).c_str());
+						strcat(publish_buf, ticket->mts_id.c_str());
+						if (ticket->alternative_process == 2) {
+							strcat(publish_buf, "\", \"reofferRefId\": \"");
+							strcat(publish_buf, alternative_mts_id.c_str());
+						}
+						if (ticket->alternative_process == 1) {
+							strcat(publish_buf, "\", \"altStakeRefId\": \"");
+							strcat(publish_buf, alternative_mts_id.c_str());
+						}
 						strcat(publish_buf, "\", \"sender\": { \"currency\": \"");
-						strcat(publish_buf, currency_name[(int)it->second->currency - 1].c_str());
-						strcat(publish_buf, "\", \"terminalId\":\"passionbet\"");
-						strcat(publish_buf, ", \"channel\": \"internet\", \"shopId\": null, \"bookmakerId\": \"19751\", \"endCustomer\": { \"ip\": \"");
-						strcat(publish_buf, it->second->last_domain.c_str());
+						strcat(publish_buf, currency_name[ticket->currency - 1].c_str());
+						strcat(publish_buf, "\", \"terminalId\":\"\"");
+						strcat(publish_buf, ", \"channel\": \"");
+						if (ticket->device == 0) strcat(publish_buf, "internet");
+						else strcat(publish_buf, "mobile");
+						strcat(publish_buf, "\", \"shopId\": null, \"bookmakerId\": ");
+						_itoa(BOOKMAKERID, time_buf, 10);
+						strcat(publish_buf, time_buf);
+						strcat(publish_buf, ", \"endCustomer\": { \"ip\": \"");
+						strcat(publish_buf, ticket->domain.c_str());
 						strcat(publish_buf, "\", \"languageId\": \"");
-						strcat(publish_buf, lang[it->second->language].c_str());
+						strcat(publish_buf, lang[ticket->language].c_str());
 						strcat(publish_buf, "\", \"deviceId\": \"PC\", \"id\": \"");
 						_itoa(wsclient->client_id, time_buf, 10);
 						strcat(publish_buf, time_buf);
@@ -23194,23 +24437,36 @@ void rabbitmqssl_mts() {
 							strcat(publish_buf, "{ \"eventId\": ");
 							switch (bet->type_radar) {
 							case 0://sr:match
-							case 1://sr:race_event
 								_itoa(bet->event_id, time_buf, 10);
+								strcat(publish_buf, time_buf);
+								break;
+							case 1://sr:race_event
+								strcat(publish_buf, "\"sr:stage:");
+								_itoa(bet->event_id, time_buf, 10);
+								strcat(publish_buf, time_buf);
+								strcat(publish_buf, "\"");
 								break;
 							case 2://sr:simple_tournament
-								 _itoa(bet->simple_id, time_buf, 10);
+								strcat(publish_buf, "\"sr:simple_tournament:");
+								_itoa(bet->simple_id, time_buf, 10);
+								strcat(publish_buf, time_buf);
+								strcat(publish_buf, "\"");
 								break;
 							case 3://sr:season
-								  //strcat(publish_buf, "\"season:");
+								strcat(publish_buf, "\"sr:season:");
 								_itoa(bet->season_id, time_buf, 10);
+								strcat(publish_buf, time_buf);
+								strcat(publish_buf, "\"");
 								break;
 							case 4: //sr:race_tournament
+								strcat(publish_buf, "\"sr:race_tournament:");
 								_itoa(bet->tournament_id, time_buf, 10);
+								strcat(publish_buf, time_buf);
+								strcat(publish_buf, "\"");
 								break;
 							}
-							
-							strcat(publish_buf, time_buf);
-						
+
+
 							if (bet->type < 2 && bet->event_match_status > 0) strcat(publish_buf, ", \"id\": \"uof:1/sr:sport:"); else strcat(publish_buf, ", \"id\": \"uof:3/sr:sport:");
 							_itoa(bet->sport_id, time_buf, 10);
 							strcat(publish_buf, time_buf);
@@ -23219,6 +24475,9 @@ void rabbitmqssl_mts() {
 							strcat(publish_buf, time_buf);
 							strcat(publish_buf, "/");
 							switch (bet->type) {
+							case 0:
+								if (bet->variant > -1) { strcat(publish_buf, bet->specifier_value[bet->variant]); strcat(publish_buf, ":"); }
+								break;
 							case 1:
 								strcat(publish_buf, "sr:player:");
 								break;
@@ -23228,6 +24487,12 @@ void rabbitmqssl_mts() {
 							case 3:
 								strcat(publish_buf, "pre:outcometext:");
 								break;
+							case 4:
+								if (bet->variant > -1) { strcat(publish_buf, bet->specifier_value[bet->variant]); strcat(publish_buf, ":"); }
+								break;
+
+
+
 							}
 
 							_itoa(bet->outcome_id[bet->selected_outcome_id], time_buf, 10);
@@ -23241,16 +24506,10 @@ void rabbitmqssl_mts() {
 								strcat(publish_buf, bet->specifier_value[k]);
 							}
 
-							if (bet->type_radar < 1 && bet->event_status > 0) {
+							if (bet->type_radar < 1 && bet->event_status > 0 && bet->market_id != 215) {
 								if (k > 0) strcat(publish_buf, "&$score=");
 								else strcat(publish_buf, "?$score=");
 								strcat(publish_buf, bet->event_score);
-							}
-
-							if (bet->market_id == 215 && bet->event_status > 0) {
-								strcat(publish_buf, "&$server=");
-								_itoa(bet->event_current_server - 1, time_buf, 10);
-								strcat(publish_buf, time_buf);
 							}
 
 							strcat(publish_buf, "\", \"odds\": ");
@@ -23261,7 +24520,17 @@ void rabbitmqssl_mts() {
 
 						}
 						strcat(publish_buf, "], \"bets\": [{ \"id\": \"");
-						strcat(publish_buf, ticket->generateId(wsclient->socket, server_id, j).c_str());
+						strcat(publish_buf, ticket->mts_id.c_str());
+						if (ticket->alternative_process == 2) {
+							strcat(publish_buf, "\", \"reofferRefId\": \"");
+							strcat(publish_buf, alternative_mts_id.c_str());
+						}
+						if (ticket->alternative_process == 1) {
+							strcat(publish_buf, "\", \"altStakeRefId\": \"");
+							strcat(publish_buf, alternative_mts_id.c_str());
+						}
+
+
 						strcat(publish_buf, "\", \"selectionRefs\": [");
 						for (int l = 0; l < ticket->bets_number; l++) {
 							strcat(publish_buf, "{ \"selectionIndex\": ");
@@ -23272,19 +24541,26 @@ void rabbitmqssl_mts() {
 						}
 
 						strcat(publish_buf, "], \"selectedSystems\": [");
-						if (ticket->type < 3) _itoa(1, time_buf, 10);
+						if (ticket->type == 1) _itoa(1, time_buf, 10);
+						else if (ticket->type == 2) _itoa(ticket->bets_number, time_buf, 10);
 						else _itoa(ticket->system_selected, time_buf, 10);
 						strcat(publish_buf, time_buf);
 						strcat(publish_buf, "], \"stake\": { \"value\": ");
+
+
 						//snprintf(time_buf, sizeof(time_buf), "%f", ticket->stake);
 						//sprintf(time_buf, "%g", ticket->stake);
 						_itoa((int)(ticket->stake * 10000 + 0.5), time_buf, 10);
 
+
 						strcat(publish_buf, time_buf);
 						strcat(publish_buf, ", \"type\": \"total\" } }] }");
-						printf(publish_buf);
-					
-					/*	HANDLE File = CreateFile(string("C://Betradar//Sports//mts"+ to_string(mts_count)+ ".json").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+						//printf(publish_buf);
+						//	printf("\r\n");
+						//	printf("\r\n");
+
+
+						/*	HANDLE File = CreateFile(string("C://Betradar//Sports//mts"+ to_string(mts_count)+ ".json").c_str(), GENERIC_WRITE, 0, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 						DWORD l = SetFilePointer(File, 0, 0, FILE_BEGIN);
 						//printf(name);
 						//printf("\r\n");
@@ -23292,34 +24568,96 @@ void rabbitmqssl_mts() {
 						WriteFile(File, publish_buf, strlen(publish_buf), &l, nullptr);
 						CloseHandle(File);*/
 
-						if (die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(exchange[0]), amqp_cstring_bytes(routingkey[0].c_str()), 0, 0, &props, amqp_cstring_bytes(publish_buf)), "Publishing") == -1) { mts_error[run_mts_num_publish] = 1; break; ticket->accept_code = -1; continue; }
-						else amqp_error_publish = 1;
-					  }
-					
-					  if (amqp_error_publish == 1) wsclient->mts_process = 2; else wsclient->mts_process = 3;
-					  //wsclient->mts_process = 3;
-					 // wsclient->mts_process = 3;
-}
+						if (ticket->alternative_process > 0) ticket->alternative_process = 0;
+
+						if (die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(exchange[0].c_str()), amqp_cstring_bytes(routingkey[0].c_str()), 0, 0, &props, amqp_cstring_bytes(publish_buf)), "Publishing") == -1) { mts_error[run_mts_num_publish] = 1; break; }
+
+
+						//countsend++;
+
+
+					}
+					if (mts_error[run_mts_num_publish] == 1)  break; else  wsclient->mts_send_process = 1;
+
+				}
+				if (wsclient->mts_process == 1 && wsclient->ticket_process == true) {
+					int change_mts_process_status = 1;
+					for (int j = 0; j < wsclient->tickets_number; j++) {
+						Ticket* ticket = wsclient->tickets[j];
+						if (ticket->accept_code < 0) continue;
+						if (ticket->mts == 1) continue;
+						if (time(nullptr) - ticket->timestamp / 1000 < 11) { change_mts_process_status = 2; continue; }
+						ticket->accept_code = -102;
+						ticket->contact_oam = 1;
+						tickets_oam[ticket->mts_id] = ticket;
+						if (change_mts_process_status == 1) change_mts_process_status = 0;
+						amqp_basic_properties_t props;
+						props._flags = AMQP_BASIC_CONTENT_TYPE_FLAG | AMQP_BASIC_DELIVERY_MODE_FLAG | AMQP_BASIC_HEADERS_FLAG;// | AMQP_BASIC_REPLY_TO_FLAG;
+						props.content_type = amqp_cstring_bytes("application/json");
+						//props.reply_to = amqp_bytes_malloc_dup(reply_to_queue);
+
+						//props.headers = "replyRoutingKey:\"Node3.ticket.confirm\"";
+						//amqp_table_t *table = &props.headers;
+						//props.headers.num_entries = 1;
+						//props.headers.entries = calloc(props.headers.num_entries, sizeof(amqp_table_entry_t));
+						amqp_table_entry_t entries[1];
+						amqp_table_t table;
+
+
+						entries[0].key = amqp_cstring_bytes("replyRoutingKey");
+						entries[0].value.kind = AMQP_FIELD_KIND_UTF8;
+						entries[0].value.value.bytes = amqp_cstring_bytes(routingkey[2].c_str());
+						table.num_entries = 1;
+						table.entries = entries;
+
+						qsort(table.entries, table.num_entries, sizeof(amqp_table_entry_t),
+							&amqp_table_entry_cmp);
+						props.headers = table;
+
+						//amqp_cstring_bytes("replyRoutingKey:\"Node3.ticket.confirm\"");
+						props.delivery_mode = 1; // persistent delivery mode 
+
+						_i64toa(timestamp(), time_buf, 10);
+						strcpy(publish_buf, "{ \"timestampUtc\": ");
+						strcat(publish_buf, time_buf);
+						strcat(publish_buf, ", \"ticketId\" :\"");
+						strcat(publish_buf, ticket->mts_id.c_str());
+						strcat(publish_buf, "\", \"sender\": { \"bookmakerId\": ");
+						_itoa(BOOKMAKERID, time_buf, 10);
+						strcat(publish_buf, time_buf);
+						strcat(publish_buf, " }, \"code\": 102, \"version\": \"2.1\" }");
+						//	printf(publish_buf);
+						//	printf("\r\n");
+
+						if (die_on_error(amqp_basic_publish(conn, 1, amqp_cstring_bytes(exchange[1].c_str()), amqp_cstring_bytes(routingkey[3].c_str()), 0, 0, &props, amqp_cstring_bytes(publish_buf)), "Publishing") == -1) { mts_error[run_mts_num_publish] = 1; break; }
+
+					}
+
+
+
+					if (change_mts_process_status == 0) {
+						wsclient->mts_process = 3;
+					}
+				}
+
+				if (mts_error[run_mts_num_publish] == 1)  break;
+
+
+
 
 			}
 
 		}
 		else Sleep(1000);
 
-		if (run_mts_num_publish != run_mts_num % 20)  break;
+		if (run_mts_num_publish != run_mts_num % 10)  break;
 		if (mts_error[run_mts_num_publish] == 1) break;
-		
+
 	}
 
-	/*run_mts(conn);*/
-	//mts_error = 1;
-
-	//if (
-		die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel"); //== -1) return;
-		//if (
-			die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");// == -1) return;
-			//if (
-				die_on_error(amqp_destroy_connection(conn), "Ending connection"); //== -1) return;
+	die_on_amqp_error(amqp_channel_close(conn, 1, AMQP_REPLY_SUCCESS), "Closing channel");
+	die_on_amqp_error(amqp_connection_close(conn, AMQP_REPLY_SUCCESS), "Closing connection");
+	die_on_error(amqp_destroy_connection(conn), "Ending connection");
 
 	return;
 }
