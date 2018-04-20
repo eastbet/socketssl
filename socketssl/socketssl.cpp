@@ -162,7 +162,8 @@ typedef void(*messageCallback)(int, string);
 #define DEBUG_OUTPUT false
 #define PRINT false
 #define PROBABILITIES 0
-#define USER 0
+#define VIRTUAL 0
+#define USER 2
 #define REPLAY 0
 #define WRITE_NEW_DATA_TO_MONGO  true
 
@@ -265,7 +266,7 @@ DWORD WINAPI MTSConsumeThread(LPVOID);
 
 
 
-atomic_int run_mts_num = 2;
+atomic_int run_mts_num = 0;
 atomic_int run_num = 0;
 atomic_int mts_error[20];
 atomic_int64_t recovery_state = -1;
@@ -7992,7 +7993,7 @@ int main() {
 
 	hThread1 = CreateThread(nullptr, 67108864, &BetradarGetThread, 0, THREAD_TERMINATE, &dwThreadID1);
 	hThread2 = CreateThread(nullptr, 67108864, &BetradarProcessThread, 0, THREAD_TERMINATE, &dwThreadID2);
-	//hThread5 = CreateThread(nullptr, 67108864, &BetsProcessThread, 0, THREAD_TERMINATE, &dwThreadID5);
+	hThread5 = CreateThread(nullptr, 67108864, &BetsProcessThread, 0, THREAD_TERMINATE, &dwThreadID5);
 	if (MTS_FLAG == 1) {
 		mts_error[run_mts_num % 10] = 0;
 		hThread3[run_mts_num % 10] = CreateThread(nullptr, 67108864, &MTSPublishThread, 0, THREAD_TERMINATE, &dwThreadID3[run_mts_num % 10]);
@@ -8367,8 +8368,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 		offset = 0;
 		if (process_index >= rabbit_index) { new_message_arrived = false; continue; }
-		if (DEBUG_OUTPUT == true) printf("process_index=%d\r\n", process_index);
-		if (DEBUG_OUTPUT == true) printf("rabbit_index=%d\r\n", rabbit_index);
+		if (DEBUG_OUTPUT == true) std::printf("process_index=%d\r\n", process_index);
+		if (DEBUG_OUTPUT == true) std::printf("rabbit_index=%d\r\n", rabbit_index);
 
 
 		//int p1 = timestamp();
@@ -8376,9 +8377,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 		new_variant = false;
 		new_message_arrived = true;
-		if (DEBUG_OUTPUT == true) printf("doc.parse<0>\r\n");
+		if (DEBUG_OUTPUT == true) std::printf("doc.parse<0>\r\n");
 		std::strcpy(maxbuf, AMQP_message[process_index%AMQP_QUEUE]);
-		if (DEBUG_OUTPUT == true) printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
+		if (DEBUG_OUTPUT == true) std::printf("doc.parse<0> end length=%d\r\n", strlen(AMQP_message[process_index%AMQP_QUEUE]));
 		doc.parse<0>(maxbuf);// (AMQP_message[process_index%AMQP_QUEUE]);
 		process_index++;
 		//new_message_arrived = false;
@@ -8386,7 +8387,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		//printf("doc2.parse<0>\r\n");
 
 		if (doc.first_node() == nullptr) {
-			if (DEBUG_OUTPUT == true) printf("doc null\r\n");
+			if (DEBUG_OUTPUT == true) std::printf("doc null\r\n");
 			new_message_arrived = false; continue;
 		}
 
@@ -8410,8 +8411,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			}
 
-			if (DEBUG_OUTPUT == true) printf("fixture_change\r\n");
+			if (DEBUG_OUTPUT == true) std::printf("fixture_change\r\n");
 			type_radar = 0;
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;// { printf("\r\n\r\n%s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]); continue; }
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
 			if (type_radar == 1)
@@ -8867,11 +8869,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			type_radar = 0;
 			event_id = 0;
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v')  { printf("\r\n\r\n%s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]); continue; }
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 
 			//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
 
+		
 
 			if (type_radar == 1)
 			{
@@ -8919,7 +8923,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			//if(event_id== 13941305 || event_id == 12152088 || event_id == 12152088 || event_id == 14125087) printf("\r\n\odds_message= %s\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
 
-			if (DEBUG_OUTPUT == true) printf("odds_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) std::printf("odds_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 
@@ -10533,7 +10537,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			if (type_radar < 2) {
 				if (event_id >= MAX_EVENTS) {
 					std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id);
-					printf("\r\r\n\nodds_message =  %s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
+					//printf("\r\r\n\nodds_message =  %s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
 					continue;
 				}
 				if (events_id[event_id] == nullptr) {
@@ -11517,18 +11521,45 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   if (players_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 0) {
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 0 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-													   players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
-													   {
-														   std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
-														   _line->outcome_team[i] = 1;
-													   }
-													   else    players_l++;
 
+
+													   if (getCompetitor(competitors_id[events_id[_line->event_id]->away_id]) == -1) {
+														   std::printf(" Error get competitors away_id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
+													   }
+
+													   if (getCompetitor(competitors_id[events_id[_line->event_id]->home_id]) == -1) {
+														   std::printf(" Error get competitors home_id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
+													   }
+
+													   if (players_id[_line->outcome_id[i]] == nullptr) {
+														   players[players_l].id = _line->outcome_id[i]; if (getPlayer(&players[players_l]) == -1)
+														   {
+															   std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+															   _line->outcome_team[i] = 1;
+														   }
+														   else    players_l++;
+													   }
+
+												   
+												   
 												   }
 
 												   if (players_id[_line->outcome_id[i]] != nullptr && _line->outcome_team[i] == 0) {
-													   if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
-													   else _line->outcome_team[i] = 1;
+													   if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;  
+													   else if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->home_id) _line->outcome_team[i] = 1;  else {
+														   printf("eror competitor_id in player  player_id=%d  event_id=%d  home_id=%d  away_id=%d run getCompetitor\r\n", _line->outcome_id[i], _line->event_id, events_id[_line->event_id]->home_id, events_id[_line->event_id]->away_id);
+														   if (getCompetitor(competitors_id[events_id[_line->event_id]->away_id]) == -1) {
+															   std::printf(" Error get competitors away_id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
+														   }
+
+														   if (getCompetitor(competitors_id[events_id[_line->event_id]->home_id]) == -1) {
+															   std::printf(" Error get competitors away_id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
+														   }
+
+
+														   if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
+														   else  _line->outcome_team[i] = 1; 
+													   }
 												   }
 
 
@@ -12025,6 +12056,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			type_radar = 0;
 			event_id = 0;
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
 			if (type_radar == 1)
@@ -13711,8 +13743,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 		ret_fixture = 0;
 		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
-			if (DEBUG_OUTPUT == true) printf("fixture_change\r\n");
+			if (DEBUG_OUTPUT == true) std::printf("fixture_change\r\n");
 			type_radar = 0;
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
 
@@ -13762,7 +13795,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				continue;
 			}
 
-			if (DEBUG_OUTPUT == true) printf("fixture_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) std::printf("fixture_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -13858,6 +13891,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 		else if (std::strcmp("odds_change", doc.first_node()->name()) == 0) {
 			type_radar = 0;
 			event_id = 0;
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
 
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
@@ -13911,7 +13945,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				continue;
 			}
 
-			if (DEBUG_OUTPUT == true) printf("odds_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) std::printf("odds_change type_radar=%d\r\n", type_radar);
 
 			if (type_radar == 2) {
 
@@ -15890,21 +15924,46 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 												   if (bplayers_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 0) {
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 0 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-													   bplayers[bplayers_l].id = _line->outcome_id[i]; if (getPlayer(&bplayers[bplayers_l], true) == -1)
-													   {
-														   std::printf("error player id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
-														   _line->outcome_team[i] = 1;
+
+
+													   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->away_id], true) == -1) {
+														   std::printf(" Error get bcompetitors away_id=%d \r\n", bevents_id[_line->event_id]->away_id); //continue;
 													   }
-													   else
-														   bplayers_l++;
+
+													   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->home_id], true) == -1) {
+														   std::printf(" Error get bcompetitors home_id=%d \r\n", bevents_id[_line->event_id]->home_id); //continue;
+													   }
+
+													   if (bplayers_id[_line->outcome_id[i]] == nullptr) {
+														   bplayers[bplayers_l].id = _line->outcome_id[i]; if (getPlayer(&bplayers[bplayers_l], true) == -1)
+														   {
+															   std::printf("error bplayer id=%d  not found \r\n ", _line->outcome_id[i]); //continue;
+															   _line->outcome_team[i] = 1;
+														   }
+														   else    bplayers_l++;
+													   }
+
+
 
 												   }
 
 												   if (bplayers_id[_line->outcome_id[i]] != nullptr && _line->outcome_team[i] == 0) {
 													   if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
-													   else _line->outcome_team[i] = 1;
-												   }
+													   else if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->home_id) _line->outcome_team[i] = 1;  else {
+														   printf("eror bcompetitor_id in bplayer  bplayer_id=%d  event_id=%d  home_id=%d  away_id=%d run getCompetitor\r\n", _line->outcome_id[i], _line->event_id, bevents_id[_line->event_id]->home_id, bevents_id[_line->event_id]->away_id);
+														   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->away_id], true) == -1) {
+															   std::printf(" Error get bcompetitors away_id=%d \r\n", bevents_id[_line->event_id]->away_id); //continue;
+														   }
 
+														   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->home_id], true) == -1) {
+															   std::printf(" Error get bcompetitors away_id=%d \r\n", bevents_id[_line->event_id]->home_id); //continue;
+														   }
+
+
+														   if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
+														   else  _line->outcome_team[i] = 1;
+													   }
+												   }
 
 
 
@@ -16300,12 +16359,12 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					if (std::strcmp("bet_cancel", doc.first_node()->name()) == 0) settlement_type = 2; else
 						if (std::strcmp("rollback_bet_cancel", doc.first_node()->name()) == 0) settlement_type = 3;
 
-
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
 
 			//std::printf(doc.first_node()->first_attribute("event_id")->value()); std::printf("\r\n");
 			//if (settlement_type == 2) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index-1)%AMQP_QUEUE]);
 
-			if (event_id == 14011589) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
+			//if (event_id == 14011589) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
 
 			type_radar = 0;
 			event_id = 0;
@@ -16345,6 +16404,8 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
 			//0 sr:match://1 sr:race_event: //2 sr:simple_tournament://3 sr:season://4:sr:race_tournament:
 			_bet->type_radar = type_radar;
+			//	printf("\r\n\r\n\r\nbet_settlement =\r\n\r\n\r\n%s\r\n\r\n\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
+
 
 			if (event_id == 0) {
 				std::printf("event_id in bet_settlement error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value());
@@ -16891,7 +16952,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 				}
-
+					
 
 			}
 
@@ -16904,6 +16965,8 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 			type_radar = 0;
 			event_id = 0;
+			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
+
 			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
 
@@ -17203,25 +17266,45 @@ int startRecovery() {
 	char* recvbuf = new char[EXTRA];
 	char* request_pre = new char[MAX_PATH];
 	char* request_liveodds = new char[MAX_PATH];
+	char* request_vf = new char[MAX_PATH];
+	char* request_vbl = new char[MAX_PATH];
+	char* request_vto = new char[MAX_PATH];
 	char* timestamp_buf = new char[MAX_PATH];
 	int result_pre = 0;
 	int result_liveodds = 0;
 
 	std::strcpy(request_pre, "/v1/pre/recovery/initiate_request?");
 	std::strcpy(request_liveodds, "/v1/liveodds/recovery/initiate_request?");
+	std::strcpy(request_vf, "/v1/vf/recovery/initiate_request?");
+	std::strcpy(request_vbl, "/v1/vbl/recovery/initiate_request?");
+	std::strcpy(request_vto, "/v1/vto/recovery/initiate_request?");
+
 	if (recovery_timestamp > 0) {
-		_i64toa(recovery_timestamp, timestamp_buf, 10); std::strcat(request_pre, "after="); std::strcat(request_pre, timestamp_buf); std::strcat(request_pre, "&"); std::strcat(request_liveodds, "after="); std::strcat(request_liveodds, timestamp_buf); std::strcat(request_liveodds, "&");
+		_i64toa(recovery_timestamp, timestamp_buf, 10); std::strcat(request_pre, "after="); std::strcat(request_pre, timestamp_buf); std::strcat(request_pre, "&"); std::strcat(request_liveodds, "after="); std::strcat(request_liveodds, timestamp_buf); std::strcat(request_liveodds, "&"); std::strcat(request_vf, "after="); std::strcat(request_vf, timestamp_buf); std::strcat(request_vf, "&"); std::strcat(request_vbl, "after="); std::strcat(request_vbl, timestamp_buf); std::strcat(request_vbl, "&");; std::strcat(request_vto, "after="); std::strcat(request_vto, timestamp_buf); std::strcat(request_vto, "&");
+
 	};
 	_i64toa(recovery_timestamp / 1000, timestamp_buf, 10);
 	std::strcat(request_pre, "request_id="); std::strcat(request_pre, timestamp_buf);
 	std::strcat(request_liveodds, "request_id="); std::strcat(request_liveodds, timestamp_buf);
-	//while (httpsRequest("api.betradar.com", request, recvbuf, 1) == -1) Sleep(1000);
+	std::strcat(request_vf, "request_id="); std::strcat(request_vf, timestamp_buf);
+	std::strcat(request_vbl, "request_id="); std::strcat(request_vbl, timestamp_buf);
+	std::strcat(request_vto, "request_id="); std::strcat(request_vto, timestamp_buf);
+    //while (httpsRequest("api.betradar.com", request, recvbuf, 1) == -1) Sleep(1000);
 	if (recovery_timestamp > 0) result_liveodds = httpsRequest("api.betradar.com", request_liveodds, recvbuf, 1);
 	result_pre = httpsRequest("api.betradar.com", request_pre, recvbuf, 1);
 	if (result_pre > 0) std::printf("Start recovery pre recovery_timestamp=%s\r\n", request_pre);
 	if (result_liveodds > 0) std::printf("Start recovery liveodds recovery_timestamp=%s\r\n", request_liveodds);
+	if (VIRTUAL == 0) {
+		httpsRequest("api.betradar.com", request_vf, recvbuf, 1);
+		httpsRequest("api.betradar.com", request_vbl, recvbuf, 1);
+		httpsRequest("api.betradar.com", request_vto, recvbuf, 1);
+	}
+
 	delete[] request_pre;
 	delete[] request_liveodds;
+	delete[] request_vf;
+	delete[] request_vbl;
+	delete[] request_vto;
 	delete[] recvbuf;
 	delete[] timestamp_buf;
 	if (result_pre < 0 || result_liveodds < 0) return -1;
