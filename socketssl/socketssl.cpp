@@ -68,6 +68,7 @@ int GetMaxCompressedLen(int);
 int CompressData(const BYTE*, int, BYTE*, int);
 int UncompressData(const BYTE*, int, BYTE*, int);
 int gzip(char*, int, char* &, int);
+string getTournamentKey(int, int);
 int64_t timestamp();
 int DMYtoSeconds(int, int, int);
 
@@ -163,7 +164,7 @@ typedef void(*messageCallback)(int, string);
 #define PRINT false
 #define PROBABILITIES 0
 #define VIRTUAL 0
-#define USER 2
+#define USER 0
 #define REPLAY 0
 #define WRITE_NEW_DATA_TO_MONGO  true
 
@@ -331,7 +332,7 @@ void Sport:: operator = (const Sport & rhs) {
 	if (translation_num > 0) {
 		translation_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
+			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
 		}
@@ -462,16 +463,16 @@ void Player:: operator = (const Player & rhs) {
 		translation_full_name = new char*[translation_num];
 
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
+			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
-			if (rhs.translation_full_name[i] != nullptr) { translation_full_name[i] = new char[strlen(rhs.translation_full_name[i]) + 1]; strcpy(translation_full_name[i], rhs.translation_full_name[i]); }
+			if (rhs.translation_full_name[i] != nullptr) { translation_full_name[i] = new char[strlen(rhs.translation_full_name[i]) + 1];std::strcpy(translation_full_name[i], rhs.translation_full_name[i]); }
 			else translation_full_name[i] = nullptr;
 
-			if (rhs.translation_type[i] != nullptr) { translation_type[i] = new char[strlen(rhs.translation_type[i]) + 1]; strcpy(translation_type[i], rhs.translation_type[i]); }
+			if (rhs.translation_type[i] != nullptr) { translation_type[i] = new char[strlen(rhs.translation_type[i]) + 1];std::strcpy(translation_type[i], rhs.translation_type[i]); }
 			else translation_type[i] = nullptr;
 
-			if (rhs.translation_nationality[i] != nullptr) { translation_nationality[i] = new char[strlen(rhs.translation_nationality[i]) + 1]; strcpy(translation_nationality[i], rhs.translation_nationality[i]); }
+			if (rhs.translation_nationality[i] != nullptr) { translation_nationality[i] = new char[strlen(rhs.translation_nationality[i]) + 1];std::strcpy(translation_nationality[i], rhs.translation_nationality[i]); }
 			else translation_nationality[i] = nullptr;
 
 
@@ -571,10 +572,10 @@ void Competitor:: operator = (const Competitor & rhs) {
 		translation_country_name = new char*[translation_num];
 		translation_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
+			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
-			if (rhs.translation_country_name[i] != nullptr) { translation_country_name[i] = new char[strlen(rhs.translation_country_name[i]) + 1]; strcpy(translation_country_name[i], rhs.translation_country_name[i]); }
+			if (rhs.translation_country_name[i] != nullptr) { translation_country_name[i] = new char[strlen(rhs.translation_country_name[i]) + 1];std::strcpy(translation_country_name[i], rhs.translation_country_name[i]); }
 			else translation_country_name[i] = nullptr;
 		}
 	}
@@ -611,9 +612,10 @@ public:
 
 	};
 	int id;
+	string key;
 	int season_id;
-	int simple_id;
-	int type_radar = 0;//0 sr:tournament //1 sr:race_tournament: //2 sr:simple_tournament: 
+	int next_season_id;
+	int type_radar = 0;//0 sr:tournament //1 sr:race_tournament: //2 sr:simple_tournament: //3 vf:tournament: 
 	int sport_id;
 	int category_id;
 	int sort;
@@ -625,12 +627,14 @@ public:
 	int start_date;
 	int end_date;
 	void operator = (const Tournament&);
+	string getCatKey();
 };
 void Tournament:: operator = (const Tournament & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
+	key = rhs.key;
 	season_id = rhs.season_id;
-	simple_id = rhs.simple_id;
+	next_season_id = rhs.next_season_id;
 	start_date = rhs.start_date;
 	end_date = rhs.end_date;
 	category_id = rhs.category_id;
@@ -656,25 +660,25 @@ void Tournament:: operator = (const Tournament & rhs) {
 		translation_season_name = new char*[translation_num];
 		translation_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
+			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
-			if (rhs.translation_season_name[i] != nullptr) { translation_season_name[i] = new char[strlen(rhs.translation_season_name[i]) + 1]; strcpy(translation_season_name[i], rhs.translation_season_name[i]); }
+			if (rhs.translation_season_name[i] != nullptr) { translation_season_name[i] = new char[strlen(rhs.translation_season_name[i]) + 1];std::strcpy(translation_season_name[i], rhs.translation_season_name[i]); }
 			else translation_season_name[i] = nullptr;
 
 		}
 	}
 
-
-
 }
+
 Tournament::Tournament() {
 	id = 0;
 	type_radar = 0;
 	category_id = 0;
 	sport_id = 0;
 	sort = 0;
-	simple_id = 0;
+	key = "";
+	next_season_id = 0;
 	season_id = 0;
 	start_date = 0;
 	end_date = 0;
@@ -689,6 +693,12 @@ Tournament::Tournament() {
 	name = nullptr;
 	season_name = nullptr;
 };
+string Tournament::getCatKey() {
+
+
+
+}
+
 class Category {
 public:
 	Category();
@@ -733,7 +743,7 @@ void Category:: operator = (const Category & rhs) {
 	if (rhs.translation_num > 0) {
 		translation_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
+			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]); }
 			else translation_name[i] = nullptr;
 
 		}
@@ -771,12 +781,12 @@ public:
 		if (translation_away_name != nullptr) { delete[] translation_away_name; translation_away_name = nullptr; }
 		if (translation_home_name != nullptr) { delete[] translation_home_name; translation_home_name = nullptr; }
 		if (translation_tv_channels != nullptr) { delete[] translation_tv_channels; translation_tv_channels = nullptr; }
-
+	
 
 
 	};
 
-
+	string key;
 	int id;
 	int position;
 	int bo;
@@ -850,9 +860,7 @@ public:
 	char *away_name;
 	char ** translation_home_name;
 	char ** translation_away_name;
-
-
-	char* delayed_description;
+    char* delayed_description;
 	int timestamp;
 	int start_time;
 	int next_live_time;
@@ -861,12 +869,12 @@ public:
 	int overtime_length;
 	int austrian_district;
 	int booked;
-	int type_radar;//0 tournament//1 race tournament//2 simple tournament
+	int type_radar;//0 sr:match// 1 race(sr:stage) // 2 sr:match (simple tournament)//3 vf:match
 	int parent_id;
 	int delayed_id;
 	int bet_stop;
-
 	void operator = (const Event&);
+	string getCatKey();
 
 };
 void Event:: operator = (const Event & rhs) {
@@ -896,6 +904,7 @@ void Event:: operator = (const Event & rhs) {
 	away_gamescore = rhs.away_gamescore;
 	home_legscore = rhs.home_legscore;
 	away_legscore = rhs.away_legscore;
+	key = rhs.key;
 
 	if (tv_channels != nullptr) {
 		delete[] tv_channels; tv_channels = nullptr;
@@ -1016,13 +1025,13 @@ void Event:: operator = (const Event & rhs) {
 		translation_home_name = new char*[translation_num];
 		translation_away_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_away_name[i] != nullptr) { translation_away_name[i] = new char[strlen(rhs.translation_away_name[i]) + 1]; strcpy(translation_away_name[i], rhs.translation_away_name[i]); }
+			if (rhs.translation_away_name[i] != nullptr) { translation_away_name[i] = new char[strlen(rhs.translation_away_name[i]) + 1];std::strcpy(translation_away_name[i], rhs.translation_away_name[i]); }
 			else translation_away_name[i] = nullptr;
 
-			if (rhs.translation_home_name[i] != nullptr) { translation_home_name[i] = new char[strlen(rhs.translation_home_name[i]) + 1]; strcpy(translation_home_name[i], rhs.translation_home_name[i]); }
+			if (rhs.translation_home_name[i] != nullptr) { translation_home_name[i] = new char[strlen(rhs.translation_home_name[i]) + 1];std::strcpy(translation_home_name[i], rhs.translation_home_name[i]); }
 			else translation_home_name[i] = nullptr;
 
-			if (rhs.translation_tv_channels[i] != nullptr) { translation_tv_channels[i] = new char[strlen(rhs.translation_tv_channels[i]) + 1]; strcpy(translation_tv_channels[i], rhs.translation_tv_channels[i]); }
+			if (rhs.translation_tv_channels[i] != nullptr) { translation_tv_channels[i] = new char[strlen(rhs.translation_tv_channels[i]) + 1];std::strcpy(translation_tv_channels[i], rhs.translation_tv_channels[i]); }
 			else translation_tv_channels[i] = nullptr;
 
 
@@ -1085,6 +1094,7 @@ Event::Event() {
 	id = 0;
 	bo = 0;
 	sport_id = 0;
+	key = "";
 	position = 0;
 	category_id = 0;
 	tournament_id = 0;
@@ -1176,6 +1186,30 @@ Event::Event() {
 
 
 };
+string Event::getCatKey() {
+	if (key.length() == 0) {
+		switch (type_radar) {
+		case 0:
+			key = "0" + to_string(id);
+			break;
+		case 1:
+			key = "1" + to_string(id);
+			break;
+		case 2:
+			key = "0" + to_string(id);
+			break;
+		case 3:
+			key = "5" + to_string(id);
+			break;
+
+		};
+	}
+	return key;
+	
+}
+
+
+
 class Market {
 public:
 	Market();
@@ -1242,7 +1276,6 @@ void Market:: operator = (const Market & rhs) {
 		variable_text = new char[strlen(rhs.variable_text) + 1];
 		std::strcpy(variable_text, rhs.variable_text);
 	}
-
 	outcome_number = rhs.outcome_number;
 	type = rhs.type;
 	line_type = rhs.line_type;
@@ -1264,21 +1297,12 @@ void Market:: operator = (const Market & rhs) {
 		outcome_id[i] = rhs.outcome_id[i];
 	}
 
-	if (name != nullptr) {
-		delete[] name; name = nullptr;
-	}
-	if (rhs.name != nullptr) {
-		name = new char[strlen(rhs.name) + 1];
-		std::strcpy(name, rhs.name);
-	}
-
 	for (int i = 0; i < specifier_number; i++) { if (specifier_name[i] != nullptr) { delete[] specifier_name[i]; specifier_name[i] = nullptr; } if (specifier_description[i] != nullptr) { delete[] specifier_description[i]; specifier_description[i] = nullptr; } }
 	if (specifier_name != nullptr) { delete[] specifier_name; specifier_name = nullptr; }
 	if (specifier_description != nullptr) { delete[] specifier_description; specifier_description = nullptr; }
 	if (specifier_type != nullptr) {
 		delete[] specifier_type; specifier_type = nullptr;
 	}
-
 
 	specifier_number = rhs.specifier_number;
 	std::strcpy(name, rhs.name);
@@ -1305,7 +1329,6 @@ void Market:: operator = (const Market & rhs) {
 		delete[] translation_name; translation_name = nullptr;
 	}
 
-
 	if (translation_outcome_name != nullptr) {
 		for (int i = 0; i < translation_num; i++) {
 			if (translation_outcome_name[i] != nullptr) {
@@ -1322,13 +1345,21 @@ void Market:: operator = (const Market & rhs) {
 		translation_outcome_name = new char**[translation_num];
 		translation_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
-			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1]; strcpy(translation_name[i], rhs.translation_name[i]); }
+			if (rhs.translation_name[i] != nullptr) { 
+				translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]);
+			
+			}
 			else translation_name[i] = nullptr;
 
 			if (rhs.translation_outcome_name[i] != nullptr) {
 				translation_outcome_name[i] = new char*[outcome_number];
-				for (int j = 0; j < outcome_number; j++) if (rhs.translation_outcome_name[i][j] != nullptr) { translation_outcome_name[i][j] = new char[strlen(rhs.translation_outcome_name[i][j]) + 1]; strcpy(translation_outcome_name[i][j], rhs.translation_outcome_name[i][j]); }
-				else translation_outcome_name[i][j] = nullptr;
+				for (int j = 0; j < outcome_number; j++) if (rhs.translation_outcome_name[i][j] != nullptr) { 
+					translation_outcome_name[i][j] = new char[strlen(rhs.translation_outcome_name[i][j]) + 1];std::strcpy(translation_outcome_name[i][j], rhs.translation_outcome_name[i][j]);
+				
+				}
+				else {
+					translation_outcome_name[i][j] = nullptr;
+				}
 			}
 			else translation_outcome_name[i] = nullptr;
 
@@ -1370,7 +1401,7 @@ class Line {
 public:
 	Line();
 	~Line() {
-
+		
 		if (name != nullptr) delete[] name;  if (outcome_number > 0) { for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) delete[] outcome_name[i]; };
 
 		if (outcome_id != nullptr) delete[] outcome_id; if (outcome_active != nullptr) delete[] outcome_active; if (outcome_team != nullptr) delete[] outcome_team; if (outcome_odds != nullptr) delete[] outcome_odds;
@@ -1394,11 +1425,12 @@ public:
 	int simple_id;
 	int market_id;
 	int event_id;
+	string key;
 	int team;
 	int status; //0 (inactive)// 1 (active) //-1(suspended) //- 3 (cleared, settled) //- 4 (cancelled)	//handed_over(-2)
 	int favourite;
 	int type;//0 -normal liveodds:outcometext //1-sr:player//2-sr:competitor//3 pre:outcometext // 4: pre:playerprops  
-	int type_radar;//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament
+	int type_radar;//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament://5 vf:match //6 sr:season: 7 //vf:tournament:
 	int variant;
 	char* name;
 	int outcome_number;
@@ -1445,6 +1477,7 @@ void Line:: operator = (const Line & rhs) {
 
 	outcome_number = rhs.outcome_number;
 	type = rhs.type;
+	key = rhs.key;
 	if (name != nullptr) {
 		delete[] name; name = nullptr;
 	}
@@ -1519,6 +1552,7 @@ Line::Line() {
 	type_radar = 0;
 	variant = -1;
 	name = nullptr;
+	key = "";
 	outcome_number = 0;
 	outcome_id = nullptr;
 	outcome_active = nullptr;
@@ -1538,19 +1572,41 @@ Line::Line() {
 
 };
 string Line::getCatKey() {
-	if (event_id > 0) {
-		return "e" + to_string(event_id);
+	if (key.length() == 0) {
+		//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournament://4 sr:race_tournament://5 vf:match  6 //vf:tournament:
+	switch (type_radar) {
+
+	case 0:	
+    	key = "0" + to_string(event_id);
+	break;
+		
+	case 1:
+		key = "1" + to_string(event_id);
+	break;
+
+	case 2:
+		key = "2" + to_string(simple_id);
+	break;
+
+	case 3:
+		key = "3" + to_string(tournament_id);
+	break;
+
+	case 4:
+		key = "4" + to_string(tournament_id);
+	break;
+
+	case 5:
+		key = "5" + to_string(event_id);
+	break;
+		
+	case 6:
+		key = "6" +to_string(tournament_id);
+	break;
+		
+		}
 	}
-	else if (tournament_id > 0) {
-		return "t" + to_string(tournament_id);
-	}
-	else if (simple_id > 0) {
-		return "s" + to_string(simple_id);
-	}
-	else {
-		cout << "Something wrong with this line: " << name << endl;
-		return "";
-	}
+	return  key;
 }
 string Line::getCompoundKey() {
 	ostringstream key_oss;
@@ -1615,10 +1671,6 @@ Voidreason::Voidreason() {
 	id = 0;
 	description = nullptr;
 };
-
-
-
-
 class Matchstatus {
 public:
 	Matchstatus();
@@ -1678,13 +1730,16 @@ Player* bplayers = new Player[PLAYERS_LENTGH];
 int bplayers_l = 0;
 Competitor* bcompetitors = new Competitor[COMPETITORS_LENTGH];
 int bcompetitors_l = 0;
-Event** bevents_id = new Event*[MAX_EVENTS];
-Event** bevents_show = new Event*[MAX_EVENTS];
+//Event** bevents_id = new Event*[MAX_EVENTS];
+Event** bevents_show = new Event*[EVENTS_LENTGH];
+unordered_map<string, Event*> bevents_id;
+//unordered_map<char*, Event*> bevents_show;
 int bevents_show_l = 0;
 Line** blines_id = new Line*[MAX_LINES];
-Tournament** btournaments_id = new Tournament*[MAX_TOURNAMENTS];
-Tournament** bseasons_id = new Tournament*[MAX_TOURNAMENTS];
-Tournament** bsimples_id = new Tournament*[MAX_TOURNAMENTS];
+//Tournament** btournaments_id = new Tournament*[MAX_TOURNAMENTS];
+unordered_map<string, Tournament*> btournaments_id;
+//Tournament** bseasons_id = new Tournament*[MAX_TOURNAMENTS];
+//Tournament** bsimples_id = new Tournament*[MAX_TOURNAMENTS];
 Category** bcategories_id = new Category*[MAX_CATEGORIES];
 Sport** bsports_id = new Sport*[MAX_SPORTS];
 Competitor** bcompetitors_id = new Competitor*[MAX_COMPETITORS];
@@ -1715,13 +1770,16 @@ int players_l = 0;
 Competitor* competitors = new Competitor[COMPETITORS_LENTGH];
 int competitors_l = 0;
 int matchstatus_l = 0;
-Event** events_id = new Event*[MAX_EVENTS];
-Event** events_show = new Event*[MAX_EVENTS];
+//Event** events_id = new Event*[MAX_EVENTS];
+unordered_map<string, Event*> events_id;
+//unordered_map<char*, Event*> events_show;
+Event** events_show = new Event*[EVENTS_LENTGH];
 int events_show_l = 0;
 Line** lines_id = new Line*[MAX_LINES];
-Tournament** tournaments_id = new Tournament*[MAX_TOURNAMENTS];
-Tournament** seasons_id = new Tournament*[MAX_TOURNAMENTS];
-Tournament** simples_id = new Tournament*[MAX_TOURNAMENTS];
+//Tournament** tournaments_id = new Tournament*[MAX_TOURNAMENTS];
+unordered_map<string, Tournament*> tournaments_id;
+//Tournament** seasons_id = new Tournament*[MAX_TOURNAMENTS];
+//Tournament** simples_id = new Tournament*[MAX_TOURNAMENTS];
 Category** categories_id = new Category*[MAX_CATEGORIES];
 Sport** sports_id = new Sport*[MAX_SPORTS];
 Competitor** competitors_id = new Competitor*[MAX_COMPETITORS];
@@ -1748,6 +1806,7 @@ public:
 	~Bet() {
 
 		if (init == 0) return;
+	
 		if (name != nullptr) delete[] name;  if (outcome_number > 0) { for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) delete[] outcome_name[i]; };
 
 		if (outcome_id != nullptr) delete[] outcome_id; if (outcome_active != nullptr) delete[] outcome_active; if (outcome_team != nullptr) delete[] outcome_team; if (outcome_odds != nullptr) delete[] outcome_odds;
@@ -1797,6 +1856,7 @@ public:
 	int season_id;
 	int market_id;
 	int event_id;
+	string key;
 	int sport_id;
 	int category_id;
 	int event_home_id;
@@ -1911,7 +1971,7 @@ void Bet:: operator = (const Bet & rhs) {
 	away_score = rhs.away_score;
 	home_gamescore = rhs.home_gamescore;
 	away_gamescore = rhs.away_gamescore;
-
+	key = rhs.key;
 	if (name != nullptr) {
 		delete[] name; name = nullptr;
 	}
@@ -2111,38 +2171,37 @@ void Bet::setHistoryData() {
 	Event* _event = nullptr;
 	char buff[MAX_PATH];
 	char buff_[MAX_PATH];
-
-	switch (type_radar) {
+    switch (type_radar) {
 
 	case 0://sr:match
 	case 1://sr:race_event
+	case 5://vf:match
 
-		if (event_id >= MAX_EVENTS) {
-			printf("event_id=%d out of MAX_EVENTS in in setHistoryData\r\n", event_id); break;
+		if (bevents_id.find(getCatKey()) == bevents_id.end()) {
+			std::printf("event_id=%d  not found in  setHistoryData\r\n", event_id); status = -2;  return;
 		}
-		if (bevents_id[event_id] == nullptr) {
-			printf("event_id=%d  not found in  setHistoryData\r\n", event_id); break;
+		_event = bevents_id[getCatKey()];
+
+		if (_event->bet_stop == 1) {
+			status = -2;  return;
 		}
-		if (bevents_id[event_id]->bet_stop == 1) {
-			status = -2; return;
-		}
-		if (bevents_id[event_id]->home_name != nullptr) {
+		if (_event->home_name != nullptr) {
 			if (event_home_name != nullptr) { delete[] event_home_name; event_home_name = nullptr; }
-			event_home_name = new char[strlen(bevents_id[event_id]->home_name) + 1];
-			std::strcpy(event_home_name, bevents_id[event_id]->home_name);
+			event_home_name = new char[strlen(_event->home_name) + 1];
+			std::strcpy(event_home_name, _event->home_name);
 		}
-		if (bevents_id[event_id]->away_name != nullptr) {
+		if (_event->away_name != nullptr) {
 			if (event_away_name != nullptr) { delete[] event_away_name; event_away_name = nullptr; }
-			event_away_name = new char[strlen(bevents_id[event_id]->away_name) + 1];
-			std::strcpy(event_away_name, bevents_id[event_id]->away_name);
+			event_away_name = new char[strlen(_event->away_name) + 1];
+			std::strcpy(event_away_name, _event->away_name);
 		}
-		event_home_id = bevents_id[event_id]->home_id;
-		event_away_id = bevents_id[event_id]->away_id;
-		if (bevents_id[event_id]->type_radar == 0) {
+		event_home_id = _event->home_id;
+		event_away_id = _event->away_id;
+		if (_event->type_radar == 0) {
 
-			if (event_home_id >= MAX_COMPETITORS) printf("event_home_id out of MAX_COMPETITORS in setHistoryData %d\r\n", event_home_id);
+			if (event_home_id >= MAX_COMPETITORS) std::printf("event_home_id out of MAX_COMPETITORS in setHistoryData %d\r\n", event_home_id);
 			else if (bcompetitors_id[event_home_id] == nullptr) {
-				printf("event_home_id not found in competitors in setHistoryData %d\r\n", event_home_id);
+				std::printf("event_home_id not found in competitors in setHistoryData %d\r\n", event_home_id);
 
 
 			}
@@ -2156,7 +2215,7 @@ void Bet::setHistoryData() {
 
 
 			}
-			if (event_away_id >= MAX_COMPETITORS) printf("event_away_id out of MAX_COMPETITORS in setHistoryData %d\r\n", event_away_id);
+			if (event_away_id >= MAX_COMPETITORS) std::printf("event_away_id out of MAX_COMPETITORS in setHistoryData %d\r\n", event_away_id);
 			else if (bcompetitors_id[event_away_id] == nullptr) printf("event_away_id not found in competitors in setHistoryData %d\r\n", event_away_id);
 			else {
 
@@ -2170,7 +2229,7 @@ void Bet::setHistoryData() {
 			}
 
 		}
-		_event = bevents_id[event_id];
+		
 		tournament_id = _event->tournament_id;
 		simple_id = _event->simple_id;
 		event_status = _event->status;
@@ -2181,7 +2240,7 @@ void Bet::setHistoryData() {
 		event_bo = _event->bo;
 		if (event_status > 0) {
 			event_match_status = _event->match_status;
-			if (matchstatus_id[event_match_status] == nullptr) printf("match_status=%d not found in matchstatus_id\r\n", event_match_status); else {
+			if (matchstatus_id[event_match_status] == nullptr) std::printf("match_status=%d not found in matchstatus_id\r\n", event_match_status); else {
 				if (matchstatus_id[event_match_status]->description != nullptr) {
 					if (event_match_status_description != nullptr) {
 						delete[] event_match_status_description; event_match_status_description = nullptr;
@@ -2257,7 +2316,7 @@ void Bet::setHistoryData() {
 
 
 		}
-
+		
 
 	case 3://sr:season
 	case 4://sr:race_tournament
@@ -2268,7 +2327,9 @@ void Bet::setHistoryData() {
 
 			//printf("setHistoryData1\r\n");
 			if (tournament_id >= MAX_TOURNAMENTS) printf("tournament_id=%d out of MAX_TOURNAMENTS in in setHistoryData\r\n", tournament_id);
-			else if (btournaments_id[tournament_id] == nullptr) printf("tournament_id=%d  not found in in setHistoryData\r\n", tournament_id);
+			else 
+				
+			if (btournaments_id[tournament_id] == nullptr) printf("tournament_id=%d  not found in in setHistoryData\r\n", tournament_id);
 			else {
 				if (type_radar > 1) {
 					event_start_time = btournaments_id[tournament_id]->end_date;
@@ -2415,6 +2476,7 @@ Bet::Bet() {
 	start_time = 0;
 	end_time = 0;
 	superceded_by = 0;
+	key = "";
 	name = nullptr;
 	outcome_number = 0;
 	outcome_name = nullptr;
@@ -2457,6 +2519,32 @@ Bet::Bet() {
 };
 Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 	init = 0;
+	outcome_name = nullptr;
+	outcome_id = nullptr;
+	outcome_active = nullptr;
+	outcome_team = nullptr;
+	outcome_probabilities = nullptr;
+	outcome_odds = nullptr;
+	outcome_result = nullptr;
+	outcome_void_factor = nullptr;
+	outcome_dead_heat_factor = nullptr;
+	tournament_name = nullptr;;
+	category_name = nullptr;;
+	season_name = nullptr;;
+	sport_name = nullptr;
+	event_away_name = nullptr;
+	event_home_name = nullptr;
+	event_match_time = nullptr;
+	event_remaining_time = nullptr;
+	event_remaining_time_in_period = nullptr;;
+	event_score = nullptr;
+	event_set_scores = nullptr;;
+	event_game_score = nullptr;
+	event_match_status_description = nullptr;
+	summary = nullptr;
+	specifier = nullptr;
+	specifier_value = nullptr;
+
 	if (line == nullptr) { std::printf("error line is null\r\n"); status = -1; return; }
 	if (line->status != 1) { std::printf("error line status is=%d\r\n", line->status); status = -2; return; }
 	id = "";
@@ -2475,7 +2563,7 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 	place_odd = bet_odd;
 	market_id = line->market_id;
 	event_id = line->event_id;
-	if (event_id >= MAX_EVENTS) { std::printf("event_id out of MAX_EVENTS in build Bet event_id =%d\r\n", event_id); status = -2; return; }
+	//if (event_id >= MAX_EVENTS) { std::printf("event_id out of MAX_EVENTS in build Bet event_id =%d\r\n", event_id); status = -2; return; }
 	if (market_id >= MAX_MARKETS) { std::printf("market_id out of MAX_MARKETS in build Bet market_id =%d\r\n", market_id); status = -2; return; }
 	init = 1;
 	favourite = line->favourite;
@@ -2504,7 +2592,8 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 	start_time = 0;
 	end_time = 0;
 	superceded_by = 0;
-
+	key = line->key;
+	
 	if (line->name != nullptr) {
 		name = new char[strlen(line->name) + 1];
 		std::strcpy(name, line->name);
@@ -2512,16 +2601,7 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 	else name = nullptr;
 
 	//for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) delete[] outcome_name[i];
-	outcome_name = nullptr;
-	outcome_id = nullptr;
-	outcome_active = nullptr;
-	outcome_team = nullptr;
-	outcome_probabilities = nullptr;
-	outcome_odds = nullptr;
-	outcome_result = nullptr;
-	outcome_void_factor = nullptr;
-	outcome_dead_heat_factor = nullptr;
-
+	
 
 	outcome_name = new char*[outcome_number];
 	outcome_id = new int[outcome_number];
@@ -2548,22 +2628,7 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 
 	}
 
-	tournament_name = nullptr;;
-	category_name = nullptr;;
-	season_name = nullptr;;
-	sport_name = nullptr;
-	event_away_name = nullptr;
-	event_home_name = nullptr;
-	event_match_time = nullptr;
-	event_remaining_time = nullptr;
-	event_remaining_time_in_period = nullptr;;
-	event_score = nullptr;
-	event_set_scores = nullptr;;
-	event_game_score = nullptr;
-	event_match_status_description = nullptr;
-	summary = nullptr;
-	specifier = nullptr;
-	specifier_value = nullptr;
+
 
 
 
@@ -2601,20 +2666,43 @@ Bet::Bet(Line* line, int  bet_outcome_id, float bet_odd) {
 	if (place_odd < accept_odd) status = -7;
 	setHistoryData();
 }
+
 string Bet::getCatKey() {
-	if (type_radar == 0 || type_radar == 1) {
-		return "e" + to_string(event_id);
+	if (key.length() == 0) {
+		//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season(tournament): //4 sr:race_tournament://5 vf:match 6 //vf:tournament:
+		switch (type_radar) {
+
+		case 0:
+			key = "0" + to_string(event_id);
+			break;
+
+		case 1:
+			key = "1" + to_string(event_id);
+			break;
+
+		case 2:
+			key = "2" + to_string(simple_id);
+			break;
+
+		case 3:
+			key = "3" + to_string(tournament_id);
+			break;
+
+		case 4:
+			key = "4" + to_string(tournament_id);
+			break;
+
+		case 5:
+			key = "5" + to_string(event_id);
+			break;
+
+		case 6:
+			key = "6" + to_string(tournament_id);
+			break;
+
+		}
 	}
-	else if (type_radar == 3 || type_radar == 4) {
-		return "t" + to_string(tournament_id);
-	}
-	else if (type_radar == 2) {
-		return "s" + to_string(simple_id);
-	}
-	else {
-		cout << "Something wrong with this Bet: " << name << " " << id << endl;
-		return "";
-	}
+	return  key;
 }
 string Bet::getCompoundKey() {
 	ostringstream key_oss;
@@ -2837,7 +2925,7 @@ public:
 		outright_create = false;
 		outright_send = false;
 		outright_message = nullptr;
-		plus = 0;
+		plus = "";
 		plus_request_id = 0;
 		handshake_message = nullptr;
 		plus_message = nullptr;
@@ -2929,7 +3017,7 @@ public:
 	atomic_int64_t last_message_queue_socket;
 	atomic_int64_t last_bet_message_queue;
 	atomic_int64_t last_bet_message_queue_socket;
-	int plus;
+	string plus;
 	int plus_request_id;
 	std::atomic<bool> plus_create;
 	std::atomic<bool> plus_send;
@@ -3695,17 +3783,24 @@ bool webSocket::wsProcessClientMessage(int clientID, unsigned char opcode, strin
 		if (dataLength > 10 && data.substr(0, 10) == "extralines") {
 			response = 0;
 			Base64Decode((char*)((char*)data.c_str() + 10), &recv_buf, &size);
-			int event_id;
+			//int event_id;
 			int request_id;
+			char* event_key = new char[48];
+
 			recv_offset = 0;
-			if (readInteger((char*)recv_buf, recv_offset, &event_id, 4, size) == -1) response = -1; else
+			//if (readInteger((char*)recv_buf, recv_offset, &event_id, 4, size) == -1) response = -1; else
+			if (readString((char*)recv_buf, recv_offset, event_key, size) == -1)  response = -1; else
 				if (readInteger((char*)recv_buf, recv_offset, &request_id, 1, size) == -1) response = -1;
-			if (response == 0 && event_id != 0 && event_id < MAX_EVENTS && events_id[event_id] != nullptr && wsclient->plus_send == false && wsclient->plus_create == false) {
+			//if (readString((char*)recv_buf, recv_offset, reg_buf, size) == -1) { response = -1; break; }
+
+			if (response == 0 && wsclient->plus_send == false && wsclient->plus_create == false && wsclient->plus.length() == 0 ) {
 				wsclient->plus_request_id = request_id;
-				wsclient->plus = event_id;
+				wsclient->plus = string(event_key);
+				
 				wsclient->plus_create = true;
 			}
-
+			delete[] event_key;
+			
 			if (recv_buf != nullptr) delete[] recv_buf;
 		}
 		else
@@ -4036,7 +4131,7 @@ bool webSocket::wsProcessClientHandshake(int clientID, char *buffer) {
 					key_end = j + 4;
 					if (wsClients[clientID]->https_buffer != nullptr) delete[] wsClients[clientID]->https_buffer; wsClients[clientID]->https_buffer = nullptr;
 					wsClients[clientID]->https_buffer = new char[MAX_HTTPS_READ_BUFFER];
-					if (key_end < buffer_len) strcpy(wsClients[clientID]->https_buffer, (char*)((char*)buffer + key_end));
+					if (key_end < buffer_len)std::strcpy(wsClients[clientID]->https_buffer, (char*)((char*)buffer + key_end));
 					else wsClients[clientID]->https_buffer[0] = 0;
 					//wsClients[clientID]->https_status = 1;
 					wsClients[clientID]->https_buffer_length = content_length;
@@ -4758,7 +4853,7 @@ void webSocket::startServer(int port) {
 									if (type_of_write_data == 8) {
 										//printf("wsClients[%d]->plus=%d clean\r\n", socketIDmap[i], wsClients[socketIDmap[i]]->plus);
 										if (wsClients[socketIDmap[i]]->plus_message != nullptr) delete[] wsClients[socketIDmap[i]]->plus_message;
-										wsClients[socketIDmap[i]]->plus = 0;
+										wsClients[socketIDmap[i]]->plus = "";
 										wsClients[socketIDmap[i]]->plus_message = nullptr;
 										wsClients[socketIDmap[i]]->plus_message_length = 0;
 										wsClients[socketIDmap[i]]->plus_send = false;
@@ -5024,90 +5119,45 @@ void bdelete_line_cat(int, LineCat);
 
 unordered_map<int, unordered_set<int>*> market2lines, bmarket2lines;   // lookup based on market_id
 																	   // lookups based on event_id | tournament_id | simple_id
-unordered_map<int, unordered_set<int>*> event2lines, bevent2lines;
-unordered_map<int, unordered_set<int>*> tourn2lines, btourn2lines;
-unordered_map<int, unordered_set<int>*> simple2lines, bsimple2lines;
+unordered_map<string, unordered_set<int>*> event2lines, bevent2lines;
+//unordered_map<string, unordered_set<int>*> tourn2lines, btourn2lines;
+//unordered_map<int, unordered_set<int>*> simple2lines, bsimple2lines;
 unordered_map<string, int> compound2line_index, bcompound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
 																		 // whenever a new Line is created call this function to update reverse lookup tables
-void insert_line(Line& line, const int line_index) {
-	//	bool DEBUG_OUTPUT = false;
-	int cat_id;
-	string compound_key;
-	string cat_name;
-
-
-
+void insert_line(Line* line, const int line_index) {
 	// hash table for case1: market_id. for all Line categories we update market2lines
-	const int market_id = line.market_id;
+	const int market_id = line->market_id;
 	auto it = market2lines.find(market_id);   // market_id is the key
 	if (it == market2lines.end()) {   // key not found, we are seeing this market_id the first time.
 		market2lines[market_id] = new unordered_set<int>();  // so create an empty vector
 	}
 	market2lines[market_id]->insert(line_index);   // insert new line's index to the set
-
-												   // now let's determine the category and the related lookup tables that will be updated
-	unordered_map<int, unordered_set<int>*>* cat2lines;
-	if (line.event_id > 0) {
-		cat_id = line.event_id;
-		cat_name = "EVENT";
-		cat2lines = &event2lines;
-		//if (rand() % 100 != 0) DEBUG_OUTPUT = false;   // only output 1/100 of these lines
+    auto cat_it = event2lines.find(line->getCatKey());   // cat_id is the key
+	if (cat_it == event2lines.end()) {   // key not found, we are seeing this cat_id the first time.
+		event2lines[line->getCatKey()] = new unordered_set<int>();  // so create an empty set
 	}
-	else if (line.tournament_id > 0) {
-		cat_id = line.tournament_id;
-		cat_name = "TOURNAMENT";
-		cat2lines = &tourn2lines;
-	}
-	else if (line.simple_id > 0) {
-		cat_id = line.simple_id;
-		cat_name = "SIMPLE";
-		cat2lines = &simple2lines;
-	}
-	else {
-		cout << "Something wrong with this line: " << line.name << endl;
-		return;
-	}
-
-	// update hash table for cases 2,3,4:  event, tournament or simple
-	auto cat_it = cat2lines->find(cat_id);   // cat_id is the key
-	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
-		(*cat2lines)[cat_id] = new unordered_set<int>();  // so create an empty set
-	}
-	(*cat2lines)[cat_id]->insert(line_index);   // insert new line to the set
-
-												/*if (DEBUG_OUTPUT) {
-												cout << "New line for " << cat_name << "=" << cat_id << endl;
-												cout << "\tTotal lines: " << (*cat2lines)[cat_id]->size() << endl;
-												}*/
-
-												// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
-												// let's first build our key
-
-	compound_key = line.getCompoundKey();
-	compound2line_index[compound_key] = line_index;   // insert new line's index as value
-													  /*
-													  if (DEBUG_OUTPUT) {
-													  cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
-													  }
-
-
-													  if (line.tournament_id > 0) {  // let's pause for checking
-													  cout << "Finally a tournament related line. Hit enter to continue ...";
-													  getchar();
-													  }
-
-													  if ((lines_l + 1) % 50 == 0) {
-													  cout << "TOTAL LINES = " << (lines_l + 1) << endl;
-													  }
-													  if ((lines_l + 1) % 1000 == 0) {
-													  test_delete();
-													  cout << "Hit enter to continue..." << endl;
-													  // getchar();
-													  }
-													  */
-
+	event2lines[line->getCatKey()]->insert(line_index);   // insert new line to the set
+	compound2line_index[line->getCompoundKey()] = line_index;   // insert new line's index as value
 	return;
 }
+void binsert_line(Line* line, const int line_index) {
+	// hash table for case1: market_id. for all Line categories we update market2lines
+	const int market_id = line->market_id;
+	auto it = bmarket2lines.find(market_id);   // market_id is the key
+	if (it == bmarket2lines.end()) {   // key not found, we are seeing this market_id the first time.
+		bmarket2lines[market_id] = new unordered_set<int>();  // so create an empty vector
+	}
+	bmarket2lines[market_id]->insert(line_index);   // insert new line's index to the set
+	auto cat_it = bevent2lines.find(line->getCatKey());   // cat_id is the key
+	if (cat_it == bevent2lines.end()) {   // key not found, we are seeing this cat_id the first time.
+		bevent2lines[line->getCatKey()] = new unordered_set<int>();  // so create an empty set
+	}
+	bevent2lines[line->getCatKey()]->insert(line_index);   // insert new line to the set
+	bcompound2line_index[line->getCompoundKey()] = line_index;   // insert new line's index as value
+	return;
+}
+
+/*
 void test_delete() {
 	auto t1 = chrono::high_resolution_clock::now();
 	auto t2 = chrono::high_resolution_clock::now();
@@ -5190,7 +5240,6 @@ void delete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 	cat2lines->erase(cat_id);
 	return;
 }
-
 // Just construct a Line object as in insert and call this function with that Line object 
 // to delete the original one from hash tables 
 void delete_line(Line &line) {
@@ -5245,89 +5294,6 @@ void delete_line(Line &line) {
 	// cout << "Deleted: " << line_it->first << " " << line_it->second << endl;
 	compound2line_index.erase(line_it);
 	// compound2line_index.erase(line.getCompoundKey());
-	return;
-}
-
-
-
-
-void binsert_line(Line& line, const int line_index) {
-	//bool DEBUG_OUTPUT = false;
-	int cat_id;
-	string compound_key;
-	string cat_name;
-
-
-
-	// hash table for case1: market_id. for all Line categories we update bmarket2lines
-	const int market_id = line.market_id;
-	auto it = bmarket2lines.find(market_id);   // market_id is the key
-	if (it == bmarket2lines.end()) {   // key not found, we are seeing this market_id the first time.
-		bmarket2lines[market_id] = new unordered_set<int>();  // so create an empty vector
-	}
-	bmarket2lines[market_id]->insert(line_index);   // insert new line's index to the set
-
-													// now let's determine the category and the related lookup tables that will be updated
-	unordered_map<int, unordered_set<int>*>* cat2lines;
-	if (line.event_id > 0) {
-		cat_id = line.event_id;
-		cat_name = "EVENT";
-		cat2lines = &bevent2lines;
-		//if (rand() % 100 != 0) DEBUG_OUTPUT = false;   // only output 1/100 of these lines
-	}
-	else if (line.tournament_id > 0) {
-		cat_id = line.tournament_id;
-		cat_name = "TOURNAMENT";
-		cat2lines = &btourn2lines;
-	}
-	else if (line.simple_id > 0) {
-		cat_id = line.simple_id;
-		cat_name = "SIMPLE";
-		cat2lines = &bsimple2lines;
-	}
-	else {
-		cout << "Something wrong with this line: " << line.name << endl;
-		return;
-	}
-
-	// update hash table for cases 2,3,4:  event, tournament or simple
-	auto cat_it = cat2lines->find(cat_id);   // cat_id is the key
-	if (cat_it == cat2lines->end()) {   // key not found, we are seeing this cat_id the first time.
-		(*cat2lines)[cat_id] = new unordered_set<int>();  // so create an empty set
-	}
-	(*cat2lines)[cat_id]->insert(line_index);   // insert new line to the set
-
-												/*if (DEBUG_OUTPUT) {
-												cout << "New line for " << cat_name << "=" << cat_id << endl;
-												cout << "\tTotal lines: " << (*cat2lines)[cat_id]->size() << endl;
-												}*/
-
-												// update hash table for cases 5,6,7:  market_id + (event_id | tournament_id | simple_id) + specifiers_value 
-												// let's first build our key
-
-	compound_key = line.getCompoundKey();
-	bcompound2line_index[compound_key] = line_index;   // insert new line's index as value
-													   /*
-													   if (DEBUG_OUTPUT) {
-													   cout << "\t" << "Key for " << line.name << ": " << compound_key << endl;
-													   }
-
-
-													   if (line.tournament_id > 0) {  // let's pause for checking
-													   cout << "Finally a tournament related line. Hit enter to continue ...";
-													   getchar();
-													   }
-
-													   if ((lines_l + 1) % 50 == 0) {
-													   cout << "TOTAL LINES = " << (lines_l + 1) << endl;
-													   }
-													   if ((lines_l + 1) % 1000 == 0) {
-													   btest_delete();
-													   cout << "Hit enter to continue..." << endl;
-													   // getchar();
-													   }
-													   */
-
 	return;
 }
 void btest_delete() {
@@ -5412,7 +5378,6 @@ void bdelete_line_cat(int cat_id, LineCat cat = LC_EVENT) {
 	cat2lines->erase(cat_id);
 	return;
 }
-
 // Just construct a Line object as in insert and call this function with that Line object 
 // to delete the original one from hash tables 
 void bdelete_line(Line &line) {
@@ -5470,7 +5435,7 @@ void bdelete_line(Line &line) {
 	return;
 }
 
-
+*/
 
 
 
@@ -7633,14 +7598,14 @@ void calculationBet(Bet* bet, Bet* _bet, int type) {
 			if (bet->outcome_result[i] == 1 && bet->outcome_name[i] != nullptr) {
 
 				//bet->summary = new char[strlen(bet->outcome_name[i]) + 1];
-				if (l == 0) strcpy(summary, bet->outcome_name[i]);
+				if (l == 0)std::strcpy(summary, bet->outcome_name[i]);
 				else { strcat(summary, " , "); strcat(summary, bet->outcome_name[i]); }
 				l++;
 			}
 			bet->outcome_dead_heat_factor[i] = _bet->outcome_dead_heat_factor[j];
 
 		}
-		if (l > 0) { bet->summary = new char[strlen(summary) + 1]; strcpy(bet->summary, summary); }
+		if (l > 0) { bet->summary = new char[strlen(summary) + 1];std::strcpy(bet->summary, summary); }
 
 
 
@@ -7649,7 +7614,7 @@ void calculationBet(Bet* bet, Bet* _bet, int type) {
 			if (bet->outcome_result[bet->selected_outcome_id] == 0 && bet->outcome_void_factor[bet->selected_outcome_id] == 1) {
 				bet->settlement_odd = 1;
 				if (bet->summary == nullptr) {
-					strcpy(summary, "Returned");  bet->summary = new char[strlen(summary) + 1]; strcpy(bet->summary, summary);
+					strcpy(summary, "Returned");  bet->summary = new char[strlen(summary) + 1];std::strcpy(bet->summary, summary);
 				}
 			}
 			else
@@ -7761,6 +7726,7 @@ int addToReplayList(int, int);
 
 int main() {
 
+
 	hThread3 = new HANDLE[20];
 	dwThreadID3 = new DWORD[20];
 	hThread9 = new HANDLE[20];
@@ -7848,8 +7814,8 @@ int main() {
 
 	*/
 
-	for (int i = 0; i < MAX_EVENTS; i++) events_id[i] = bevents_id[i] = nullptr;
-	for (int i = 0; i < MAX_EVENTS; i++) events_show[i] = bevents_show[i] = nullptr;
+	
+	for (int i = 0; i < EVENTS_LENTGH; i++) events_show[i] = bevents_show[i] = nullptr;
 	for (int i = 0; i < MAX_LINES; i++) lines_id[i] = blines_id[i] = nullptr;
 	for (int i = 0; i < MAX_TOURNAMENTS; i++) tournaments_id[i] = btournaments_id[i] = nullptr;
 	for (int i = 0; i < MAX_TOURNAMENTS; i++) seasons_id[i] = bseasons_id[i] = nullptr;
@@ -7900,6 +7866,14 @@ int main() {
 	return 0;
 #endif
 	loadMarketsFromDB();
+	//getVariantMarket(markets_id[534][0], "pre:markettext:46330");
+
+
+	/*for (int j = 0; j < markets_l; j++) { if(markets[j].id > 758 && markets[j].id < 797 && markets[j].variable_text != nullptr ) deleteMarketFromDB(&markets[j]); }
+	_getch();
+	return 0;*/
+	
+
 
 
 
@@ -8256,6 +8230,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	int write_count_file = 0;
 	//bool DEBUG_OUTPUT = false;
 	int event_id = 0;
+	string key = "";
 	int type_radar = 0;
 	int status = 0;
 	int betstop_reason = 0;
@@ -8413,21 +8388,38 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			if (DEBUG_OUTPUT == true) std::printf("fixture_change\r\n");
 			type_radar = 0;
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;// { printf("\r\n\r\n%s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]); continue; }
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-			if (type_radar == 1)
+			event_id = 0;
+		//	if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;// { printf("\r\n\r\n%s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]); continue; }
+
+			
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{ event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 0; }
+			else if(strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
 			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (events_id[event_id] != nullptr && tournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (events_id[event_id] == nullptr && tournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (events_id[event_id] == nullptr && tournaments_id[event_id] == nullptr) {
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0) {
+			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{ type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				 key ="1"+ string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (events_id.find(key) != events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (events_id.find(key) == events_id.end() && event_id < MAX_TOURNAMENTS && tournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (events_id.find(key) == events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					tournaments[tournaments_l].id = event_id;
 					tournaments[tournaments_l].type_radar = 1;
 					tournaments[tournaments_l].season_id = 0;
 					tournaments[tournaments_l].simple_id = 0;
-					if (getTournament(&tournaments[tournaments_l], false) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&tournaments[tournaments_l], false) == -1) {
 
 						tournaments[tournaments_l].id = 0; tournaments[tournaments_l].type_radar = 0;
 						events[events_l].id = event_id; events[events_l].type_radar = 1;
@@ -8439,25 +8431,18 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 					else { type_radar = 4;  tournaments_l++; }
 				}
-				if (type_radar == -1) continue;
+				if (type_radar == -1) continue; }
+
+			else { std::printf("Unknown type radar in fixture_change =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
 
 
-			}
-
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
 			//	if(type_radar == 1) printf("fixture_message= = %s\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
 
-			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament:
+			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament://5 vf:match //6 sr:season: 7 //vf:tournament:
 
-			if (event_id == 0) {
-				std::printf("fixture change error event_id =0 message = %s\r\n", doc.first_node()->first_attribute("event_id")->value());
-				continue;
-			}
 
-			if (DEBUG_OUTPUT == true) printf("fixture_change type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) std::printf("fixture_change type_radar=%d\r\n", type_radar);
+			key = to_string(type_radar) + to_string(event_id);
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -8643,16 +8628,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				std::printf("fixture_change succes for race_tournamnet id=%d\r\n", event_id);
 
 			}
-			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
-				if (events_id[event_id] == nullptr) {
+			if (type_radar == 0 || type_radar == 1 || type_radar == 5) {
+				//	if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
+				if (events_id.find(key) == events_id.end()) {
 					std::printf("Event not found in fixture_change. %d\r\n", event_id);
 					events[events_l].id = event_id; events[events_l].type_radar = type_radar;
 					ret_fixture = getEventFixture(&events[events_l]);
 					if (ret_fixture == -1) { std::printf("fixture_change error. %d\r\n", event_id); events[events_l].id = 0; events[events_l].type_radar = 0; continue; }
 					else events_l++;
 				}
-				else ret_fixture = getEventFixture(events_id[event_id]);
+				else ret_fixture = getEventFixture(events_id[key]);
 
 				if (ret_fixture == -1) { std::printf("fixtur_change error. %d\r\n", event_id);  continue; }
 
@@ -8686,17 +8671,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 					delete[] zip_message;
 					zip_message = nullptr;
-					if (DEBUG_OUTPUT == true) printf("new simple tournament  in fixture change radarmessagehandler\r\n");
+					if (DEBUG_OUTPUT == true) std::printf("new simple tournament  in fixture change radarmessagehandler\r\n");
 
 
 					t_offset = 0;
 				}
-				std::printf("fixture_change success. event_id=%d \r\n", event_id);
+				std::printf("fixture_change success. event_id=%d key=%s\r\n", event_id, key);
+                
+				_event = events_id[key];
 
-
-				if (recovery_state == 0 && events_id[event_id]->status != -1 && events_id[event_id]->bet_stop == 0) {
-					_event = events_id[event_id];
-
+				 if (recovery_state == 0 && _event->status != -1 && _event->bet_stop == 0) {
 					offset = 0;
 					writeInteger(buffer, offset, 0, 1);//request_id
 					writeInteger(buffer, offset, 1, 2);
@@ -8817,8 +8801,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					else writeInteger(buffer, offset, _event->booked, 1);
 
 
-					if (event2lines.find(_event->id) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
-					else writeInteger(buffer, offset, event2lines[_event->id]->size(), 2);
+					if (event2lines.find(_event->getCatKey()) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
+					else writeInteger(buffer, offset, event2lines[_event->getCatKey()]->size(), 2);
 
 
 					//retry_offset = offset;
@@ -8827,8 +8811,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					writeInteger(buffer, offset, event_lines_l, 2);
 
 
-					if (DEBUG_OUTPUT == true)
-						printf("fixture radarmessagehandler\r\n");
+					if (DEBUG_OUTPUT == true) std::printf("fixture radarmessagehandler\r\n");
 
 					zip_len = gzip(buffer, offset, zip_message, 2);
 					//delete[] buffer;
@@ -8849,8 +8832,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					}
 					delete[] zip_message;
 					zip_message = nullptr;
-					if (DEBUG_OUTPUT == true)
-						printf("fixture end radarmessagehandler\r\n");
+					if (DEBUG_OUTPUT == true) std::printf("fixture end radarmessagehandler\r\n");
 
 
 
@@ -8869,26 +8851,36 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			type_radar = 0;
 			event_id = 0;
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v')  { printf("\r\n\r\n%s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]); continue; }
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-
-			//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-
-		
-
-			if (type_radar == 1)
-			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (events_id[event_id] != nullptr && tournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (events_id[event_id] == nullptr && tournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (events_id[event_id] == nullptr && tournaments_id[event_id] == nullptr) {
+			//printf("\r\n\r\n%s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]); continue;
+			
+			
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 0;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5; 
+			 continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0) 
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{	type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				key = "1"+string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (events_id.find(key) != events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (events_id.find(key) == events_id.end() && event_id < MAX_TOURNAMENTS && tournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (events_id.find(key) == events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					tournaments[tournaments_l].id = event_id;
 					tournaments[tournaments_l].type_radar = 1;
 					tournaments[tournaments_l].season_id = 0;
 					tournaments[tournaments_l].simple_id = 0;
-					if (getTournament(&tournaments[tournaments_l], false) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&tournaments[tournaments_l], false) == -1) {
 
 						tournaments[tournaments_l].id = 0; tournaments[tournaments_l].type_radar = 0;
 						events[events_l].id = event_id; events[events_l].type_radar = 1;
@@ -8901,18 +8893,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					else { type_radar = 4;  tournaments_l++; }
 				}
 				if (type_radar == -1) continue;
-
-
 			}
 
+			else { std::printf("Unknown type radar in odds_change =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
+			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament://5 vf:match //6 sr:season: 7 //vf:tournament:
 
+			key = to_string(type_radar) + to_string(event_id);
 
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament
 			_line->type_radar = type_radar;
+			_line->key = key;
+		
 			//if (event_id == 14122909|| event_id == 14093243) printf("\r\r\n\nodds_message =  %s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
 
 
@@ -9609,30 +9599,30 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
-						auto it = compound2line_index.find(_line[0].getCompoundKey());
+						auto it = compound2line_index.find(_line->getCompoundKey());
 						if (DEBUG_OUTPUT == true) {
-							printf(_line[0].getCompoundKey().c_str());
+							printf(_line ->getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == compound2line_index.end()) {
 							if (DEBUG_OUTPUT == true) printf("new line add");
-							_line[0].id = lines_l;
+							_line->id = lines_l;
 							if (DEBUG_OUTPUT == true) printf("new line add1");
-							lines[lines_l] = _line[0];
-							lines_id[_line[0].id] = &lines[lines_l];
+							lines[lines_l] = (*_line);
+							lines_id[_line->id] = &lines[lines_l];
 							if (DEBUG_OUTPUT == true) printf("new line add2");
-							insert_line(_line[0], lines_l);
+							insert_line(_line, lines_l);
 							if (DEBUG_OUTPUT == true) printf("new line add3");
 							lines_l++;
-							categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
+							categories_id[_tournament->category_id]->outrights_id.push_back(_line->id);
 							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
 							if (DEBUG_OUTPUT == true) printf("line update");
-							_line[0].id = it->second;
+							_line->id = it->second;
 							if (DEBUG_OUTPUT == true) printf("line update1");
-							lines[it->second] = _line[0];
+							lines[it->second] = (*_line);
 							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
@@ -10443,30 +10433,30 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-						auto it = compound2line_index.find(_line[0].getCompoundKey());
+						auto it = compound2line_index.find(_line ->getCompoundKey());
 						if (DEBUG_OUTPUT == true) {
-							printf(_line[0].getCompoundKey().c_str());
+							printf(_line ->getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == compound2line_index.end()) {
 							if (DEBUG_OUTPUT == true) printf("new line add");
-							_line[0].id = lines_l;
+							_line->id = lines_l;
 							if (DEBUG_OUTPUT == true) printf("new line add1");
-							lines[lines_l] = _line[0];
-							lines_id[_line[0].id] = &lines[lines_l];
+							lines[lines_l] = (*_line);
+							lines_id[_line->id] = &lines[lines_l];
 							if (DEBUG_OUTPUT == true) printf("new line add2");
-							insert_line(_line[0], lines_l);
+							insert_line(_line, lines_l);
 							if (DEBUG_OUTPUT == true) printf("new line add3");
 							lines_l++;
-							categories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
+							categories_id[_tournament->category_id]->outrights_id.push_back(_line->id);
 							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
 							if (DEBUG_OUTPUT == true) printf("line update");
-							_line[0].id = it->second;
+							_line->id = it->second;
 							if (DEBUG_OUTPUT == true) printf("line update1");
-							lines[it->second] = _line[0];
+							lines[it->second] = (*_line);
 							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
@@ -10534,13 +10524,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				}
 				if (recovery_state == 0) writeInteger(buffer, retry_offset, event_lines_l, 2);
 			}
-			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) {
-					std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id);
-					//printf("\r\r\n\nodds_message =  %s\r\n\r\n", AMQP_message[(process_index - 1) % AMQP_QUEUE]);
-					continue;
-				}
-				if (events_id[event_id] == nullptr) {
+			if (type_radar == 0 || type_radar == 1 || type_radar == 5) {
+				  if (events_id.find(key) == events_id.end()) {
 					std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
 					events[events_l].id = event_id;
 					events[events_l].type_radar = type_radar;
@@ -10585,22 +10570,24 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						t_offset = 0;
 					}
-
-
-
-
-
-
 					events_l++;
-
+					
 				}
-				_event = events_id[event_id];
+				
+				  _event = events_id[key];
+
+				if (DEBUG_OUTPUT == true) std::printf("event from hash _event->id=%d\r\n" , _event->id);
+
 				if (_event->show == 0) {
 					events_show[events_show_l] = _event; events_show_l++;
 				}
 				_event->show = 1;
+
+				if (DEBUG_OUTPUT == true) std::printf("event from hash _event->tournament_id=%d\r\n", _event->tournament_id);
+                
 				//_event->bet_stop = 0;
 
+				//if (DEBUG_OUTPUT == true) std::printf("odds_change _line->event_key=%s\r\n", _line->event_key);
 
 				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
@@ -10867,7 +10854,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 						for (xml_node<> * period_score = period_scores->first_node("period_score"); period_score; period_score = period_score->next_sibling())
 						{
-							if (j == 0) strcpy(set_scores, period_score->first_attribute("home_score")->value());
+							if (j == 0)std::strcpy(set_scores, period_score->first_attribute("home_score")->value());
 							if (j > 0) {
 								std::strcat(set_scores, "-");
 								std::strcat(set_scores, period_score->first_attribute("home_score")->value());
@@ -10880,7 +10867,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 						//printf(set_scores);
 						//printf("\r\n");
 						if (_event->set_scores != nullptr) { delete[] _event->set_scores; _event->set_scores = nullptr; }
-						_event->set_scores = new char[strlen(set_scores) + 1]; strcpy(_event->set_scores, set_scores);
+						_event->set_scores = new char[strlen(set_scores) + 1];std::strcpy(_event->set_scores, set_scores);
 					}
 
 
@@ -11112,8 +11099,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 					}
 
-					if (event2lines.find(_event->id) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
-					else writeInteger(buffer, offset, event2lines[_event->id]->size(), 2);
+					if (event2lines.find(_event->getCatKey()) == event2lines.end()) writeInteger(buffer, offset, 0, 2);
+					else writeInteger(buffer, offset, event2lines[_event->getCatKey()]->size(), 2);
 					retry_offset = offset;
 					writeInteger(buffer, offset, 0, 2);
 					//offset += 2;
@@ -11358,7 +11345,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									   _line->outcome_team = nullptr;
 
 
-									   if (DEBUG_OUTPUT == true) printf("start parse market4\r\n");
+									   if (DEBUG_OUTPUT == true) std::printf("start parse market4\r\n");
 									   if (_line->name != nullptr) delete[] _line->name;
 									   _line->name = new char[strlen(_market->name) + 1];
 									   std::strcpy(_line->name, _market->name);
@@ -11370,9 +11357,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 									   }
 
 
-									   replace(_line->name, "$competitor1", events_id[_line->event_id]->home_name);
-									   if (_event->away_name != nullptr) replace(_line->name, "$competitor2", events_id[_line->event_id]->away_name);
-									   if (_event->type_radar > 0) replace(_line->name, "$event", events_id[_line->event_id]->home_name);
+									   replace(_line->name, "$competitor1", _event->home_name);
+									   if (_event->away_name != nullptr) replace(_line->name, "$competitor2", _event->away_name);
+									   if (_event->type_radar > 0) replace(_line->name, "$event", _event->home_name);
 
 									   for (xml_node<> * outcome_node = market_node->first_node("outcome"); outcome_node; outcome_node = outcome_node->next_sibling()) {
 
@@ -11410,7 +11397,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   outcome_number++;
 
 									   }
-									   if (DEBUG_OUTPUT == true) printf("start parse market3\r\n");
+									   if (DEBUG_OUTPUT == true) std::printf("start parse market3\r\n");
 
 
 
@@ -11480,9 +11467,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
 												   }
 
-												   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-												   if (_event->away_name != nullptr) replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+												   replace(_line->outcome_name[i], "$competitor1", _event->home_name);
+												   if (_event->away_name != nullptr) replace(_line->outcome_name[i], "$competitor2", _event->away_name);
+												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name);
 
 
 
@@ -11523,12 +11510,12 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 0 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
 
 
-													   if (getCompetitor(competitors_id[events_id[_line->event_id]->away_id]) == -1) {
-														   std::printf(" Error get competitors away_id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
+													   if (getCompetitor(competitors_id[_event->away_id]) == -1) {
+														   std::printf(" Error get competitors away_id=%d \r\n", _event->away_id); //continue;
 													   }
 
-													   if (getCompetitor(competitors_id[events_id[_line->event_id]->home_id]) == -1) {
-														   std::printf(" Error get competitors home_id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
+													   if (getCompetitor(competitors_id[_event->home_id]) == -1) {
+														   std::printf(" Error get competitors home_id=%d \r\n", _event->home_id); //continue;
 													   }
 
 													   if (players_id[_line->outcome_id[i]] == nullptr) {
@@ -11545,19 +11532,19 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												   }
 
 												   if (players_id[_line->outcome_id[i]] != nullptr && _line->outcome_team[i] == 0) {
-													   if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;  
-													   else if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->home_id) _line->outcome_team[i] = 1;  else {
-														   printf("eror competitor_id in player  player_id=%d  event_id=%d  home_id=%d  away_id=%d run getCompetitor\r\n", _line->outcome_id[i], _line->event_id, events_id[_line->event_id]->home_id, events_id[_line->event_id]->away_id);
-														   if (getCompetitor(competitors_id[events_id[_line->event_id]->away_id]) == -1) {
-															   std::printf(" Error get competitors away_id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
+													   if (players_id[_line->outcome_id[i]]->competitor_id ==_event->away_id) _line->outcome_team[i] = 2;  
+													   else if (players_id[_line->outcome_id[i]]->competitor_id == _event->home_id) _line->outcome_team[i] = 1;  else {
+														   std::printf("eror competitor_id in player  player_id=%d  event_id=%d  home_id=%d  away_id=%d run getCompetitor\r\n", _line->outcome_id[i], _line->event_id, _event->home_id, _event->away_id);
+														   if (getCompetitor(competitors_id[_event->away_id]) == -1) {
+															   std::printf(" Error get competitors away_id=%d \r\n", _event->away_id); //continue;
 														   }
 
-														   if (getCompetitor(competitors_id[events_id[_line->event_id]->home_id]) == -1) {
-															   std::printf(" Error get competitors away_id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
+														   if (getCompetitor(competitors_id[_event->home_id]) == -1) {
+															   std::printf(" Error get competitors away_id=%d \r\n", _event->home_id); //continue;
 														   }
 
 
-														   if (players_id[_line->outcome_id[i]]->competitor_id == events_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
+														   if (players_id[_line->outcome_id[i]]->competitor_id == _event->away_id) _line->outcome_team[i] = 2;
 														   else  _line->outcome_team[i] = 1; 
 													   }
 												   }
@@ -11565,16 +11552,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   if (players_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 2) {
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-													   if (events_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
-														   std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", events_id[_line->event_id]->away_id, _line->event_id);
+													   if (_event->away_id >= MAX_COMPETITORS) {
+														   std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", _event->away_id, _line->event_id);
 														   continue;
 													   }
 
-													   if (competitors_id[events_id[_line->event_id]->away_id] == nullptr) {
-														   std::printf("Competitor id %d not found in team 2 run. getCompetitor\r\n", events_id[_line->event_id]->away_id);
-														   competitors[competitors_l].id = events_id[_line->event_id]->away_id;
+													   if (competitors_id[_event->away_id] == nullptr) {
+														   std::printf("Competitor id %d not found in team 2 run. getCompetitor\r\n", _event->away_id);
+														   competitors[competitors_l].id = _event->away_id;
 														   if (getCompetitor(&competitors[competitors_l]) == -1) {
-															   std::printf(" Error get competitors id=%d \r\n", events_id[_line->event_id]->away_id); //continue;
+															   std::printf(" Error get competitors id=%d \r\n", _event->away_id); //continue;
 														   }
 														   else competitors_l++;
 
@@ -11584,16 +11571,16 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 												   if (players_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 1) {
 													   std::printf("Player5 id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-													   if (events_id[_line->event_id]->home_id >= MAX_COMPETITORS) {
-														   std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", events_id[_line->event_id]->home_id, _line->event_id);
+													   if (_event->home_id >= MAX_COMPETITORS) {
+														   std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", _event->home_id, _line->event_id);
 														   continue;
 													   }
 
-													   if (competitors_id[events_id[_line->event_id]->home_id] == nullptr) {
-														   std::printf("Competitor id %d not found in team 1 run. getCompetitor\r\n", events_id[_line->event_id]->home_id);
-														   competitors[competitors_l].id = events_id[_line->event_id]->home_id;
+													   if (competitors_id[_event->home_id] == nullptr) {
+														   std::printf("Competitor id %d not found in team 1 run. getCompetitor\r\n", _event->home_id);
+														   competitors[competitors_l].id = _event->home_id;
 														   if (getCompetitor(&competitors[competitors_l]) == -1) {
-															   std::printf(" Error get competitors id=%d \r\n", events_id[_line->event_id]->home_id); //continue;
+															   std::printf(" Error get competitors id=%d \r\n", _event->home_id); //continue;
 														   }
 														   else competitors_l++;
 
@@ -11671,9 +11658,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
 														   }
 
-														   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-														   replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+														   replace(_line->outcome_name[i], "$competitor1", _event->home_name);
+														   replace(_line->outcome_name[i], "$competitor2", _event->away_name);
+														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name);
 
 
 
@@ -11756,9 +11743,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 															   if (j == _line->variant) continue;
 															   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
 														   }
-														   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-														   replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+														   replace(_line->outcome_name[i], "$competitor1", _event->home_name);
+														   replace(_line->outcome_name[i], "$competitor2", _event->away_name);
+														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name);
 													   }
 													   else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 												   }
@@ -11799,7 +11786,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   std::printf("Eror. Outcome name not found. market_id=%d _line->outcome_id[i]=%d\r\n", _line->market_id, _line->outcome_id[i]);
 													   _line->outcome_name[i] = new char[2];
 													   std::strcpy(_line->outcome_name[i], " ");
-													   if (_market->variant > -1) printf("_market->variant=%s\r\n", _market->variable_text);
+													   if (_market->variant > -1) std::printf("_market->variant=%s\r\n", _market->variable_text);
 													   if (outcomeNameError == 0) outcomeNameError = 1;
 												   }
 
@@ -11809,9 +11796,9 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 													   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j]);
 												   }
 
-												   replace(_line->outcome_name[i], "$competitor1", events_id[_line->event_id]->home_name);
-												   replace(_line->outcome_name[i], "$competitor2", events_id[_line->event_id]->away_name);
-												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", events_id[_line->event_id]->home_name);
+												   replace(_line->outcome_name[i], "$competitor1", _event->home_name);
+												   replace(_line->outcome_name[i], "$competitor2", _event->away_name);
+												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name);
 
 
 												   //if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
@@ -11841,7 +11828,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 												   if (_line->outcome_team[i] == 2) _line->outcome_name[i] = new char[strlen(players_id[props_player_id]->full_name) + 14 + strlen(_event->away_name)];
 												   else  _line->outcome_name[i] = new char[strlen(players_id[props_player_id]->full_name) + 14 + strlen(_event->home_name)];
 
-												   strcpy(_line->outcome_name[i], players_id[props_player_id]->full_name);
+												  std::strcpy(_line->outcome_name[i], players_id[props_player_id]->full_name);
 												   //strcat(_line->outcome_name[i], " (");
 												   //if (_line->outcome_team[i] == 2) strcat(_line->outcome_name[i], _event->away_name);
 												   //else strcat(_line->outcome_name[i], _event->home_name);
@@ -11878,44 +11865,45 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 										   if (outcomeNameError == 1 && _market->variant > -1) goto outcomeNameError3;
 									   }
-									   if (DEBUG_OUTPUT == true) printf("start parse market6\r\n");
+									   if (DEBUG_OUTPUT == true) std::printf("start parse market6\r\n");
 
-									   if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
+									   if (DEBUG_OUTPUT == true) std::printf("insertLine _line->type ==%d\r\n", _line->type);
 									   if (DEBUG_OUTPUT == true) {
-										   printf(_line[0].getCompoundKey().c_str());
-										   printf("\r\n");
+										   std::printf(_line->getCompoundKey().c_str());
+										   std::printf("\r\n");
 									   }
-									   auto it = compound2line_index.find(_line[0].getCompoundKey());
-									   if (DEBUG_OUTPUT == true) printf("auto it\r\n");
+									   auto it = compound2line_index.find(_line->getCompoundKey());
+									   if (DEBUG_OUTPUT == true) std::printf("auto it\r\n");
 
 									   if (it == compound2line_index.end()) {
-										   if (DEBUG_OUTPUT == true) printf("new line add ");
-										   _line[0].id = lines_l;
-										   if (DEBUG_OUTPUT == true) printf("new line add1 ");
-										   lines[lines_l] = _line[0];
-										   lines_id[_line[0].id] = &lines[lines_l];
-										   if (DEBUG_OUTPUT == true) printf("new line add2 ");
-										   insert_line(_line[0], lines_l);
-										   if (DEBUG_OUTPUT == true) printf("new line add3 ");
+										   if (DEBUG_OUTPUT == true) std::printf("new line add ");
+										   _line->id = lines_l;
+										   if (DEBUG_OUTPUT == true) std::printf("new line add1 ");
+										   lines[lines_l] = (*_line);
+										   lines_id[_line->id] = &lines[lines_l];
+										   if (DEBUG_OUTPUT == true) std::printf("new line add2 ");
+										   insert_line(_line, lines_l);
+
+										   if (DEBUG_OUTPUT == true) std::printf("new line add3 ");
 										   lines_l++;
-										   if (DEBUG_OUTPUT == true) printf("new line add finish\r\n");
+										   if (DEBUG_OUTPUT == true) std::printf("new line add finish\r\n");
 
 									   }
 									   else {
-										   if (DEBUG_OUTPUT == true) printf("line update");
-										   _line[0].id = it->second;
-										   if (DEBUG_OUTPUT == true) printf("line update1");
-										   lines[it->second] = _line[0];
-										   if (DEBUG_OUTPUT == true) printf("line finish\r\n");
+										   if (DEBUG_OUTPUT == true) std::printf("line update");
+										   _line->id = it->second;
+										   if (DEBUG_OUTPUT == true) std::printf("line update1");
+										   lines[it->second] = (*_line);
+										   if (DEBUG_OUTPUT == true) std::printf("line finish\r\n");
 
 										   //printf("Line Update\r\n");
 									   }
 
-									   if (DEBUG_OUTPUT == true) printf("end insertLine _line->type ==%d\r\n", _line->type);
+									   if (DEBUG_OUTPUT == true) std::printf("end insertLine _line->type ==%d\r\n", _line->type);
 
 									   if (recovery_state == 0) {
 
-										   if (DEBUG_OUTPUT == true) printf("write buffer data\r\n");
+										   if (DEBUG_OUTPUT == true) std::printf("write buffer data\r\n");
 
 										   //if (markets_id[_line->market_id][0]->line_type == 0 && events[i].status == 0) continue;
 										   //if (_line->status == 0 || _line->status == -3) continue;
@@ -11946,11 +11934,11 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 										   //for (int j = 0; j < _line->specifier_number; j++) writeString(buffer, offset, _line->specifier_value[j]);
 										   for (j = 0; j < _line->specifier_number; j++) {
 											   if (_line->market_id == 215 && j == 2) {
-												   strcpy(specifier_value, _line->specifier_value[j]); replace_competitor(specifier_value);
+												  std::strcpy(specifier_value, _line->specifier_value[j]); replace_competitor(specifier_value);
 												   writeString(buffer, offset, specifier_value);
 											   }
 											   else    if (_line->market_id == 882 && j == 0) {
-												   strcpy(specifier_value, _line->specifier_value[j]); replace_player(specifier_value);
+												  std::strcpy(specifier_value, _line->specifier_value[j]); replace_player(specifier_value);
 												   writeString(buffer, offset, specifier_value);
 											   }
 											   else  writeString(buffer, offset, _line->specifier_value[j]);
@@ -11972,8 +11960,8 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 				if (_event->status > 0) _event->bet_stop = 0;
 				else  if (_event->status == 0 && _event->bet_stop == 1) {
 					int active_lines_counter = 0;
-					if (event2lines.find(event_id) == event2lines.end()) {}
-					else for (unordered_set<int>::iterator it = event2lines[event_id]->begin(); it != event2lines[event_id]->end(); ++it)
+					if (event2lines.find(_event->getCatKey()) == event2lines.end()) {}
+					else for (unordered_set<int>::iterator it = event2lines[_event->getCatKey()]->begin(); it != event2lines[_event->getCatKey()]->end(); ++it)
 						if (lines[*(it)].status == 1) active_lines_counter++;
 					if (active_lines_counter > 0) _event->bet_stop = 0; else radar_message = false;
 
@@ -11982,7 +11970,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			}
 
-			if (DEBUG_OUTPUT == true) printf("end parse type_radar=%d\r\n", type_radar);
+			if (DEBUG_OUTPUT == true) std::printf("end parse type_radar=%d\r\n", type_radar);
 
 			//bool radar_message = true;
 			//int active_lines_counter = 0;
@@ -12019,7 +12007,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			request_id = -1;
 			if (doc.first_node()->first_attribute("request_id")) request_id = atoi(doc.first_node()->first_attribute("request_id")->value());
 			if (recovery_timestamp_integer == request_id) counter_snapshot++;
-			printf("request_id=%d counter_snapshot=%d recovery_timestamp_integer=%d \r\n", request_id, counter_snapshot, recovery_timestamp_integer);
+			std::printf("request_id=%d counter_snapshot=%d recovery_timestamp_integer=%d \r\n", request_id, counter_snapshot, recovery_timestamp_integer);
 
 
 			if ((counter_snapshot == 2) || (counter_snapshot == 1 && recovery_timestamp == 0)) {
@@ -12056,21 +12044,33 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 			type_radar = 0;
 			event_id = 0;
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-			if (type_radar == 1)
-			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (events_id[event_id] != nullptr && tournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (events_id[event_id] == nullptr && tournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (events_id[event_id] == nullptr && tournaments_id[event_id] == nullptr) {
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+			type_radar = 0;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5; continue; }
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0)
+			{event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{   type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				key = "1"+string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (events_id.find(key) != events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (events_id.find(key) == events_id.end() && event_id < MAX_TOURNAMENTS && tournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (events_id.find(key) == events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					tournaments[tournaments_l].id = event_id;
 					tournaments[tournaments_l].type_radar = 1;
 					tournaments[tournaments_l].season_id = 0;
 					tournaments[tournaments_l].simple_id = 0;
-					if (getTournament(&tournaments[tournaments_l], false) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&tournaments[tournaments_l], false) == -1) {
 
 						tournaments[tournaments_l].id = 0; tournaments[tournaments_l].type_radar = 0;
 						events[events_l].id = event_id; events[events_l].type_radar = 1;
@@ -12083,26 +12083,22 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					else { type_radar = 4;  tournaments_l++; }
 				}
 				if (type_radar == -1) continue;
-
-
 			}
 
+			else { std::printf("Unknown type radar in bet_stop =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
+			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament://5 vf:match //6 sr:season: 7 //vf:tournament:
 
-			//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in clientsprocessthread in bet_stop module%d\r\n", event_id); continue; }
-				if (events_id[event_id] == nullptr) {
+			key = to_string(type_radar) + to_string(event_id);
+
+			if (type_radar == 0 || type_radar == 1 || type_radar == 5) {
+				if (events_id.find(key) == events_id.end()) {
 					std::printf("Event not found in bet_stop. event_id=%d type_radar=%d\r\n", event_id, type_radar); continue;
 				}
-				_event = events_id[event_id];
+				_event = events_id[key];
 				_event->bet_stop = 1;
 
-				if (event2lines.find(event_id) == event2lines.end()) {}
-				else for (unordered_set<int>::iterator it = event2lines[event_id]->begin(); it != event2lines[event_id]->end(); ++it) if (lines[*(it)].status == 1) lines[*(it)].status = -1;
+				if (event2lines.find(_event->getCatKey()) == event2lines.end()) {}
+				else for (unordered_set<int>::iterator it = event2lines[key]->begin(); it != event2lines[key]->end(); ++it) if (lines[*(it)].status == 1) lines[*(it)].status = -1;
 
 
 
@@ -12165,18 +12161,18 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 		_line[0] = lines[i];
 
 
-		auto it = compound2line_index.find(_line[0].getCompoundKey());
+		auto it = compound2line_index.find(_line ->getCompoundKey());
 		if (it == compound2line_index.end()) {
-		_line[0].id = lines_l;
-		lines[lines_l] = _line[0];
-		lines_id[_line[0].id] = &lines[lines_l];
-		insert_line(_line[0], lines_l);
+		_line->id = lines_l;
+		lines[lines_l] = (*_line);
+		lines_id[_line->id] = &lines[lines_l];
+		insert_line(_line, lines_l);
 		lines_l++;
 
 		}
 		else {
-		_line[0].id = it->second;
-		lines[it->second] = _line[0];
+		_line->id = it->second;
+		lines[it->second] = (*_line);
 
 		}
 
@@ -12295,7 +12291,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 	//delete[] socket_message_little;
 	delete[] buffer;
 	clientIDs.clear();
-	printf("Exit BetradarProcessThread");
+	std::printf("Exit BetradarProcessThread");
 	return 0;
 
 }
@@ -12313,6 +12309,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 	char set_scores[1024];
 	char* maxbuf = new char[200000];
 	Event* _event = nullptr;
+	string key = "";
 	Tournament* _tournament = nullptr;
 	int i = 0;
 	int k = 0;
@@ -13037,7 +13034,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 							bet = ticket->bets[j];
 							if (bet->event_status == 0) { bet_ready_counter++; continue; }
 							if (bet->timeout == 1) { bet_ready_counter++; continue; }
-							bevent = bevents_id[bet->event_id];
+							bevent = bevents_id[bet->getCatKey()];
 							if (bevent == nullptr || bevent->status > 2 || bevent->reporting == -1) { ticket->accept_code = -12;  ticket_ready_counter++; break; }
 							if (bevent->reporting == 1 && (time(nullptr) - ticket->timestamp / 1000  < BET_TIMEOUT_REPORTING)) break;
 							if (bevent->reporting == 0 && (time(nullptr) - ticket->timestamp / 1000  < BET_TIMEOUT)) break;
@@ -13745,25 +13742,46 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 		if (std::strcmp("fixture_change", doc.first_node()->name()) == 0) {
 			if (DEBUG_OUTPUT == true) std::printf("fixture_change\r\n");
 			type_radar = 0;
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-
-
-
-
-			if (type_radar == 1)
+			event_id = 0;
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
 			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (bevents_id[event_id] != nullptr && btournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] == nullptr) {
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				type_radar = 0;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5; continue; }
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{
+				type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				key = "1"+string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (bevents_id.find(key) != bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (bevents_id.find(key) == bevents_id.end() && event_id < MAX_TOURNAMENTS && btournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (bevents_id.find(key) == bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					btournaments[btournaments_l].id = event_id;
 					btournaments[btournaments_l].type_radar = 1;
 					btournaments[btournaments_l].season_id = 0;
 					btournaments[btournaments_l].simple_id = 0;
-					if (getTournament(&btournaments[btournaments_l], false, true) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&btournaments[btournaments_l], false, true) == -1) {
 
 						btournaments[btournaments_l].id = 0; btournaments[btournaments_l].type_radar = 0;
 						bevents[bevents_l].id = event_id; bevents[bevents_l].type_radar = 1;
@@ -13776,26 +13794,11 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					else { type_radar = 4;  btournaments_l++; }
 				}
 				if (type_radar == -1) continue;
-
-
 			}
 
-
-
-
-
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-			//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament:
-
-			if (event_id == 0) {
-				std::printf("fixture change error event_id is ==0 message = %s\r\n", doc.first_node()->first_attribute("event_id")->value());
-				continue;
-			}
-
-			if (DEBUG_OUTPUT == true) std::printf("fixture_change type_radar=%d\r\n", type_radar);
+			else { std::printf("Unknown type radar in fixture_change =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
+			//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament://5 vf:match //6 sr:season: 7 //vf:tournament:
+			key = to_string(type_radar) + to_string(event_id);
 
 			if (type_radar == 2) {
 				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
@@ -13859,9 +13862,8 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				std::printf("fixture_change succes for race_tournamnet id=%d\r\n", event_id);
 
 			}
-			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
-				if (bevents_id[event_id] == nullptr) {
+			if (type_radar == 0 || type_radar ==1 || type_radar == 5) {
+				if (bevents_id.find(key) == bevents_id.end()) {
 					std::printf("Event not found in fixture_change. %d\r\n", event_id);
 					bevents[bevents_l].id = event_id; bevents[bevents_l].type_radar = type_radar;
 					ret_fixture = getEventFixture(&bevents[bevents_l], true);
@@ -13869,7 +13871,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					else bevents_l++;
 
 				}
-				else  ret_fixture = getEventFixture(bevents_id[event_id], true);
+				else  ret_fixture = getEventFixture(bevents_id[key], true);
 				if (ret_fixture == -1) { std::printf("fixtur_change error. %d\r\n", event_id);  continue; }
 
 
@@ -13877,7 +13879,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 				std::printf("fixture_change success. event_id=%d \r\n", event_id);
 
-				//bevents_id[event_id]->bet_stop = 0;
+				//bevents_id[event_key]->bet_stop = 0;
 
 
 
@@ -13891,24 +13893,51 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 		else if (std::strcmp("odds_change", doc.first_node()->name()) == 0) {
 			type_radar = 0;
 			event_id = 0;
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
-
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-			//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-
-			if (type_radar == 1)
+			type_radar = 0;
+			event_id = 0;
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
 			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (bevents_id[event_id] != nullptr && btournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] == nullptr) {
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				type_radar = 0;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5;	
+				continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{
+				type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				key = "1"+ string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (bevents_id.find(key) != bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (bevents_id.find(key) == bevents_id.end() && event_id < MAX_TOURNAMENTS && btournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (bevents_id.find(key) == bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					btournaments[btournaments_l].id = event_id;
 					btournaments[btournaments_l].type_radar = 1;
 					btournaments[btournaments_l].season_id = 0;
 					btournaments[btournaments_l].simple_id = 0;
-					if (getTournament(&btournaments[btournaments_l], false, true) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&btournaments[btournaments_l], false, true) == -1) {
 
 						btournaments[btournaments_l].id = 0; btournaments[btournaments_l].type_radar = 0;
 						bevents[bevents_l].id = event_id; bevents[bevents_l].type_radar = 1;
@@ -13921,24 +13950,14 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					else { type_radar = 4;  btournaments_l++; }
 				}
 				if (type_radar == -1) continue;
-
-
 			}
 
+			else { std::printf("Unknown type radar in odds_change =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
 
-
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
-
-
-
-
-			//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season://4 sr:race_tournament
-
-
+			key = to_string(type_radar) + to_string(event_id);
 			_line->type_radar = type_radar;
+			_line->key = key;
+			//if (_line->event_key != nullptr) delete[] _line->event_key; _line->event_key = nullptr;
 
 			if (event_id == 0) {
 				std::printf("event_id error=0\r\n"); std::printf(doc.first_node()->first_attribute("event_id")->value());
@@ -14528,30 +14547,30 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 
-						auto it = bcompound2line_index.find(_line[0].getCompoundKey());
+						auto it = bcompound2line_index.find(_line ->getCompoundKey());
 						if (DEBUG_OUTPUT == true) {
-							printf(_line[0].getCompoundKey().c_str());
+							printf(_line ->getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == bcompound2line_index.end()) {
 							if (DEBUG_OUTPUT == true) printf("new line add");
-							_line[0].id = blines_l;
+							_line->id = blines_l;
 							if (DEBUG_OUTPUT == true) printf("new line add1");
-							blines[blines_l] = _line[0];
-							blines_id[_line[0].id] = &blines[blines_l];
+							blines[blines_l] = (*_line);
+							blines_id[_line->id] = &blines[blines_l];
 							if (DEBUG_OUTPUT == true) printf("new line add2");
-							binsert_line(_line[0], blines_l);
+							binsert_line(_line, blines_l);
 							if (DEBUG_OUTPUT == true) printf("new line add3");
 							blines_l++;
-							bcategories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
+							bcategories_id[_tournament->category_id]->outrights_id.push_back(_line->id);
 							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
 							if (DEBUG_OUTPUT == true) printf("line update");
-							_line[0].id = it->second;
+							_line->id = it->second;
 							if (DEBUG_OUTPUT == true) printf("line update1");
-							blines[it->second] = _line[0];
+							blines[it->second] = (*_line);
 							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
@@ -15199,30 +15218,30 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 						if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
-						auto it = bcompound2line_index.find(_line[0].getCompoundKey());
+						auto it = bcompound2line_index.find(_line ->getCompoundKey());
 						if (DEBUG_OUTPUT == true) {
-							printf(_line[0].getCompoundKey().c_str());
+							printf(_line ->getCompoundKey().c_str());
 							printf("\r\n");
 						}
 						if (it == bcompound2line_index.end()) {
 							if (DEBUG_OUTPUT == true) printf("new line add");
-							_line[0].id = blines_l;
+							_line->id = blines_l;
 							if (DEBUG_OUTPUT == true) printf("new line add1");
-							blines[blines_l] = _line[0];
-							blines_id[_line[0].id] = &blines[blines_l];
+							blines[blines_l] = (*_line);
+							blines_id[_line->id] = &blines[blines_l];
 							if (DEBUG_OUTPUT == true) printf("new line add2");
-							binsert_line(_line[0], blines_l);
+							binsert_line(_line, blines_l);
 							if (DEBUG_OUTPUT == true) printf("new line add3");
 							blines_l++;
-							bcategories_id[_tournament->category_id]->outrights_id.push_back(_line[0].id);
+							bcategories_id[_tournament->category_id]->outrights_id.push_back(_line->id);
 							if (DEBUG_OUTPUT == true) printf("new line add finish");
 
 						}
 						else {
 							if (DEBUG_OUTPUT == true) printf("line update");
-							_line[0].id = it->second;
+							_line->id = it->second;
 							if (DEBUG_OUTPUT == true) printf("line update1");
-							blines[it->second] = _line[0];
+							blines[it->second] = (*_line);
 							if (DEBUG_OUTPUT == true) printf("line finish");
 
 							//printf("Line Update\r\n");
@@ -15242,9 +15261,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				}
 
 			}
-			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in run %d\r\n", event_id); continue; }
-				if (bevents_id[event_id] == nullptr) {
+			if (type_radar == 0 || type_radar == 1 || type_radar == 5) {
+			
+				if (bevents_id.find(key) == bevents_id.end()) {
 					std::printf("Event not found. Run getFixture to get event_id=%d type_radar=%d\r\n", event_id, type_radar);
 					bevents[bevents_l].id = event_id;
 					bevents[bevents_l].type_radar = type_radar;
@@ -15252,13 +15271,12 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					bevents_l++;
 
 				}
-				_event = bevents_id[event_id];
+				_event = bevents_id[key];
 				if (_event->show == 0) {
 					bevents_show[bevents_show_l] = _event; bevents_show_l++;
 				}
 				_event->show = 1;
-				//_event->bet_stop = 0;
-
+			
 				if (PRINT == true) {
 					std::printf("\r\n***************************************************\r\n");
 					std::printf("%d\r\n", _event->id);
@@ -15444,7 +15462,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 						for (xml_node<> * period_score = period_scores->first_node("period_score"); period_score; period_score = period_score->next_sibling())
 						{
-							if (j == 0) strcpy(set_scores, period_score->first_attribute("home_score")->value());
+							if (j == 0)std::strcpy(set_scores, period_score->first_attribute("home_score")->value());
 							if (j > 0) {
 								std::strcat(set_scores, "-");
 								std::strcat(set_scores, period_score->first_attribute("home_score")->value());
@@ -15457,7 +15475,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						//printf(set_scores);
 						//printf("\r\n");
 						if (_event->set_scores != nullptr) { delete[] _event->set_scores; _event->set_scores = nullptr; }
-						_event->set_scores = new char[strlen(set_scores) + 1]; strcpy(_event->set_scores, set_scores);
+						_event->set_scores = new char[strlen(set_scores) + 1];std::strcpy(_event->set_scores, set_scores);
 					}
 
 
@@ -15773,9 +15791,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 									   }
 
 
-									   replace(_line->name, "$competitor1", bevents_id[_line->event_id]->home_name, true);
-									   if (_event->away_name != nullptr) replace(_line->name, "$competitor2", bevents_id[_line->event_id]->away_name, true);
-									   if (_event->type_radar > 0) replace(_line->name, "$event", bevents_id[_line->event_id]->home_name, true);
+									   replace(_line->name, "$competitor1", _event->home_name, true);
+									   if (_event->away_name != nullptr) replace(_line->name, "$competitor2", _event->away_name, true);
+									   if (_event->type_radar > 0) replace(_line->name, "$event", _event->home_name, true);
 
 
 
@@ -15888,9 +15906,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 													   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j], true);
 												   }
 
-												   replace(_line->outcome_name[i], "$competitor1", bevents_id[_line->event_id]->home_name, true);
-												   if (_event->away_name != nullptr) replace(_line->outcome_name[i], "$competitor2", bevents_id[_line->event_id]->away_name, true);
-												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", bevents_id[_line->event_id]->home_name, true);
+												   replace(_line->outcome_name[i], "$competitor1", _event->home_name, true);
+												   if (_event->away_name != nullptr) replace(_line->outcome_name[i], "$competitor2", _event->away_name, true);
+												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name, true);
 
 
 
@@ -15926,12 +15944,12 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 0 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
 
 
-													   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->away_id], true) == -1) {
-														   std::printf(" Error get bcompetitors away_id=%d \r\n", bevents_id[_line->event_id]->away_id); //continue;
+													   if (getCompetitor(bcompetitors_id[_event->away_id], true) == -1) {
+														   std::printf(" Error get bcompetitors away_id=%d \r\n", _event->away_id); //continue;
 													   }
 
-													   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->home_id], true) == -1) {
-														   std::printf(" Error get bcompetitors home_id=%d \r\n", bevents_id[_line->event_id]->home_id); //continue;
+													   if (getCompetitor(bcompetitors_id[_event->home_id], true) == -1) {
+														   std::printf(" Error get bcompetitors home_id=%d \r\n", _event->home_id); //continue;
 													   }
 
 													   if (bplayers_id[_line->outcome_id[i]] == nullptr) {
@@ -15948,19 +15966,19 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 												   }
 
 												   if (bplayers_id[_line->outcome_id[i]] != nullptr && _line->outcome_team[i] == 0) {
-													   if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
-													   else if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->home_id) _line->outcome_team[i] = 1;  else {
-														   printf("eror bcompetitor_id in bplayer  bplayer_id=%d  event_id=%d  home_id=%d  away_id=%d run getCompetitor\r\n", _line->outcome_id[i], _line->event_id, bevents_id[_line->event_id]->home_id, bevents_id[_line->event_id]->away_id);
-														   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->away_id], true) == -1) {
-															   std::printf(" Error get bcompetitors away_id=%d \r\n", bevents_id[_line->event_id]->away_id); //continue;
+													   if (bplayers_id[_line->outcome_id[i]]->competitor_id == _event->away_id) _line->outcome_team[i] = 2;
+													   else if (bplayers_id[_line->outcome_id[i]]->competitor_id == _event->home_id) _line->outcome_team[i] = 1;  else {
+														   printf("eror bcompetitor_id in bplayer  bplayer_id=%d  event_id=%d  home_id=%d  away_id=%d run getCompetitor\r\n", _line->outcome_id[i], _line->event_id, _event->home_id, _event->away_id);
+														   if (getCompetitor(bcompetitors_id[_event->away_id], true) == -1) {
+															   std::printf(" Error get bcompetitors away_id=%d \r\n", _event->away_id); //continue;
 														   }
 
-														   if (getCompetitor(bcompetitors_id[bevents_id[_line->event_id]->home_id], true) == -1) {
-															   std::printf(" Error get bcompetitors away_id=%d \r\n", bevents_id[_line->event_id]->home_id); //continue;
+														   if (getCompetitor(bcompetitors_id[_event->home_id], true) == -1) {
+															   std::printf(" Error get bcompetitors away_id=%d \r\n", _event->home_id); //continue;
 														   }
 
 
-														   if (bplayers_id[_line->outcome_id[i]]->competitor_id == bevents_id[_line->event_id]->away_id) _line->outcome_team[i] = 2;
+														   if (bplayers_id[_line->outcome_id[i]]->competitor_id == _event->away_id) _line->outcome_team[i] = 2;
 														   else  _line->outcome_team[i] = 1;
 													   }
 												   }
@@ -15969,16 +15987,16 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 												   if (bplayers_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 2) {
 													   std::printf("Player4 id=%d not found in market id=%d in event_id=%d  in run function team 2 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-													   if (bevents_id[_line->event_id]->away_id >= MAX_COMPETITORS) {
-														   std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", bevents_id[_line->event_id]->away_id, _line->event_id);
+													   if (_event->away_id >= MAX_COMPETITORS) {
+														   std::printf("ERROR in run. away_id out of MAX_COMPETITORS. away_id=%d event_id=%d\r\n", _event->away_id, _line->event_id);
 														   continue;
 													   }
 
-													   if (bcompetitors_id[bevents_id[_line->event_id]->away_id] == nullptr) {
-														   std::printf("Competitor id %d not found in team 2 run. getCompetitor\r\n", bevents_id[_line->event_id]->away_id);
-														   bcompetitors[bcompetitors_l].id = bevents_id[_line->event_id]->away_id;
+													   if (bcompetitors_id[_event->away_id] == nullptr) {
+														   std::printf("Competitor id %d not found in team 2 run. getCompetitor\r\n", _event->away_id);
+														   bcompetitors[bcompetitors_l].id = _event->away_id;
 														   if (getCompetitor(&bcompetitors[bcompetitors_l], true) == -1) {
-															   std::printf(" Error get competitors id=%d \r\n", bevents_id[_line->event_id]->away_id); //continue;
+															   std::printf(" Error get competitors id=%d \r\n", _event->away_id); //continue;
 														   }
 														   else bcompetitors_l++;
 
@@ -15988,16 +16006,16 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 												   if (bplayers_id[_line->outcome_id[i]] == nullptr && _line->outcome_team[i] == 1) {
 													   std::printf("Player5 id=%d not found in market id=%d in event_id=%d  in run function team 1 \r\n", _line->outcome_id[i], _line->market_id, _line->event_id);
-													   if (bevents_id[_line->event_id]->home_id >= MAX_COMPETITORS) {
-														   std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", bevents_id[_line->event_id]->home_id, _line->event_id);
+													   if (_event->home_id >= MAX_COMPETITORS) {
+														   std::printf("ERROR in run. home_id out of MAX_COMPETITORS. home_id=%d event_id=%d\r\n", _event->home_id, _line->event_id);
 														   continue;
 													   }
 
-													   if (bcompetitors_id[bevents_id[_line->event_id]->home_id] == nullptr) {
-														   std::printf("Competitor id %d not found in team 1 run. getCompetitor\r\n", bevents_id[_line->event_id]->home_id);
-														   bcompetitors[bcompetitors_l].id = bevents_id[_line->event_id]->home_id;
+													   if (bcompetitors_id[_event->home_id] == nullptr) {
+														   std::printf("Competitor id %d not found in team 1 run. getCompetitor\r\n", _event->home_id);
+														   bcompetitors[bcompetitors_l].id = _event->home_id;
 														   if (getCompetitor(&bcompetitors[bcompetitors_l], true) == -1) {
-															   std::printf(" Error get competitors id=%d \r\n", bevents_id[_line->event_id]->home_id); //continue;
+															   std::printf(" Error get competitors id=%d \r\n", _event->home_id); //continue;
 														   }
 														   else bcompetitors_l++;
 
@@ -16071,9 +16089,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 															   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j], true);
 														   }
 
-														   replace(_line->outcome_name[i], "$competitor1", bevents_id[_line->event_id]->home_name, true);
-														   replace(_line->outcome_name[i], "$competitor2", bevents_id[_line->event_id]->away_name, true);
-														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", bevents_id[_line->event_id]->home_name, true);
+														   replace(_line->outcome_name[i], "$competitor1", _event->home_name, true);
+														   replace(_line->outcome_name[i], "$competitor2", _event->away_name, true);
+														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name, true);
 
 
 
@@ -16156,9 +16174,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 															   if (j == _line->variant) continue;
 															   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j], true);
 														   }
-														   replace(_line->outcome_name[i], "$competitor1", bevents_id[_line->event_id]->home_name, true);
-														   replace(_line->outcome_name[i], "$competitor2", bevents_id[_line->event_id]->away_name, true);
-														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", bevents_id[_line->event_id]->home_name, true);
+														   replace(_line->outcome_name[i], "$competitor1", _event->home_name, true);
+														   replace(_line->outcome_name[i], "$competitor2", _event->away_name, true);
+														   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name, true);
 													   }
 													   else { _line->outcome_name[i] = new char[2]; std::strcpy(_line->outcome_name[i], " "); }
 												   }
@@ -16209,9 +16227,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 													   replace(_line->outcome_name[i], _line->specifier[j], _line->specifier_value[j], true);
 												   }
 
-												   replace(_line->outcome_name[i], "$competitor1", bevents_id[_line->event_id]->home_name, true);
-												   replace(_line->outcome_name[i], "$competitor2", bevents_id[_line->event_id]->away_name, true);
-												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", bevents_id[_line->event_id]->home_name, true);
+												   replace(_line->outcome_name[i], "$competitor1", _event->home_name, true);
+												   replace(_line->outcome_name[i], "$competitor2", _event->away_name, true);
+												   if (_event->type_radar > 0) replace(_line->outcome_name[i], "$event", _event->home_name, true);
 
 
 												   //if (_line->market_id == 188 || _line->market_id == 224 || _line->market_id == 485 || _line->market_id == 231 || _line->market_id == 65 || _line->market_id == 383 || _line->market_id == 66) 
@@ -16241,7 +16259,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 												   if (_line->outcome_team[i] == 2) _line->outcome_name[i] = new char[strlen(bplayers_id[props_player_id]->full_name) + 14 + strlen(_event->away_name)];
 												   else  _line->outcome_name[i] = new char[strlen(bplayers_id[props_player_id]->full_name) + 14 + strlen(_event->home_name)];
 
-												   strcpy(_line->outcome_name[i], bplayers_id[props_player_id]->full_name);
+												  std::strcpy(_line->outcome_name[i], bplayers_id[props_player_id]->full_name);
 												   //strcat(_line->outcome_name[i], " (");
 												   //if (_line->outcome_team[i] == 2) strcat(_line->outcome_name[i], _event->away_name);
 												   //else strcat(_line->outcome_name[i], _event->home_name);
@@ -16284,20 +16302,20 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 									   if (DEBUG_OUTPUT == true) printf("insertLine _line->type ==%d\r\n", _line->type);
 									   if (DEBUG_OUTPUT == true) {
-										   printf(_line[0].getCompoundKey().c_str());
+										   printf(_line ->getCompoundKey().c_str());
 										   printf("\r\n");
 									   }
-									   auto it = bcompound2line_index.find(_line[0].getCompoundKey());
+									   auto it = bcompound2line_index.find(_line ->getCompoundKey());
 									   if (DEBUG_OUTPUT == true) printf("auto it\r\n");
 
 									   if (it == bcompound2line_index.end()) {
 										   if (DEBUG_OUTPUT == true) printf("new line add ");
-										   _line[0].id = blines_l;
+										   _line->id = blines_l;
 										   if (DEBUG_OUTPUT == true) printf("new line add1 ");
-										   blines[blines_l] = _line[0];
-										   blines_id[_line[0].id] = &blines[blines_l];
+										   blines[blines_l] = (*_line);
+										   blines_id[_line->id] = &blines[blines_l];
 										   if (DEBUG_OUTPUT == true) printf("new line add2 ");
-										   binsert_line(_line[0], blines_l);
+										   binsert_line(_line, blines_l);
 										   if (DEBUG_OUTPUT == true) printf("new line add3 ");
 										   blines_l++;
 										   if (DEBUG_OUTPUT == true) printf("new line add finish\r\n");
@@ -16305,9 +16323,9 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 									   }
 									   else {
 										   if (DEBUG_OUTPUT == true) printf("line update");
-										   _line[0].id = it->second;
+										   _line->id = it->second;
 										   if (DEBUG_OUTPUT == true) printf("line update1");
-										   blines[it->second] = _line[0];
+										   blines[it->second] = (*_line);
 										   if (DEBUG_OUTPUT == true) printf("line finish\r\n");
 
 										   //printf("Line Update\r\n");
@@ -16324,8 +16342,8 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				if (_event->status > 0) _event->bet_stop = 0;
 				else  if (_event->status == 0 && _event->bet_stop == 1) {
 					int active_lines_counter = 0;
-					if (bevent2lines.find(event_id) == bevent2lines.end()) {}
-					else for (unordered_set<int>::iterator it = bevent2lines[event_id]->begin(); it != bevent2lines[event_id]->end(); ++it)
+					if (bevent2lines.find(_event->getCatKey()) == bevent2lines.end()) {}
+					else for (unordered_set<int>::iterator it = bevent2lines[_event->getCatKey()]->begin(); it != bevent2lines[_event->getCatKey()]->end(); ++it)
 						if (blines[*(it)].status == 1) active_lines_counter++;
 					if (active_lines_counter > 0) _event->bet_stop = 0;
 
@@ -16358,30 +16376,47 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 				if (std::strcmp("rollback_bet_settlement", doc.first_node()->name()) == 0) settlement_type = 1; else
 					if (std::strcmp("bet_cancel", doc.first_node()->name()) == 0) settlement_type = 2; else
 						if (std::strcmp("rollback_bet_cancel", doc.first_node()->name()) == 0) settlement_type = 3;
-
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
-
-			//std::printf(doc.first_node()->first_attribute("event_id")->value()); std::printf("\r\n");
-			//if (settlement_type == 2) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index-1)%AMQP_QUEUE]);
-
-			//if (event_id == 14011589) printf("bet_settlement = %s\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
-
 			type_radar = 0;
 			event_id = 0;
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-			if (type_radar == 1)
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
 			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (bevents_id[event_id] != nullptr && btournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] == nullptr) {
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				 type_radar = 0;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5;continue; }
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{
+				type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				key = "1" + string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (bevents_id.find(key) != bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (bevents_id.find(key) == bevents_id.end() && event_id < MAX_TOURNAMENTS && btournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (bevents_id.find(key) == bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					btournaments[btournaments_l].id = event_id;
 					btournaments[btournaments_l].type_radar = 1;
 					btournaments[btournaments_l].season_id = 0;
 					btournaments[btournaments_l].simple_id = 0;
-					if (getTournament(&btournaments[btournaments_l], false, true) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&btournaments[btournaments_l], false, true) == -1) {
 
 						btournaments[btournaments_l].id = 0; btournaments[btournaments_l].type_radar = 0;
 						bevents[bevents_l].id = event_id; bevents[bevents_l].type_radar = 1;
@@ -16394,16 +16429,13 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					else { type_radar = 4;  btournaments_l++; }
 				}
 				if (type_radar == -1) continue;
-
-
 			}
 
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+			else { std::printf("Unknown type radar in bet_settlement_change =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
 			//0 sr:match://1 sr:race_event: //2 sr:simple_tournament://3 sr:season://4:sr:race_tournament:
+			key = to_string(type_radar) + to_string(event_id);
 			_bet->type_radar = type_radar;
+			_bet->key = key;
 			//	printf("\r\n\r\n\r\nbet_settlement =\r\n\r\n\r\n%s\r\n\r\n\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
 
 
@@ -16445,25 +16477,25 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 			else _bet->end_time = 0;
 
 			if (DEBUG_OUTPUT == true) printf("bet_settlement type_radar=%d  settlement_type=%d\r\n", type_radar, settlement_type);
-			printf("bet_settlement type_radar=%d  settlement_type=%d\r\n", type_radar, settlement_type);
+			//printf("bet_settlement type_radar=%d  settlement_type=%d\r\n", type_radar, settlement_type);
 			//printf("xml = %s\r\n", AMQP_message[(bprocess_index - 1) % AMQP_QUEUE]);
 			//printf("bet_settlement type_radar=%d\r\n", type_radar);
 
 			xml_node<> * outcomes = doc.first_node()->first_node("outcomes");
 			if (outcomes == nullptr)  outcomes = doc.first_node();
 
-
+			
 			if (outcomes != nullptr) {
 				_bet->tournament_id = 0;
 				_bet->event_id = 0;
 				_bet->simple_id = 0;
+				
 
 				if (type_radar == 2) _bet->simple_id = event_id;//simple_tournament
 				if (type_radar == 3) if (event_id < MAX_TOURNAMENTS && seasons_id[event_id] != nullptr) _bet->tournament_id = seasons_id[event_id]->id;//season
 				if (type_radar == 4)_bet->tournament_id = event_id;//race_tournament
-				if (type_radar < 2) _bet->event_id = event_id;//sr:match sr:race_event
-
-
+				if (type_radar == 0 || type_radar == 1 || type_radar == 5) _bet->event_id = event_id;//sr:match sr:race_event
+				
 				for (xml_node<> * market_node = outcomes->first_node("market"); market_node; market_node = market_node->next_sibling())
 				{
 					settlementError = 0;
@@ -16900,22 +16932,6 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 							if (PRINT == true) {
 								printf("_bet->outcome_name[i]=%s\r\n", _bet->outcome_name[i]);
 								printf("_bet->outcome_void_factor[i]=%d\r\n", _bet->outcome_void_factor[i]);
@@ -16952,7 +16968,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 
 				}
-					
+
 
 			}
 
@@ -16965,23 +16981,46 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 
 			type_radar = 0;
 			event_id = 0;
-			if (VIRTUAL == 0 && doc.first_node()->first_attribute("event_id")->value()[0] == 'v') continue;
-
-			event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-			if (event_id > 0 && strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0) type_radar = 1;
-
-			if (type_radar == 1)
+			type_radar = 0;
+			event_id = 0;
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:season:", 10) == 0)
 			{
-				if (event_id >= MAX_TOURNAMENTS) continue;
-				if (bevents_id[event_id] != nullptr && btournaments_id[event_id] == nullptr) type_radar = 1;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (bevents_id[event_id] == nullptr && btournaments_id[event_id] == nullptr) {
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 0;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:simple_tournament:", 21) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:race_tournament:", 19) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9)); type_radar = 5; continue; }
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:season:", 10) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 6; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:tournament:", 14) == 0)
+			{
+				event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 7; continue;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{
+				type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				key ="1"+ string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
+				if (bevents_id.find(key) != bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) type_radar = 1;
+				else if (bevents_id.find(key) == bevents_id.end() && event_id < MAX_TOURNAMENTS && btournaments_id[event_id] != nullptr) type_radar = 4;
+				else if (bevents_id.find(key) == bevents_id.end() && (event_id >= MAX_TOURNAMENTS || btournaments_id[event_id] == nullptr)) {
 					type_radar = -1;
 					btournaments[btournaments_l].id = event_id;
 					btournaments[btournaments_l].type_radar = 1;
 					btournaments[btournaments_l].season_id = 0;
 					btournaments[btournaments_l].simple_id = 0;
-					if (getTournament(&btournaments[btournaments_l], false, true) == -1) {
+					if (event_id >= MAX_TOURNAMENTS || getTournament(&btournaments[btournaments_l], false, true) == -1) {
 
 						btournaments[btournaments_l].id = 0; btournaments[btournaments_l].type_radar = 0;
 						bevents[bevents_l].id = event_id; bevents[bevents_l].type_radar = 1;
@@ -16994,25 +17033,20 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					else { type_radar = 4;  btournaments_l++; }
 				}
 				if (type_radar == -1) continue;
-
-
 			}
 
-			//if (event_id > 0 && doc.first_node()->first_attribute("event_id")->value()[3] == 's') printf(doc.first_node()->first_attribute("event_id")->value());
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 10)); type_radar = 3; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 14)); type_radar = 1; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 19)); type_radar = 4; }
-			if (event_id == 0) { event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 21)); type_radar = 2; }
+			else { std::printf("Unknown type radar in bet_stop =%s", (char*)doc.first_node()->first_attribute("event_id")->value()); continue; };
 
-			if (type_radar < 2) {
-				if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in betradarprocessthread in bet_stop module%d\r\n", event_id); continue; }
-				if (bevents_id[event_id] == nullptr) {
+			key = to_string(type_radar) + to_string(event_id);
+
+			if (type_radar == 0 || type_radar == 1 || type_radar == 5 ) {
+				if (bevents_id.find(key) == bevents_id.end()) {
 					std::printf("Event not found in bet_stop. event_id=%d type_radar=%d\r\n", event_id, type_radar); continue;
 				}
-				_event = bevents_id[event_id];
+				_event = bevents_id[key];
 				_event->bet_stop = 1;
-				if (bevent2lines.find(event_id) == bevent2lines.end()) {}
-				else for (unordered_set<int>::iterator it = bevent2lines[event_id]->begin(); it != bevent2lines[event_id]->end(); ++it) if (blines[*(it)].status == 1) blines[*(it)].status = -1;
+				if (bevent2lines.find(_event->getCatKey()) == bevent2lines.end()) {}
+				else for (unordered_set<int>::iterator it = bevent2lines[_event->getCatKey()]->begin(); it != bevent2lines[_event->getCatKey()]->end(); ++it) if (blines[*(it)].status == 1) blines[*(it)].status = -1;
 
 			}
 
@@ -17244,6 +17278,18 @@ int UncompressData(const BYTE* abSrc, int nLenSrc, BYTE* abDst, int nLenDst)
 	inflateEnd(&zInfo);   // zlib function
 	return(nRet); // -1 or len of output
 }
+
+string getTournamentKey(int line_type_radar, int id) {
+	//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournamnet //4 sr:race_tournament://5 vf:match  6 //vf:tournament: 7 //sr:season: 8 //vf:season:
+
+
+
+	return to_string(type_radar) + to_string(id);
+
+}
+
+
+
 int gzip(char* message, int messageLen, char* &zip_message, int step = 0) {
 	if (messageLen == 0 || message == nullptr) return -1;
 	int step_byte = 0;
@@ -18110,15 +18156,19 @@ void getEvents(time_t sec, int days) {
 
 				}
 
-				if (events[i].tournament_id == 0 && events[i].parent_id > 0 && events_id[events[i].parent_id] != nullptr) {
-					events[i].tournament_id = events_id[events[i].parent_id]->tournament_id;
-					events[i].sport_id = events_id[events[i].parent_id]->sport_id;
-					events[i].category_id = events_id[events[i].parent_id]->category_id;
+				if (events[i].tournament_id == 0 && events[i].parent_id > 0) {
+
+					string event_key = to_string(events[i].parent_id);
+					if (events_id.find(event_key) != events_id.end()) {
+                        events[i].tournament_id = events_id[event_key]->tournament_id;
+						events[i].sport_id = events_id[event_key]->sport_id;
+						events[i].category_id = events_id[event_key]->category_id;
+					}
 				}
 
 			}
 
-			if (events[i].id<MAX_EVENTS) events_id[events[i].id] = &events[i]; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEvents%d\r\n", events[i].id);
+			 events_id[events[i].getCatKey()] = &events[i]; 
 			//&& events[i].start_time>time(nullptr)
 
 			if (booking > 0 && events[i].booked == 2 && events[i].status == 0 && booked_num < booking) { postBooked(events[i].id); booked_num++; }
@@ -19348,7 +19398,8 @@ int getEventFixture(Event* event, bool b) {
 	Tournament** simples_id;
 	Tournament** tournaments_id;
 	Tournament* tournaments;
-	Event** events_id;
+	//Event** events_id;
+	unordered_map<string, Event*>* revents_id;
 	int* rcategories_l;
 	int* rtournaments_l;
 	int ret_value = 0;
@@ -19363,7 +19414,7 @@ int getEventFixture(Event* event, bool b) {
 		categories_id = ::bcategories_id;
 		categories = ::bcategories;
 		rcategories_l = &::bcategories_l;
-		events_id = ::bevents_id;
+		revents_id = &::bevents_id;
 		tournaments_id = ::btournaments_id;
 		tournaments = ::btournaments;
 		seasons_id = ::bseasons_id;
@@ -19377,7 +19428,7 @@ int getEventFixture(Event* event, bool b) {
 		categories_id = ::categories_id;
 		categories = ::categories;
 		rcategories_l = &::categories_l;
-		events_id = ::events_id;
+		revents_id = &::events_id;
 		tournaments_id = ::tournaments_id;
 		tournaments = ::tournaments;
 		seasons_id = ::seasons_id;
@@ -19393,14 +19444,14 @@ int getEventFixture(Event* event, bool b) {
 	using namespace std;
 	int j = 0;
 	int i = 0;
-	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf; return -1; }
+	int recv_length = strlen(recvbuf) - 4; if (recv_length > 1000) recv_length = 1000; for (j = 0; j < recv_length; j++) if (recvbuf[j] == '\r' && recvbuf[j + 1] == '\n' && recvbuf[j + 2] == '\r' && recvbuf[j + 3] == '\n') break; if (j == recv_length || j< 5) { delete[] recvbuf;  return -1; }
 	try { doc.parse<0>((char*)((char*)recvbuf + j + 4)); }
-	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf; return -1; }
+	catch (parse_error e) { cerr << "Fail. Parse error " << e.what() << endl; delete[] recvbuf;  return -1; }
 
 	//printf("getEventFixture01\r\n");
 	root_node = doc.first_node("fixtures_fixture");
 	if (root_node == nullptr) {
-		delete[] recvbuf; doc.clear(); //printf("getEventFixture end -1\r\n");  
+		delete[] recvbuf;  doc.clear(); //printf("getEventFixture end -1\r\n");  
 		return -1;
 	}
 	//printf("2 getEventFixture b=%d\r\n", b);;
@@ -19627,7 +19678,7 @@ int getEventFixture(Event* event, bool b) {
 
 		if (event->tournament_id >= MAX_TOURNAMENTS) {
 			std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id);
-			delete[] recvbuf; doc.clear(); return -1;
+			delete[] recvbuf;  doc.clear(); return -1;
 		}
 		else {
 			if (event->type_radar == 0) {
@@ -19838,15 +19889,26 @@ int getEventFixture(Event* event, bool b) {
 
 
 	delete[] recvbuf;
-	if (event->id<MAX_EVENTS) events_id[event->id] = event; else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEventFixture %d\r\n", event->id);
+
+	//if (event->id < MAX_EVENTS)
+	
+	(*revents_id)[event->getCatKey()] = event; //else std::printf("ERROR DATA!\r\nevent id out of MAX_EVENTS in getEventFixture %d\r\n", event->id);
+	
+
 	if (event->bo == 0 && (event->sport_id == 5 || event->sport_id == 19)) getEventSummary(event);
 	//printf("15 getEventFixture b=%d\r\n", b);
 
 
-	if (event->type_radar == 1 && event->tournament_id == 0 && event->parent_id > 0 && events_id[event->parent_id] != nullptr) {
-		event->tournament_id = events_id[event->parent_id]->tournament_id;
-		event->sport_id = events_id[event->parent_id]->sport_id;
-		event->category_id = events_id[event->parent_id]->category_id;
+	if (event->type_radar == 1 && event->tournament_id == 0 && event->parent_id > 0){
+		
+		char* key = new char[48];
+		_itoa(event->parent_id, key, 10);
+		if ((*revents_id).find(key) != (*revents_id).end()) {
+			event->tournament_id = (*revents_id)[key]->tournament_id;
+			event->sport_id = (*revents_id)[key]->sport_id;
+			event->category_id = (*revents_id)[key]->category_id;
+		}
+		delete[] key;
 	}
 
 	//printf("16 getEventFixture b=%d\r\n", b);
@@ -19856,7 +19918,7 @@ int getEventFixture(Event* event, bool b) {
 	if (event->sport_id == 0) { doc.clear();  return -1; }
 	if (event->category_id == 0) { doc.clear(); return -1; }
 
-
+	
 	if (b == false) {
 
 		if (ret_value == 0) {
@@ -20137,16 +20199,18 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 
 
 
-	if (tournament->type_radar == 0 && tournament->id == 0) _itoa(tournament->season_id, buf, 10);
+	if ((tournament->type_radar == 0 || tournament->type_radar == 3) && tournament->id == 0) _itoa(tournament->season_id, buf, 10);
 	else if (tournament->type_radar == 2 && tournament->id == 0) _itoa(tournament->simple_id, buf, 10);
 	else _itoa(tournament->id, buf, 10);
 
 
 	std::strcpy(buffer, "/v1/sports/en/tournaments/");
-	if (tournament->type_radar == 0 && tournament->id >0) 	std::strcat(buffer, "sr:tournament:"); else
+	if (tournament->type_radar == 0 && tournament->id > 0) 	std::strcat(buffer, "sr:tournament:"); else
 		if (tournament->type_radar == 1) 	std::strcat(buffer, "sr:race_tournament:"); else
 			if (tournament->type_radar == 2) 	std::strcat(buffer, "sr:simple_tournament:"); else
-				if (tournament->type_radar == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:");
+				if (tournament->type_radar == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:"); else 
+					if (tournament->type_radar == 3 && tournament->id > 0) 	std::strcat(buffer, "vf:tournament:"); else 
+					if (tournament->type_radar == 3 && tournament->season_id > 0) 	std::strcat(buffer, "vf:season:"); 
 				else {
 					delete[] recvbuf;  return -1;
 				};
@@ -20593,8 +20657,8 @@ void replace_player(char* & specifier_value) {
 			return;
 		}
 
-		if (players_id[player_id]->full_name != nullptr) strcpy(specifier_value, players_id[player_id]->full_name);
-		else strcpy(specifier_value, players_id[player_id]->name);
+		if (players_id[player_id]->full_name != nullptr)std::strcpy(specifier_value, players_id[player_id]->full_name);
+		else std::strcpy(specifier_value, players_id[player_id]->name);
 		return;
 	}
 
@@ -20799,7 +20863,7 @@ void replace(char* &string, char* sub, char* value, bool b) {
 	std::strcat(retValue, (char*)((char*)string + index2[i - 1]));
 
 	//printf(retValue);
-	// strcpy(string, retValue);
+	//std::strcpy(string, retValue);
 	//printf(string);
 
 	delete[] string;
@@ -20852,7 +20916,7 @@ void replace_substr(char* &string, char* sub, char* value) {
 	std::strcat(retValue, (char*)((char*)string + index2[i - 1]));
 
 	//printf(retValue);
-	// strcpy(string, retValue);
+	//std::strcpy(string, retValue);
 	//printf(string);
 
 	delete[] string;
@@ -20948,8 +21012,8 @@ void loadEventsFromDB() {
 
 		bevents[i] = events[i];
 		if (!(events[i].type_radar == 2 && events[i].simple_id == 0)) {
-			events_id[events[i].id] = &events[i];
-			bevents_id[bevents[i].id] = &bevents[i];
+			events_id[events[i].getCatKey()] = &events[i];
+			bevents_id[bevents[i].getCatKey()] = &bevents[i];
 			i++;
 		}
 
@@ -21211,8 +21275,7 @@ void loadMarketsFromDB() {
 		// optional values
 		// if (doc["variable_text"] == false) {
 		mongo_str_to_buffer(doc["variable_text"], markets[i].variable_text);
-
-
+		
 		// outcomes array
 		bsoncxx::document::element outcomes_elem = doc["outcomes"];
 		bsoncxx::array::view outcomes{ outcomes_elem.get_array().value };
@@ -21254,17 +21317,17 @@ void loadMarketsFromDB() {
 						markets[i].translation_outcome_name[l][j] = nullptr;
 						mongo_str_to_buffer(elt, markets[i].translation_outcome_name[l][j]); j++;
 					}
-
+					
 				}
 
 			}
 
 
-
-
+		
 		// specifiers array
 		bsoncxx::document::element specifiers_elem = doc["specifiers"];
 		bsoncxx::array::view specifiers{ specifiers_elem.get_array().value };
+		
 
 		if (specifiers.empty()) {
 			markets[i].specifier_type = nullptr;
@@ -21284,6 +21347,7 @@ void loadMarketsFromDB() {
 				markets[i].specifier_type[specifier_index] = subdoc["type"].get_int32();
 				markets[i].specifier_name[specifier_index] = nullptr;
 				mongo_str_to_buffer(subdoc["name"], markets[i].specifier_name[specifier_index]);
+		
 				if (subdoc["description"]) {
 					markets[i].specifier_description[specifier_index] = nullptr;
 					mongo_str_to_buffer(subdoc["description"], markets[i].specifier_description[specifier_index]);
@@ -22150,10 +22214,11 @@ char* CreateStep_2(int& len) {
 
 
 
-		if (event2lines.find(events_show[i]->id) == event2lines.end()) { writeInteger(buffer, offset, 0, 2); writeInteger(buffer, offset, 0, 2); continue; }
+		if (event2lines.find(events_show[i]->getCatKey()) == event2lines.end()) {  writeInteger(buffer, offset, 0, 2); writeInteger(buffer, offset, 0, 2); continue; }
+		//printf("events_show[i]->id=%d\r\n", events_show[i]->id);
 		//if (events_show[i]->type_radar == 1) printf("events_show[i]->status=%d\r\n", events_show[i]->status);
 
-		writeInteger(buffer, offset, event2lines[events_show[i]->id]->size(), 2);
+		writeInteger(buffer, offset, event2lines[events_show[i]->getCatKey()]->size(), 2);
 
 		event_lines_l = 0;
 		retry_offset = offset;
@@ -22161,7 +22226,7 @@ char* CreateStep_2(int& len) {
 
 
 
-		for (unordered_set<int>::iterator it = event2lines[events_show[i]->id]->begin(); it != event2lines[events_show[i]->id]->end(); ++it)
+		for (unordered_set<int>::iterator it = event2lines[events_show[i]->getCatKey()]->begin(); it != event2lines[events_show[i]->getCatKey()]->end(); ++it)
 		{
 			if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events_show[i]->status == 0) continue;
 			if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
@@ -22232,15 +22297,15 @@ char* CreateStep_2(int& len) {
 	return encode_message;
 
 };
-int getActiveNumLines(int event_id) {
+int getActiveNumLines(string key) {
 	int active_lines_counter = 0;
-	if (event2lines.find(event_id) == event2lines.end()) { return 0; }
-	else for (unordered_set<int>::iterator it = event2lines[event_id]->begin(); it != event2lines[event_id]->end(); ++it)
+	if (event2lines.find(key) == event2lines.end()) { return 0; }
+	else for (unordered_set<int>::iterator it = event2lines[key]->begin(); it != event2lines[key]->end(); ++it)
 		if (lines[*(it)].status == -1 || lines[*(it)].status == 1) active_lines_counter++;
 	return active_lines_counter;
 
 }
-void CreatePlus_2(wsClient* client) {
+void CreatePlus_2(wsClient* wsclient) {
 	//printf("CreatePlus_2\r\n");
 	//server.wsClients[clientIDs[i]]
 	int i, j, l, k = 0;
@@ -22252,16 +22317,20 @@ void CreatePlus_2(wsClient* client) {
 	int len = 0;
 	size_t offset = 0;
 	size_t retry_offset = 0;
-	int event_id = client->plus;
-
+	string event_key = wsclient->plus;
+	Event* _event = nullptr;
+	int event_id = 0;
 	//printf("CreatePlus_2 server.wsClients[%d]->plus=%d\r\n", clientID, server.wsClients[clientID]->plus);
 
-	if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
-	if (events_id[event_id] == nullptr) { std::printf("\r\nEvent id= %d not found in CreatePlus_2 \r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
-	if (events_id[event_id]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
-	if (event2lines.find(event_id) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
+	//if (event_id >= MAX_EVENTS) { std::printf("ERROR DATA!\r\nsevent id out of MAX_EVENTS in CreatePlus_2 %d\r\n", event_id); delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
+
+	if (events_id.find(event_key) == events_id.end()) { std::printf("\r\nEvent key= %s not found in CreatePlus_2 \r\n", event_key); delete[] buffer; wsclient->plus_create = false; wsclient->plus_send = false; wsclient->plus = ""; return; }
+	if (events_id[event_key]->show == 0) { std::printf("\r\nsEvent id= %d not show type in CreatePlus_2 %d\r\n", event_id); delete[] buffer; wsclient->plus_create = false; wsclient->plus_send = false; wsclient->plus = ""; return; }
+	_event = events_id[event_key];
+	event_id =_event->id;
+	if (event2lines.find(event_key) == event2lines.end()) { std::printf("\r\nsEvent id= %d not lines for show  in CreatePlus_2 %d\r\n", event_id); delete[] buffer; wsclient->plus_create = false; wsclient->plus_send = false;  wsclient->plus = "";  return; }
 	events_send_l = 1;
-	writeInteger(buffer, offset, client->plus_request_id, 1);
+	writeInteger(buffer, offset, wsclient->plus_request_id, 1);
 	writeInteger(buffer, offset, events_send_l, 2);
 	writeInteger(buffer, offset, 5, 1); //5 response for rospis command
 	writeInteger(buffer, offset, event_id, 4);
@@ -22270,7 +22339,7 @@ void CreatePlus_2(wsClient* client) {
 	retry_offset = offset;
 	offset += 2;
 
-	for (unordered_set<int>::iterator it = event2lines[event_id]->begin(); it != event2lines[event_id]->end(); ++it)
+	for (unordered_set<int>::iterator it = event2lines[event_key]->begin(); it != event2lines[event_key]->end(); ++it)
 	{
 		//if (markets_id[lines[*(it)].market_id][0]->line_type == 0 && events_show[i]->status == 0) continue;
 		if (lines[*(it)].status == 0 || lines[*(it)].status == -3) continue;
@@ -22280,7 +22349,7 @@ void CreatePlus_2(wsClient* client) {
 		writeInteger(buffer, offset, lines[*(it)].market_id, 2);
 		writeInteger(buffer, offset, lines[*(it)].type, 1);
 		writeInteger(buffer, offset, lines[*(it)].favourite, 1);
-		if (events_id[event_id]->bet_stop == 1 && lines[*(it)].status == 1) writeInteger(buffer, offset, -1, 1); else
+		if (_event->bet_stop == 1 && lines[*(it)].status == 1) writeInteger(buffer, offset, -1, 1); else
 			writeInteger(buffer, offset, lines[*(it)].status, 1);
 		//if (lines[*(it)].outcome_number == 0) printf("lines[*(it)].outcome_number=0 lines[*(it)].id=%d  lines[*(it)].market_id=%d\r\n", lines[*(it)].id, lines[*(it)].market_id);
 		if (lines[*(it)].type == 3) writeString(buffer, offset, lines[*(it)].name);
@@ -22321,7 +22390,7 @@ void CreatePlus_2(wsClient* client) {
 
 	writeInteger(buffer, retry_offset, event_lines_l, 2);
 
-	if (event_lines_l == 0) { delete[] buffer; client->plus_create = false; client->plus_send = false; return; }
+	if (event_lines_l == 0) { delete[] buffer; wsclient->plus_create = false; wsclient->plus = ""; wsclient->plus_send = false; return; }
 
 
 	char* zip_message = nullptr;
@@ -22331,15 +22400,15 @@ void CreatePlus_2(wsClient* client) {
 	char* encode_message = SendframeEncode(zip_message, zip_len, len);
 	delete[] zip_message;
 	delete[] specifier_value;
-	client->plus_message = encode_message;
-	client->plus_message_length = len;
+	wsclient->plus_message = encode_message;
+	wsclient->plus_message_length = len;
 
 	//printf("CreatePlus_2 client->plus_message_length=%d\r\n",client->plus_message_length);
 
 	//printf("server.wsClients[clientID]->plus_message_length=%d\r\n", server.wsClients[clientID]->plus_message_length);
 
-	client->plus_send = true;
-	client->plus_create = false;
+	wsclient->plus_send = true;
+	wsclient->plus_create = false;
 
 
 };
@@ -22935,11 +23004,11 @@ int httpsRequest(char* domain, char* path, char* recv, int mode) {
 
 	//X509_free(cert);
 	sendBuf = new char[1024];
-	if (mode == 0) strcpy(sendBuf, "GET ");
-	else if (mode == 1) strcpy(sendBuf, "POST ");
-	else if (mode == 2) strcpy(sendBuf, "PUT ");
-	else if (mode == 3) strcpy(sendBuf, "DELETE ");
-	else strcpy(sendBuf, "GET ");
+	if (mode == 0)std::strcpy(sendBuf, "GET ");
+	else if (mode == 1)std::strcpy(sendBuf, "POST ");
+	else if (mode == 2)std::strcpy(sendBuf, "PUT ");
+	else if (mode == 3)std::strcpy(sendBuf, "DELETE ");
+	else std::strcpy(sendBuf, "GET ");
 	strcat(sendBuf, path);
 	strcat(sendBuf, " HTTP/1.0\nHost: ");
 	strcat(sendBuf, domain);
@@ -23015,11 +23084,11 @@ int httpRequest(char* domain, char* path, char* recv_buf, int mode) {
 	}
 
 	sendBuf = new char[1024];
-	if (mode == 0) strcpy(sendBuf, "GET ");
-	else if (mode == 1) strcpy(sendBuf, "POST ");
-	else if (mode == 2) strcpy(sendBuf, "PUT ");
-	else if (mode == 3) strcpy(sendBuf, "DELETE ");
-	else strcpy(sendBuf, "GET ");
+	if (mode == 0)std::strcpy(sendBuf, "GET ");
+	else if (mode == 1)std::strcpy(sendBuf, "POST ");
+	else if (mode == 2)std::strcpy(sendBuf, "PUT ");
+	else if (mode == 3)std::strcpy(sendBuf, "DELETE ");
+	else std::strcpy(sendBuf, "GET ");
 	strcat(sendBuf, path);
 	strcat(sendBuf, " HTTP/1.0\nHost: ");
 	strcat(sendBuf, domain);
@@ -23116,11 +23185,11 @@ int httpsRequestExtern(char* domain, char* path, char* recv, int mode) {
 
 
 	sendBuf = new char[1024];
-	if (mode == 0) strcpy(sendBuf, "GET ");
-	else if (mode == 1) strcpy(sendBuf, "POST ");
-	else if (mode == 2) strcpy(sendBuf, "PUT ");
-	else if (mode == 3) strcpy(sendBuf, "DELETE ");
-	else strcpy(sendBuf, "GET ");
+	if (mode == 0)std::strcpy(sendBuf, "GET ");
+	else if (mode == 1)std::strcpy(sendBuf, "POST ");
+	else if (mode == 2)std::strcpy(sendBuf, "PUT ");
+	else if (mode == 3)std::strcpy(sendBuf, "DELETE ");
+	else std::strcpy(sendBuf, "GET ");
 	strcat(sendBuf, path);
 	strcat(sendBuf, " HTTP/1.0\nHost: ");
 	strcat(sendBuf, domain);
