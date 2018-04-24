@@ -600,9 +600,10 @@ class Tournament {
 public:
 	Tournament();
 	~Tournament() {
-		if (name != nullptr) delete[] name; if (season_name != nullptr) delete[] season_name;
+		if (name != nullptr) delete[] name; if (season_name != nullptr) delete[] season_name; if (next_season_name != nullptr) delete[] next_season_name;
 		for (int i = 0; i < translation_num; i++) {
 			if (translation_season_name != nullptr) { if (translation_season_name[i] != nullptr) delete[] translation_season_name[i]; translation_season_name[i] = nullptr; }
+			if (translation_next_season_name != nullptr) { if (translation_next_season_name[i] != nullptr) delete[] translation_next_season_name[i]; translation_next_season_name[i] = nullptr; }
 			if (translation_name != nullptr) { if (translation_name[i] != nullptr) delete[] translation_name[i]; translation_name[i] = nullptr; }
 		}
 
@@ -612,7 +613,6 @@ public:
 
 	};
 	int id;
-	string key;
 	int season_id;
 	int next_season_id;
 	int type_radar = 0;//0 sr:tournament //1 sr:race_tournament: //2 sr:simple_tournament: //3 vf:tournament: 
@@ -623,16 +623,19 @@ public:
 	char** translation_name;
 	char *name;
 	char *season_name;
+	char *next_season_name;
 	char** translation_season_name;
+	char** translation_next_season_name;
 	int start_date;
 	int end_date;
 	void operator = (const Tournament&);
 	string getCatKey();
+	string getSeasonKey();
+	string getNextSeasonKey();
 };
 void Tournament:: operator = (const Tournament & rhs) {
 	if (this == &rhs) return;
 	id = rhs.id;
-	key = rhs.key;
 	season_id = rhs.season_id;
 	next_season_id = rhs.next_season_id;
 	start_date = rhs.start_date;
@@ -655,9 +658,17 @@ void Tournament:: operator = (const Tournament & rhs) {
 		season_name = new char[strlen(rhs.season_name) + 1];
 		std::strcpy(season_name, rhs.season_name);
 	}
+	if (next_season_name != nullptr) {
+		delete[] next_season_name; next_season_name = nullptr;
+	}
+	if (rhs.next_season_name != nullptr) {
+		next_season_name = new char[strlen(rhs.next_season_name) + 1];
+		std::strcpy(next_season_name, rhs.next_season_name);
+	}
 
 	if (rhs.translation_num > 0) {
 		translation_season_name = new char*[translation_num];
+		translation_next_season_name = new char*[translation_num];
 		translation_name = new char*[translation_num];
 		for (int i = 0; i < translation_num; i++) {
 			if (rhs.translation_name[i] != nullptr) { translation_name[i] = new char[strlen(rhs.translation_name[i]) + 1];std::strcpy(translation_name[i], rhs.translation_name[i]); }
@@ -666,6 +677,8 @@ void Tournament:: operator = (const Tournament & rhs) {
 			if (rhs.translation_season_name[i] != nullptr) { translation_season_name[i] = new char[strlen(rhs.translation_season_name[i]) + 1];std::strcpy(translation_season_name[i], rhs.translation_season_name[i]); }
 			else translation_season_name[i] = nullptr;
 
+			if (rhs.translation_next_season_name[i] != nullptr) { translation_next_season_name[i] = new char[strlen(rhs.translation_next_season_name[i]) + 1]; std::strcpy(translation_next_season_name[i], rhs.translation_next_season_name[i]); }
+			else translation_next_season_name[i] = nullptr;
 		}
 	}
 
@@ -677,17 +690,18 @@ Tournament::Tournament() {
 	category_id = 0;
 	sport_id = 0;
 	sort = 0;
-	key = "";
 	next_season_id = 0;
 	season_id = 0;
 	start_date = 0;
 	end_date = 0;
 	translation_num = LANG_NUM;
 	translation_season_name = new char*[translation_num];
+	translation_next_season_name = new char*[translation_num];
 	translation_name = new char*[translation_num];
 	for (int i = 0; i < translation_num; i++) {
 		translation_name[i] = nullptr;
 		translation_season_name[i] = nullptr;
+		translation_next_season_name[i] = nullptr;
 	}
 
 	name = nullptr;
@@ -695,9 +709,19 @@ Tournament::Tournament() {
 };
 string Tournament::getCatKey() {
 
-
+	return to_string(type_radar) + to_string(id);
 
 }
+
+string Tournament::getSeasonKey() {
+	return to_string(type_radar) + to_string(season_id);
+	
+}
+
+string Tournament::getNextSeasonKey() {
+	return to_string(type_radar) + to_string(next_season_id);
+}
+
 
 class Category {
 public:
@@ -875,6 +899,7 @@ public:
 	int bet_stop;
 	void operator = (const Event&);
 	string getCatKey();
+	string getTournamentKey();
 
 };
 void Event:: operator = (const Event & rhs) {
@@ -1207,6 +1232,9 @@ string Event::getCatKey() {
 	return key;
 	
 }
+string Event::getTournamentKey() {
+	return to_string(type_radar) + to_string(tournament_id);
+}
 
 
 
@@ -1422,7 +1450,6 @@ public:
 	int betstop_reason;
 	int tournament_id;
 	int season_id;
-	int simple_id;
 	int market_id;
 	int event_id;
 	string key;
@@ -1430,7 +1457,8 @@ public:
 	int status; //0 (inactive)// 1 (active) //-1(suspended) //- 3 (cleared, settled) //- 4 (cancelled)	//handed_over(-2)
 	int favourite;
 	int type;//0 -normal liveodds:outcometext //1-sr:player//2-sr:competitor//3 pre:outcometext // 4: pre:playerprops  
-	int type_radar;//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:season://4 sr:race_tournament://5 vf:match //6 sr:season: 7 //vf:tournament:
+	int type_radar;//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournament://4 sr:race_tournament://5 vf:match  6 //vf:tournament:
+	int event_type_radar;
 	int variant;
 	char* name;
 	int outcome_number;
@@ -1449,6 +1477,8 @@ public:
 	int next_betstop;
 	void operator = (const Line&);
 	string getCatKey();
+	string getEventKey();
+	string getTournamentKey();
 	string getCompoundKey();
 };
 void Line:: operator = (const Line & rhs) {
@@ -1464,7 +1494,6 @@ void Line:: operator = (const Line & rhs) {
 	tournament_id = rhs.tournament_id;
 	season_id = rhs.season_id;
 	variant = rhs.variant;
-	simple_id = rhs.simple_id;
 	next_betstop = rhs.next_betstop;
 	for (int i = 0; i < outcome_number; i++) if (outcome_name[i] != nullptr) delete[] outcome_name[i];
 	if (outcome_name != nullptr) { delete[] outcome_name; outcome_name = nullptr; }
@@ -1550,6 +1579,7 @@ Line::Line() {
 	favourite = 0;
 	type = 0;
 	type_radar = 0;
+	event_type_radar = 0;
 	variant = -1;
 	name = nullptr;
 	key = "";
@@ -1567,8 +1597,7 @@ Line::Line() {
 	specifier_number = 0;
 	extended_specifier_number = 0;
 	next_betstop = 0;
-	simple_id = 0;
-
+	
 
 };
 string Line::getCatKey() {
@@ -1585,7 +1614,7 @@ string Line::getCatKey() {
 	break;
 
 	case 2:
-		key = "2" + to_string(simple_id);
+		key = "2" + to_string(tournament_id);
 	break;
 
 	case 3:
@@ -1608,6 +1637,56 @@ string Line::getCatKey() {
 	}
 	return  key;
 }
+string Line::getEventKey() {
+		//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournament://4 sr:race_tournament://5 vf:match  6 //vf:tournament:
+		switch (type_radar) {
+		case 0:
+			return "0" + to_string(event_id);
+			break;
+		case 1:
+			return "1" + to_string(event_id);
+			break;
+		case 5:
+			return "5" + to_string(event_id);
+			break;
+	}
+
+		std::printf("Error getEventKey in Line::getEventKey type_radar=%d\r\n", type_radar);
+	return  "";
+}
+string Line::getTournamentKey() {
+	//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournament://4 sr:race_tournament://5 vf:match  6 //vf:tournament:
+	switch (type_radar) {
+	case 0:
+		if (event_type_radar == 2 ) return "2" + to_string(tournament_id);
+		else return "0" + to_string(tournament_id);
+		break;
+	case 1:
+		return "1" + to_string(tournament_id);
+		break;
+	case 2:
+		return "2" + to_string(tournament_id);
+		break;
+
+	case 3:
+		return "0" + to_string(tournament_id);
+		break;
+	
+	case 4:
+		return "1" + to_string(tournament_id);
+		break;
+	
+	case 5:
+		return "3" + to_string(tournament_id);
+		break;
+	
+	case 6:
+		return "3" + to_string(tournament_id);
+		break;
+
+	}
+	return  "";
+}
 string Line::getCompoundKey() {
 	ostringstream key_oss;
 	key_oss.str("");  // reset our stream
@@ -1621,6 +1700,7 @@ string Line::getCompoundKey() {
 	}
 	return key_oss.str();
 }
+
 class Betstop {
 public:
 	Betstop();
@@ -1738,6 +1818,7 @@ int bevents_show_l = 0;
 Line** blines_id = new Line*[MAX_LINES];
 //Tournament** btournaments_id = new Tournament*[MAX_TOURNAMENTS];
 unordered_map<string, Tournament*> btournaments_id;
+unordered_map<string, Tournament*> bseasons_id;
 //Tournament** bseasons_id = new Tournament*[MAX_TOURNAMENTS];
 //Tournament** bsimples_id = new Tournament*[MAX_TOURNAMENTS];
 Category** bcategories_id = new Category*[MAX_CATEGORIES];
@@ -1778,6 +1859,7 @@ int events_show_l = 0;
 Line** lines_id = new Line*[MAX_LINES];
 //Tournament** tournaments_id = new Tournament*[MAX_TOURNAMENTS];
 unordered_map<string, Tournament*> tournaments_id;
+unordered_map<string, Tournament*> seasons_id;
 //Tournament** seasons_id = new Tournament*[MAX_TOURNAMENTS];
 //Tournament** simples_id = new Tournament*[MAX_TOURNAMENTS];
 Category** categories_id = new Category*[MAX_CATEGORIES];
@@ -1852,7 +1934,6 @@ public:
 	float accept_odd;
 	float settlement_odd;
 	int tournament_id;
-	int simple_id;
 	int season_id;
 	int market_id;
 	int event_id;
@@ -1869,6 +1950,7 @@ public:
 	int favourite;
 	int type;//0 -normal liveodds:outcometext //1-sr:player//2-sr:competitor//3 pre:outcometext   //4: pre:playerprops   
 	int type_radar;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season: 4//sr:race_tournament
+	int event_type_radar;//0 sr:match://1 sr:race_event //2 sr:simple_tournament:://3 sr:season: 4//sr:race_tournament
 	int variant;
 	char* name;
 	int void_reason;
@@ -1920,6 +2002,8 @@ public:
 	void operator = (const Bet&);
 	void setHistoryData();
 	string getCatKey();
+	string getEventKey();
+	string getTournamentKey();
 	string getCompoundKey();
 };
 void Bet:: operator = (const Bet & rhs) {
@@ -1938,7 +2022,6 @@ void Bet:: operator = (const Bet & rhs) {
 	place_odd = rhs.place_odd;
 	tournament_id = rhs.tournament_id;
 	variant = rhs.variant;
-	simple_id = rhs.simple_id;
 	outcome_number = rhs.outcome_number;
 	void_reason = rhs.void_reason;
 	certainy = rhs.certainy;
@@ -1949,6 +2032,7 @@ void Bet:: operator = (const Bet & rhs) {
 	end_time = rhs.end_time;
 	superceded_by = rhs.superceded_by;
 	type_radar = rhs.type_radar;
+	event_type_radar = rhs.event_type_radar;
 	line_id = rhs.line_id;
 	ticket_id = rhs.ticket_id;
 	selected_outcome_id = rhs.selected_outcome_id;
@@ -2169,6 +2253,7 @@ void Bet:: operator = (const Bet & rhs) {
 }
 void Bet::setHistoryData() {
 	Event* _event = nullptr;
+	Tournament* _tournament = nullptr;
 	char buff[MAX_PATH];
 	char buff_[MAX_PATH];
     switch (type_radar) {
@@ -2177,10 +2262,10 @@ void Bet::setHistoryData() {
 	case 1://sr:race_event
 	case 5://vf:match
 
-		if (bevents_id.find(getCatKey()) == bevents_id.end()) {
+		if (bevents_id.find(getEventKey()) == bevents_id.end()) {
 			std::printf("event_id=%d  not found in  setHistoryData\r\n", event_id); status = -2;  return;
 		}
-		_event = bevents_id[getCatKey()];
+		_event = bevents_id[getEventKey()];
 
 		if (_event->bet_stop == 1) {
 			status = -2;  return;
@@ -2231,7 +2316,7 @@ void Bet::setHistoryData() {
 		}
 		
 		tournament_id = _event->tournament_id;
-		simple_id = _event->simple_id;
+		event_type_radar = _event->type_radar;
 		event_status = _event->status;
 		event_start_time = _event->start_time;
 		event_period_length = _event->period_length;
@@ -2318,27 +2403,24 @@ void Bet::setHistoryData() {
 		}
 		
 
-	case 3://sr:season
+    case 2://sr:simple_tournament
+	case 3://sr:tournament
 	case 4://sr:race_tournament
-
-
-
-		if (!(type_radar < 2 && _event->type_radar == 2)) {
+	case 6://vf:tournament
 
 			//printf("setHistoryData1\r\n");
-			if (tournament_id >= MAX_TOURNAMENTS) printf("tournament_id=%d out of MAX_TOURNAMENTS in in setHistoryData\r\n", tournament_id);
-			else 
 				
-			if (btournaments_id[tournament_id] == nullptr) printf("tournament_id=%d  not found in in setHistoryData\r\n", tournament_id);
+			if (btournaments_id.find(getTournamentKey()) == btournaments_id.end()) printf("tournament_id=%d  type_radar =%d not found in in setHistoryData \r\n", tournament_id, type_radar);
 			else {
-				if (type_radar > 1) {
-					event_start_time = btournaments_id[tournament_id]->end_date;
+				_tournament = btournaments_id[getTournamentKey()];
+				if (type_radar == 2 || type_radar == 3 || type_radar == 4 || type_radar == 6) {
+					event_start_time = _tournament->end_date;
 					event_id = tournament_id;
 				}
-				if (btournaments_id[tournament_id]->category_id >= MAX_CATEGORIES) printf("category_id=%d out of  MAX_CATEGORIES in in setHistoryData\r\n", btournaments_id[tournament_id]->category_id);
-				else if (bcategories_id[btournaments_id[tournament_id]->category_id] == nullptr) printf("tournament_id=%d  not found in in setHistoryData\r\n", btournaments_id[tournament_id]->category_id);
+				if (_tournament->category_id >= MAX_CATEGORIES) printf("category_id=%d out of  MAX_CATEGORIES in in setHistoryData\r\n", _tournament->category_id);
+				else if (bcategories_id[_tournament->category_id] == nullptr) printf("tournament_id=%d  not found in in setHistoryData\r\n", _tournament->category_id);
 				else {
-					category_id = btournaments_id[tournament_id]->category_id;
+					category_id = _tournament->category_id;
 					if (bcategories_id[category_id]->name != nullptr) {
 						if (category_name != nullptr) { delete[] category_name; category_name = nullptr; }
 						category_name = new char[strlen(bcategories_id[category_id]->name) + 1];
@@ -2346,23 +2428,23 @@ void Bet::setHistoryData() {
 					}
 
 				}
-				if (btournaments_id[tournament_id]->name != nullptr) {
+				if (_tournament->name != nullptr) {
 					if (tournament_name != nullptr) { delete[] tournament_name; tournament_name = nullptr; }
-					tournament_name = new char[strlen(btournaments_id[tournament_id]->name) + 1];
-					std::strcpy(tournament_name, btournaments_id[tournament_id]->name);
+					tournament_name = new char[strlen(_tournament->name) + 1];
+					std::strcpy(tournament_name, _tournament->name);
 				}
-				if (season_id == 0) season_id = btournaments_id[tournament_id]->season_id;
-				if (season_id != 0 && season_id == btournaments_id[tournament_id]->season_id && btournaments_id[tournament_id]->season_name != nullptr) {
+				if (season_id == 0) season_id = _tournament->season_id;
+				if (season_id != 0 && season_id == _tournament->season_id && _tournament->season_name != nullptr) {
 					if (season_name != nullptr) { delete[] season_name; season_name = nullptr; }
-					season_name = new char[strlen(btournaments_id[tournament_id]->season_name) + 1];
-					std::strcpy(season_name, btournaments_id[tournament_id]->season_name);
+					season_name = new char[strlen(_tournament->season_name) + 1];
+					std::strcpy(season_name, _tournament->season_name);
 				}
 
 
-				if (btournaments_id[tournament_id]->sport_id >= MAX_SPORTS) printf("sport_id=%d out of MAX_SPORTS in in setHistoryData\r\n", btournaments_id[tournament_id]->sport_id);
-				else if (bsports_id[btournaments_id[tournament_id]->sport_id] == nullptr) printf("sport_id=%d  not found in in setHistoryData\r\n", btournaments_id[tournament_id]->sport_id);
+				if (_tournament->sport_id >= MAX_SPORTS) printf("sport_id=%d out of MAX_SPORTS in in setHistoryData\r\n", _tournament->sport_id);
+				else if (bsports_id[_tournament->sport_id] == nullptr) printf("sport_id=%d  not found in in setHistoryData\r\n", _tournament->sport_id);
 				else {
-					sport_id = btournaments_id[tournament_id]->sport_id;
+					sport_id = _tournament->sport_id;
 					if (bsports_id[sport_id]->name != nullptr) {
 						if (sport_name != nullptr) { delete[] sport_name; sport_name = nullptr; }
 						sport_name = new char[strlen(bsports_id[sport_id]->name) + 1];
@@ -2373,56 +2455,9 @@ void Bet::setHistoryData() {
 
 
 			break;
-		}
 
 
-	case 2://sr:simple_tournament
-
-		if (simple_id >= MAX_TOURNAMENTS) printf("simple_id=%d out of MAX_simples in in setHistoryData\r\n", simple_id);
-		else if (bsimples_id[simple_id] == nullptr) printf("simple_id=%d  not found in in setHistoryData\r\n", simple_id);
-		else {
-			if (type_radar > 1) {
-				event_start_time = bsimples_id[simple_id]->end_date;
-				event_id = simple_id;
-			}
-			if (bsimples_id[simple_id]->category_id >= MAX_CATEGORIES) printf("category_id=%d out of  MAX_CATEGORIES in in setHistoryData\r\n", bsimples_id[simple_id]->category_id);
-			else if (bcategories_id[bsimples_id[simple_id]->category_id] == nullptr) printf("simple_id=%d  not found in in setHistoryData\r\n", bsimples_id[simple_id]->category_id);
-			else {
-				category_id = bsimples_id[simple_id]->category_id;
-				if (bcategories_id[category_id]->name != nullptr) {
-					if (category_name != nullptr) { delete[] category_name; category_name = nullptr; }
-					category_name = new char[strlen(bcategories_id[category_id]->name) + 1];
-					std::strcpy(category_name, bcategories_id[category_id]->name);
-				}
-
-			}
-			if (bsimples_id[simple_id]->name != nullptr) {
-				if (tournament_name != nullptr) { delete[] tournament_name; tournament_name = nullptr; }
-				tournament_name = new char[strlen(bsimples_id[simple_id]->name) + 1];
-				std::strcpy(tournament_name, bsimples_id[simple_id]->name);
-			}
-			if (season_id == 0) season_id = bsimples_id[simple_id]->season_id;
-			if (season_id != 0 && season_id == bsimples_id[simple_id]->season_id && bsimples_id[simple_id]->season_name != nullptr) {
-				if (season_name != nullptr) { delete[] season_name; season_name = nullptr; }
-				season_name = new char[strlen(bsimples_id[simple_id]->season_name) + 1];
-				std::strcpy(season_name, bsimples_id[simple_id]->season_name);
-			}
-
-
-			if (bsimples_id[simple_id]->sport_id >= MAX_SPORTS) printf("sport_id=%d out of MAX_SPORTS in in setHistoryData\r\n", bsimples_id[simple_id]->sport_id);
-			else if (bsports_id[bsimples_id[simple_id]->sport_id] == nullptr) printf("sport_id=%d  not found in in setHistoryData\r\n", bsimples_id[simple_id]->sport_id);
-			else {
-				sport_id = bsimples_id[simple_id]->sport_id;
-				if (bsports_id[sport_id]->name != nullptr) {
-					if (sport_name != nullptr) { delete[] sport_name; sport_name = nullptr; }
-					sport_name = new char[strlen(bsports_id[sport_id]->name) + 1];
-					std::strcpy(sport_name, bsports_id[sport_id]->name);
-				}
-			};
-		}
-
-
-		break;
+	
 
 	default:
 
@@ -2703,6 +2738,56 @@ string Bet::getCatKey() {
 		}
 	}
 	return  key;
+}
+string Bet::getEventKey() {
+	//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournament://4 sr:race_tournament://5 vf:match  6 //vf:tournament:
+	switch (type_radar) {
+	case 0:
+		return "0" + to_string(event_id);
+		break;
+	case 1:
+		return "1" + to_string(event_id);
+		break;
+	case 5:
+		return "5" + to_string(event_id);
+		break;
+	}
+
+	std::printf("Error getEventKey in Line::getEventKey type_radar=%d\r\n", type_radar);
+	return  "";
+}
+string Bet::getTournamentKey() {
+	//0 sr:match://1 sr:race_event(sr:stage) //2 sr:simple_tournament://3 sr:tournament://4 sr:race_tournament://5 vf:match  6 //vf:tournament:
+	switch (type_radar) {
+	case 0:
+		if (event_type_radar == 2) return "2" + to_string(tournament_id);
+		else return "0" + to_string(tournament_id);
+		break;
+	case 1:
+		return "1" + to_string(tournament_id);
+		break;
+	case 2:
+		return "2" + to_string(tournament_id);
+		break;
+
+	case 3:
+		return "0" + to_string(tournament_id);
+		break;
+
+	case 4:
+		return "1" + to_string(tournament_id);
+		break;
+
+	case 5:
+		return "3" + to_string(tournament_id);
+		break;
+
+	case 6:
+		return "3" + to_string(tournament_id);
+		break;
+
+	}
+	return  "";
 }
 string Bet::getCompoundKey() {
 	ostringstream key_oss;
@@ -8411,17 +8496,15 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
 			{ type_radar = 1; event_id = atoi((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
 				 key ="1"+ string((char*)((char*)doc.first_node()->first_attribute("event_id")->value() + 9));
-				if (events_id.find(key) != events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) type_radar = 1;
-				else if (events_id.find(key) == events_id.end() && event_id < MAX_TOURNAMENTS && tournaments_id[event_id] != nullptr) type_radar = 4;
-				else if (events_id.find(key) == events_id.end() && (event_id >= MAX_TOURNAMENTS || tournaments_id[event_id] == nullptr)) {
+				if (events_id.find(key) != events_id.end() && tournaments_id.find(key) == tournaments_id.end()) type_radar = 1;
+				else if (events_id.find(key) == events_id.end() && tournaments_id.find(key) != tournaments_id.end()) type_radar = 4;
+				else {
 					type_radar = -1;
 					tournaments[tournaments_l].id = event_id;
 					tournaments[tournaments_l].type_radar = 1;
 					tournaments[tournaments_l].season_id = 0;
-					tournaments[tournaments_l].simple_id = 0;
-					if (event_id >= MAX_TOURNAMENTS || getTournament(&tournaments[tournaments_l], false) == -1) {
-
-						tournaments[tournaments_l].id = 0; tournaments[tournaments_l].type_radar = 0;
+				if (getTournament(&tournaments[tournaments_l], false) == -1) {
+                    	tournaments[tournaments_l].id = 0; tournaments[tournaments_l].type_radar = 0;
 						events[events_l].id = event_id; events[events_l].type_radar = 1;
 						ret_fixture = getEventFixture(&events[events_l]);
 						if (ret_fixture == -1) {
@@ -8442,14 +8525,14 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 			if (DEBUG_OUTPUT == true) std::printf("fixture_change type_radar=%d\r\n", type_radar);
+
 			key = to_string(type_radar) + to_string(event_id);
 
 			if (type_radar == 2) {
-				if (event_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\nssimple id out of MAX_TOURNAMENTS in run fixture_change %d\r\n", event_id); continue; }
-				if (simples_id[event_id] == nullptr) {
+
+  			if (tournaments_id.find(key) == tournaments_id.end()) {
 					std::printf("Simple tournament not found. Run getTournament(). simple_id=%d\r\n", event_id);
-					tournaments[tournaments_l].id = 0;
-					tournaments[tournaments_l].simple_id = event_id;
+					tournaments[tournaments_l].id = event_id;
 					tournaments[tournaments_l].type_radar = 2;
 					if (getTournament(&tournaments[tournaments_l], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture change simple %d\r\n", event_id); continue; }
 					tournaments_l++;
@@ -8496,6 +8579,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 
 
 				}
+
 				else if (getTournament(simples_id[event_id], false) == -1) { std::printf("ERROR!\r\nTournaments simple id not found in run fixture %d\r\n", event_id); continue; }
 				std::printf("fixture_change succes for tournamnet simple id=%d\r\n", event_id);
 
@@ -17406,8 +17490,8 @@ void getCategoriesTournaments() {
 	i = 0;
 	for (xml_node<> * tournament_node = root_node->first_node("tournament"); tournament_node; tournament_node = tournament_node->next_sibling())
 	{
-		tournaments[i].type_radar = 1;
-
+		
+		
 		if (tournaments[i].name != nullptr) {
 			delete[] tournaments[i].name; tournaments[i].name = nullptr;
 		}
@@ -17416,29 +17500,37 @@ void getCategoriesTournaments() {
 			std::strcpy(tournaments[i].name, tournament_node->first_attribute("name")->value());
 		}
 
-		tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));
-		if (tournaments[i].id == 0) {
+
+
+
+		if (strncmp(tournament_node->first_attribute("id")->value(), "sr:tournament:", 14) == 0) {
 			tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
-			if (tournaments[i].id > 0)	tournaments[i].type_radar = 0;
+			tournaments[i].type_radar = 0;
+		}
+		else
+			if (strncmp(tournament_node->first_attribute("id")->value(), "sr:simple_tournament:", 21) == 0) {
+				tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
+				tournaments[i].type_radar = 2;
+			}
+			else
+				if (strncmp(tournament_node->first_attribute("id")->value(), "sr:stage:", 9) == 0) {
+					tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));
+					tournaments[i].type_radar = 1;
 
-			else {
-				tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
-				if (tournaments[i].id > 0)	tournaments[i].type_radar = 1;
-
-				else {
-					tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
-					if (tournaments[i].id > 0) {
-						tournaments[i].type_radar = 2; tournaments[i].simple_id = tournaments[i].id;  tournaments[i].id = 0;
+				}
+				else
+					if (strncmp(tournament_node->first_attribute("id")->value(), "vf:tournament:", 14) == 0) {
+						tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
+						tournaments[i].type_radar = 3;
 					}
 					else {
-						tournaments[i].id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 10));
-						if (tournaments[i].id > 0) tournaments[i].type_radar = 3;
-					}
-				}
-			}
-		}
+						printf("ERROR in tournamnet value getCategoriesTournaments node =%s\r\n", tournament_node->first_attribute("id")->value());
+						continue;
+					};
 
-		if (tournaments[i].type_radar == 1 && tournament_node->first_attribute("scheduled")) {
+
+	
+		if (tournament_node->first_attribute("scheduled")) {
 
 			strcpy(buf, tournament_node->first_attribute("scheduled")->value());
 			st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
@@ -17453,7 +17545,7 @@ void getCategoriesTournaments() {
 		}
 
 
-		if (tournaments[i].type_radar == 1 && tournament_node->first_attribute("scheduled_end")) {
+		if (tournament_node->first_attribute("scheduled_end")) {
 
 			strcpy(buf, tournament_node->first_attribute("scheduled_end")->value());
 			st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
@@ -17468,12 +17560,12 @@ void getCategoriesTournaments() {
 		}
 
 		//printf("tournamentId=%d Name=%s", tournaments[i].id, tournaments[i].name);
-		temp = atoi((char*)((char*)tournament_node->first_node("category")->first_attribute("id")->value() + 12));
+		tournaments[i].category_id = atoi((char*)((char*)tournament_node->first_node("category")->first_attribute("id")->value() + 12));
 
-		temp2 = atoi((char*)((char*)tournament_node->first_node("sport")->first_attribute("id")->value() + 9));
+		tournaments[i].sport_id = atoi((char*)((char*)tournament_node->first_node("sport")->first_attribute("id")->value() + 9));
 
 		//printf("tournaments[i].id=%d\r\n", tournaments[i].id);
-		if (tournaments[i].type_radar == 0) {
+		
 
 			if (tournaments[i].season_name != nullptr) {
 				delete[] tournaments[i].season_name; tournaments[i].season_name = nullptr;
@@ -17515,7 +17607,7 @@ void getCategoriesTournaments() {
 
 
 
-		}
+		
 
 		if (tournament_node->first_node("tournament_length")) {
 			if (tournament_node->first_node("tournament_length")->first_attribute("start_date")) {
@@ -17546,12 +17638,14 @@ void getCategoriesTournaments() {
 
 
 
+		
 
 
 
-
-		if (temp >= MAX_CATEGORIES) std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getCategoryTournaments %d\r\n", temp);
-		else if (categories_id[temp] == nullptr) {
+		if (tournaments[i].category_id >= MAX_CATEGORIES) {
+			std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getCategoryTournaments %d\r\n", tournaments[i].category_id); continue;
+		}
+		else if (categories_id[tournaments[i].category_id] == nullptr) {
 			if (categories[j].name != nullptr) {
 				delete[] categories[j].name; categories[j].name = nullptr;
 			}
@@ -17560,30 +17654,18 @@ void getCategoriesTournaments() {
 				std::strcpy(categories[j].name, tournament_node->first_node("category")->first_attribute("name")->value());
 			}
 
-			categories[j].id = temp;
-			categories[j].sport_id = temp2;
-			categories_id[temp] = &categories[j];
-
+			categories[j].id = tournaments[i].category_id;
+			categories[j].sport_id = tournaments[i].sport_id;
+			categories_id[categories[j].id] = &categories[j];
+			saveCategoryToDB(&categories[j]);
 			j++;
 		}
 
-		tournaments[i].sport_id = temp2;
-		tournaments[i].category_id = temp;
-
-		if (tournaments[i].type_radar == 2) {
-			if (tournaments[i].simple_id < MAX_TOURNAMENTS) simples_id[tournaments[i].simple_id] = &tournaments[i]; else std::printf("ERROR DATA!\r\ntournament simple_id out of MAX_TOURNAMANETS in getCanegoryTournaments %d\r\n", tournaments[i].simple_id);
-
-		}
-		else {
-			if (tournaments[i].id < MAX_TOURNAMENTS) tournaments_id[tournaments[i].id] = &tournaments[i]; else std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMANETS in getCanegoryTournaments %d\r\n", tournaments[i].id);
-			if (tournaments[i].season_id > 0) {
-				if (tournaments[i].season_id < MAX_TOURNAMENTS) seasons_id[tournaments[i].season_id] = &tournaments[i]; else std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getCanegoryTournaments %d\r\n", tournaments[i].season_id);
-			}
-		}
-
-
-		//printf("tournamentId=%d Name=%s tournamentIdSport=%d tournamentIdCategory=%d", tournaments[i].id, tournaments[i].name, tournaments[i].sport_id, tournaments[i].category_id);
-		//cout << endl;
+		
+		
+			tournaments_id[tournaments[i].getCatKey()] = &tournaments[i]; 
+			if(tournaments[i].season_id > 0) seasons_id[tournaments[i].getSeasonKey()] = &tournaments[i];
+			saveTournamentToDB(&tournaments[i]);
 		i++;
 
 		//cout << endl;
@@ -17623,44 +17705,46 @@ void getCategoriesTournamentsTranslate(int l) {
 	doc.parse<0>((char*)((char*)recvbuf + i + 4));
 	root_node = doc.first_node("tournaments");
 	i = 0;
+	int id = 0;
+	string key;
+	int type_radar;
+
 	for (xml_node<> * tournament_node = root_node->first_node("tournament"); tournament_node; tournament_node = tournament_node->next_sibling())
 	{
 
-		int type_radar = 1;
-		int simple_id = 0;
-		int id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));
-		if (id == 0) {
+
+		if (strncmp(tournament_node->first_attribute("id")->value(), "sr:tournament:", 14) == 0) {
 			id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
-			if (id > 0)type_radar = 0;
+			type_radar = 0;
+		}
+		else
+			if (strncmp(tournament_node->first_attribute("id")->value(), "sr:simple_tournament:", 21) == 0) {
+			id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
+			type_radar = 2;
+			}
+			else
+				if (strncmp(tournament_node->first_attribute("id")->value(), "sr:stage:", 9) == 0) {
+			    id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));
+		     	type_radar = 1;
 
-			else {
-				id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
-				if (id > 0) type_radar = 1;
-
-				else {
-					id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
-					if (id > 0) {
-						type_radar = 2;  simple_id = id;  id = 0;
+				}
+				else
+					if (strncmp(tournament_node->first_attribute("id")->value(), "vf:tournament:", 14) == 0) {
+			         id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
+					 type_radar = 3;
 					}
 					else {
-						id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 10));
-						if (id > 0) type_radar = 3;
-					}
-				}
-			}
-		}
+						printf("ERROR in tournamnet value getCategoriesTournaments node =%s\r\n", tournament_node->first_attribute("id")->value());
+						continue;
+					};
 
 
-		if (type_radar == 2) {
-			if (simple_id == 0 || simple_id >= MAX_TOURNAMENTS || simples_id[simple_id] == nullptr) { printf("simpleid torunamnets error=%d\r\n", simple_id); continue; }
-			tournament = simples_id[simple_id];
-		}
-		else {
-			if (id == 0 || id >= MAX_TOURNAMENTS || tournaments_id[id] == nullptr) { printf("id torunamnets error=%d\r\n", id); continue; }
-			tournament = tournaments_id[id];
+					key = to_string(type_radar) + to_string(id);
 
-		}
+					if (tournaments_id.find(key) == tournaments_id.end()) continue;
+					tournament = tournaments_id[key];
 
+		
 
 		if (tournament_node->first_attribute("name") && tournament->translation_name[l] == nullptr) {
 			//printf("tournament_node->first_attribute(name)->value()=%s\r\n", tournament_node->first_attribute("name")->value());
@@ -17830,6 +17914,7 @@ void getEvents(time_t sec, int days) {
 	struct tm tm;
 	std::memset(&st, 0, sizeof(st));
 	std::memset(&tm, 0, sizeof(tm));
+	Tournament* _tournament;
 	char* recvbuf = new char[EXTRA];
 	int booked_num = 0;
 
@@ -17858,22 +17943,25 @@ void getEvents(time_t sec, int days) {
 		for (xml_node<> * event_node = root_node->first_node("sport_event"); event_node; event_node = event_node->next_sibling())
 		{
 			//printf("for\r\n");
-			events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 9));
-			if (events[i].id == 0) {
-				events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 14));
-				events[i].type_radar = 1;
+			if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "vf:match:", 9) == 0)
+			{
+				events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 9)); events[i].type_radar = 3;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:match:", 9) == 0)
+			{
+				events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 9)); events[i].type_radar = 0;
+			}
+			else if (strncmp(doc.first_node()->first_attribute("event_id")->value(), "sr:stage:", 9) == 0)
+			{
+				events[i].id = atoi((char*)((char*)event_node->first_attribute("id")->value() + 9)); events[i].type_radar = 1;
+			}
+			else {
+			printf("ERROR getEvents\r\n");
+			printf("event_node=%s\r\n",event_node->first_attribute("id")->value());
+			printf("\r\n"); continue;
 			}
 
-			if (events[i].id == 0) {
-
-				printf("EROR\r\n");
-				printf(event_node->first_attribute("id")->value());
-				printf("\r\n");
-
-			}
-
-
-
+		
 			if (event_node->first_attribute("status") != nullptr) {
 				if (strcmp("live", event_node->first_attribute("status")->value()) == 0)  events[i].status = 1; else
 					if (strcmp("closed", event_node->first_attribute("status")->value()) == 0)  events[i].status = 4; else
@@ -17891,8 +17979,6 @@ void getEvents(time_t sec, int days) {
 			}
 
 
-
-
 			strcpy(buf, event_node->first_attribute("id")->next_attribute()->value());
 			sscanf(buf, "%d-%d-%dT%d:%d:%d", &st.wYear, &st.wMonth, &st.wDay, &st.wHour, &st.wMinute, &st.wSecond);
 			tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
@@ -17903,191 +17989,45 @@ void getEvents(time_t sec, int days) {
 
 
 
-			if (events[i].type_radar == 0) {
+			if (events[i].type_radar == 0 || events[i].type_radar == 3) {
 
 				if (event_node->first_attribute("liveodds")) {
 					strcpy(buf, event_node->first_attribute("liveodds")->value());
 					if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'd') events[i].booked = 1;
 					if (buf[0] == 'b'&& buf[1] == 'o'&& buf[5] == 'b') events[i].booked = 2;
 				}
-
-
-
-
-
-
-				if (events[i].home_name != nullptr) {
+                if (events[i].home_name != nullptr) {
 					delete[] events[i].home_name; events[i].home_name = nullptr;
 				}
 				if (event_node->first_node("competitors")->first_node("competitor")->first_attribute("name")) {
 					events[i].home_name = new char[strlen(event_node->first_node("competitors")->first_node("competitor")->first_attribute("name")->value()) + 1];
 					std::strcpy(events[i].home_name, event_node->first_node("competitors")->first_node("competitor")->first_attribute("name")->value());
 				}
-
-
-				if (events[i].away_name != nullptr) { delete[] events[i].away_name; events[i].away_name = nullptr; }
+                if (events[i].away_name != nullptr) { delete[] events[i].away_name; events[i].away_name = nullptr; }
 				if (event_node->first_node("competitors")->first_node("competitor")->next_sibling()->first_attribute("name")) {
 					events[i].away_name = new char[strlen(event_node->first_node("competitors")->first_node("competitor")->next_sibling()->first_attribute("name")->value()) + 1];
 					std::strcpy(events[i].away_name, event_node->first_node("competitors")->first_node("competitor")->next_sibling()->first_attribute("name")->value());
 				}
-
-
 				events[i].home_id = atoi((char*)((char*)event_node->first_node("competitors")->first_node("competitor")->first_attribute("id")->value() + 14));
 				events[i].away_id = atoi((char*)((char*)event_node->first_node("competitors")->first_node("competitor")->next_sibling()->first_attribute("id")->value() + 14));
-
 				if (event_node->first_node("competitors")->first_node("competitor")->first_node("reference_ids") && event_node->first_node("competitors")->first_node("competitor")->first_attribute("id")->value()[3] == 'c')
 					events[i].home_reference_id = atoi((char*)event_node->first_node("competitors")->first_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
 					events[i].home_reference_id = events[i].home_id; //events[i].home_id = 0;
 				}
-
 				if (event_node->first_node("competitors")->last_node("competitor")->first_node("reference_ids") && event_node->first_node("competitors")->last_node("competitor")->first_attribute("id")->value()[3] == 'c')
 					events[i].away_reference_id = atoi((char*)event_node->first_node("competitors")->last_node("competitor")->first_node("reference_ids")->first_node("reference_id")->first_attribute("value")->value()); else {
 					events[i].away_reference_id = events[i].away_id; //events[i].away_id = 0;
 				}
 
-				events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 14));
-				if (events[i].tournament_id == 0) {
-					events[i].simple_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 21));
-					events[i].type_radar = 2;
-				}
-				else events[i].type_radar = 0;
-
-				events[i].sport_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
-				events[i].category_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
-
-
-
-
-
-				if (events[i].category_id >= MAX_CATEGORIES) std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getEvents %d\r\n", events[i].category_id);
-				else {
-					if (categories_id[events[i].category_id] == nullptr) {
-						categories_id[events[i].category_id] = &categories[categories_l];
-						categories_l++;
-
-					}
-					categories_id[events[i].category_id]->id = events[i].category_id;
-					categories_id[events[i].category_id]->sport_id = events[i].sport_id;
-
-					if (categories_id[events[i].category_id]->name != nullptr) {
-						delete[] categories_id[events[i].category_id]->name; categories_id[events[i].category_id]->name = nullptr;
-					}
-
-					categories_id[events[i].category_id]->name = new char[strlen(event_node->first_node("tournament")->first_node("category")->first_attribute("name")->value()) + 1];
-					std::strcpy(categories_id[events[i].category_id]->name, event_node->first_node("tournament")->first_node("category")->first_attribute("name")->value());
-
-
-				}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-				if (events[i].tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEvents %d\r\n", events[i].tournament_id); continue; }
-
-				if (events[i].type_radar == 0) {
-					if (tournaments_id[events[i].tournament_id] == nullptr) {
-						tournaments_id[events[i].tournament_id] = &tournaments[tournaments_l];
-						tournaments_l++;
-					}
-
-
-					tournaments_id[events[i].tournament_id]->type_radar = events[i].type_radar;
-					tournaments_id[events[i].tournament_id]->id = events[i].tournament_id;
-					tournaments_id[events[i].tournament_id]->category_id = events[i].category_id;
-					tournaments_id[events[i].tournament_id]->sport_id = events[i].sport_id;
-
-					if (tournaments_id[events[i].tournament_id]->name != nullptr) delete[] tournaments_id[events[i].tournament_id]->name;
-					tournaments_id[events[i].tournament_id]->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
-					std::strcpy(tournaments_id[events[i].tournament_id]->name, event_node->first_node("tournament")->first_attribute("name")->value());
-				}
-
-
-				if (events[i].type_radar == 2) {
-					if (simples_id[events[i].simple_id] == nullptr) {
-						simples_id[events[i].simple_id] = &tournaments[tournaments_l];
-						tournaments_l++;
-					}
-
-
-					simples_id[events[i].simple_id]->type_radar = events[i].type_radar;
-					simples_id[events[i].simple_id]->id = 0;
-					simples_id[events[i].simple_id]->simple_id = events[i].simple_id;
-					simples_id[events[i].simple_id]->category_id = events[i].category_id;
-					simples_id[events[i].simple_id]->sport_id = events[i].sport_id;
-
-					if (simples_id[events[i].simple_id]->name != nullptr) delete[] simples_id[events[i].simple_id]->name;
-					simples_id[events[i].simple_id]->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
-					std::strcpy(simples_id[events[i].simple_id]->name, event_node->first_node("tournament")->first_attribute("name")->value());
-				}
-
-
-
-
-				if (event_node->first_node("season") && events[i].type_radar == 0) {
-
-					if (tournaments_id[events[i].tournament_id]->season_name != nullptr) { delete[] tournaments_id[events[i].tournament_id]->season_name; tournaments_id[events[i].tournament_id]->season_name = nullptr; }
-
-					tournaments_id[events[i].tournament_id]->season_name = new char[strlen(event_node->first_node("season")->first_attribute("name")->value()) + 1];
-					std::strcpy(tournaments_id[events[i].tournament_id]->season_name, event_node->first_node("season")->first_attribute("name")->value());
-
-
-					tournaments_id[events[i].tournament_id]->season_id = atoi((char*)((char*)event_node->first_node("season")->first_attribute("id")->value() + 10));
-					seasons_id[tournaments_id[events[i].tournament_id]->season_id] = tournaments_id[events[i].tournament_id];
-
-
-					if (tournaments_id[events[i].tournament_id]->season_id > 0) {
-						if (tournaments_id[events[i].tournament_id]->season_id < MAX_TOURNAMENTS) seasons_id[tournaments_id[events[i].tournament_id]->season_id] = tournaments_id[events[i].tournament_id]; else std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getEvents %d\r\n", tournaments_id[events[i].tournament_id]->season_id);
-					}
-
-
-
-					if (event_node->first_node("season")->first_attribute("start_date")) {
-						strcpy(buf, event_node->first_node("season")->first_attribute("start_date")->value());
-						st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
-						sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
-
-						tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
-						tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
-						start = mktime(&tm);
-						tournaments_id[events[i].tournament_id]->start_date = (int)start;
-
-					}
-
-					if (event_node->first_node("season")->first_attribute("end_date")) {
-						strcpy(buf, event_node->first_node("season")->first_attribute("end_date")->value());
-						st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
-						sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
-
-						tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
-						tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
-						start = mktime(&tm);
-						tournaments_id[events[i].tournament_id]->end_date = (int)start;
-
-					}
-
-				}
-
+				
 
 
 
 
 			}
-			else {
-				events[i].parent_id = atoi((char*)((char*)event_node->first_node("parent")->first_attribute("id")->value() + 9));//sr:stage:
+			else if (events[i].type_radar == 1) {
+				if(event_node->first_node("parent")) events[i].parent_id = atoi((char*)((char*)event_node->first_node("parent")->first_attribute("id")->value() + 9));//sr:stage:
 																																 // atoi((char*)((char*)event_node->first_node("parent")->first_attribute("id")->value() + 14));
-
 				if (events[i].home_name != nullptr) {
 					delete[] events[i].home_name; events[i].home_name = nullptr;
 				}
@@ -18095,7 +18035,6 @@ void getEvents(time_t sec, int days) {
 					events[i].home_name = new char[strlen(event_node->first_attribute("name")->value()) + 1];
 					std::strcpy(events[i].home_name, event_node->first_attribute("name")->value());
 				}
-
 				if (events[i].away_name != nullptr) {
 					delete[] events[i].away_name; events[i].away_name = nullptr;
 				}
@@ -18105,68 +18044,151 @@ void getEvents(time_t sec, int days) {
 				}
 
 
+			}
 
 
-				if (event_node->first_node("tournament"))
-				{
-					//events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 19));
-					events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 9));//sr:stage:
-					events[i].sport_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
-					events[i].category_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
 
 
-					if (events[i].category_id >= MAX_CATEGORIES) std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getEvents %d\r\n", events[i].category_id);
-					else {
-						if (categories_id[events[i].category_id] == nullptr) {
-							categories_id[events[i].category_id] = &categories[categories_l];
-							categories_l++;
+			if (event_node->first_node("tournament")) {
+
+				if (strncmp(event_node->first_node("tournament")->first_attribute("id")->value(), "sr:tournament:", 14) == 0) {
+					events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 14));
+					events[i].type_radar = 0;
+				}
+				else
+					if (strncmp(event_node->first_node("tournament")->first_attribute("id")->value(), "sr:simple_tournament:", 21) == 0) {
+						events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 21));
+						events[i].type_radar = 2;
+					}
+					else
+						if (strncmp(event_node->first_node("tournament")->first_attribute("id")->value(), "sr:stage:", 9) == 0) {
+							events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 9));
+							events[i].type_radar = 1;
 
 						}
-						categories_id[events[i].category_id]->id = events[i].category_id;
-						categories_id[events[i].category_id]->sport_id = events[i].sport_id;
-
-						if (categories_id[events[i].category_id]->name != nullptr) {
-							delete[] categories_id[events[i].category_id]->name; categories_id[events[i].category_id]->name = nullptr;
+						else 	
+							if (strncmp(event_node->first_node("tournament")->first_attribute("id")->value(), "vf:tournament:", 14) == 0) {
+							events[i].tournament_id = atoi((char*)((char*)event_node->first_node("tournament")->first_attribute("id")->value() + 14));
+							events[i].type_radar = 3;
 						}
+						 else {
+								printf("ERROR in tournamnet value getEvents node =%s\r\n", event_node->first_node("tournament")->first_attribute("id")->value());
+								continue;
+							};
 
-						categories_id[events[i].category_id]->name = new char[strlen(event_node->first_node("tournament")->first_node("category")->first_attribute("name")->value()) + 1];
-						std::strcpy(categories_id[events[i].category_id]->name, event_node->first_node("tournament")->first_node("category")->first_attribute("name")->value());
+			
+			
+			};
+				
+				
+			if (events[i].tournament_id == 0 && events[i].parent_id > 0) {
+
+				string event_key = to_string(events[i].parent_id);
+				if (events_id.find(event_key) != events_id.end()) {
+					events[i].tournament_id = events_id[event_key]->tournament_id;
+					events[i].sport_id = events_id[event_key]->sport_id;
+					events[i].category_id = events_id[event_key]->category_id;
+				}
+			}
+
+				
+				
+				
+			if (event_node->first_node("tournament")) {
+				events[i].sport_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
+				events[i].category_id = atoi((char*)((char*)event_node->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
+			}
+			if (events[i].category_id >= MAX_CATEGORIES) {
+				std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getEvents %d\r\n", events[i].category_id); continue;
+			}
+			else {
+				if (categories_id[events[i].category_id] == nullptr) {
+					categories_id[events[i].category_id] = &categories[categories_l];
+					categories_l++;
+
+				}
+				categories_id[events[i].category_id]->id = events[i].category_id;
+				categories_id[events[i].category_id]->sport_id = events[i].sport_id;
+
+				if (categories_id[events[i].category_id]->name != nullptr) {
+					delete[] categories_id[events[i].category_id]->name; categories_id[events[i].category_id]->name = nullptr;
+				}
+
+				categories_id[events[i].category_id]->name = new char[strlen(event_node->first_node("tournament")->first_node("category")->first_attribute("name")->value()) + 1];
+				std::strcpy(categories_id[events[i].category_id]->name, event_node->first_node("tournament")->first_node("category")->first_attribute("name")->value());
 
 
-					}
+			}
+			
+
+			string tournament_key = events[i].getTournamentKey();
+		
+				if (tournaments_id.find(tournament_key) == tournaments_id.end()) {
+					tournaments_id[tournament_key] = &tournaments[tournaments_l];
+					tournaments_l++;
+				} 
+				_tournament = tournaments_id[tournament_key];
+
+				_tournament->type_radar = events[i].type_radar;
+				_tournament->id = events[i].tournament_id;
+				_tournament->category_id = events[i].category_id;
+				_tournament->sport_id = events[i].sport_id;
+
+				if (event_node->first_node("tournament") && event_node->first_node("tournament")->first_attribute("name")) {
+					if (_tournament->name != nullptr) delete[] _tournament->name;
+					_tournament->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
+					std::strcpy(_tournament->name, event_node->first_node("tournament")->first_attribute("name")->value());
+				}
+
+
+			if (event_node->first_node("season")) {
+
+				if (_tournament->season_name != nullptr) { delete[] _tournament->season_name; _tournament->season_name = nullptr; }
+
+				_tournament->season_name = new char[strlen(event_node->first_node("season")->first_attribute("name")->value()) + 1];
+				std::strcpy(_tournament->season_name, event_node->first_node("season")->first_attribute("name")->value());
+				
+				_tournament->season_id = atoi((char*)((char*)event_node->first_node("season")->first_attribute("id")->value() + 10));
+				seasons_id[_tournament->getSeasonKey()] = _tournament;
 
 
 
-					if (events[i].tournament_id >= MAX_TOURNAMENTS) { std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEvents %d\r\n", events[i].tournament_id); continue; }
-					if (tournaments_id[events[i].tournament_id] == nullptr) {
-						tournaments_id[events[i].tournament_id] = &tournaments[tournaments_l];
-						tournaments_l++;
-					}
+				if (event_node->first_node("season")->first_attribute("start_date")) {
+					strcpy(buf, event_node->first_node("season")->first_attribute("start_date")->value());
+					st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
+					sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
 
-
-					tournaments_id[events[i].tournament_id]->type_radar = events[i].type_radar;
-					tournaments_id[events[i].tournament_id]->id = events[i].tournament_id;
-					tournaments_id[events[i].tournament_id]->category_id = events[i].category_id;
-					tournaments_id[events[i].tournament_id]->sport_id = events[i].sport_id;
-
-					if (tournaments_id[events[i].tournament_id]->name != nullptr) delete[] tournaments_id[events[i].tournament_id]->name;
-					tournaments_id[events[i].tournament_id]->name = new char[strlen(event_node->first_node("tournament")->first_attribute("name")->value()) + 1];
-					std::strcpy(tournaments_id[events[i].tournament_id]->name, event_node->first_node("tournament")->first_attribute("name")->value());
-
+					tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
+					tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
+					start = mktime(&tm);
+					_tournament->start_date = (int)start;
 
 				}
 
-				if (events[i].tournament_id == 0 && events[i].parent_id > 0) {
+				if (event_node->first_node("season")->first_attribute("end_date")) {
+					strcpy(buf, event_node->first_node("season")->first_attribute("end_date")->value());
+					st.wHour = 0, st.wMinute = 0, st.wSecond = 0;
+					sscanf(buf, "%d-%d-%d", &st.wYear, &st.wMonth, &st.wDay);
 
-					string event_key = to_string(events[i].parent_id);
-					if (events_id.find(event_key) != events_id.end()) {
-                        events[i].tournament_id = events_id[event_key]->tournament_id;
-						events[i].sport_id = events_id[event_key]->sport_id;
-						events[i].category_id = events_id[event_key]->category_id;
-					}
+					tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
+					tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
+					start = mktime(&tm);
+					_tournament->end_date = (int)start;
+
 				}
 
 			}
+
+
+
+
+
+
+
+
+
+
+
 
 			 events_id[events[i].getCatKey()] = &events[i]; 
 			//&& events[i].start_time>time(nullptr)
@@ -19368,7 +19390,9 @@ int getEventFixture(Event* event, bool b) {
 	_itoa(event->id, buf, 10);
 	if (event->type_radar == 0 || event->type_radar == 2) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:match:");
 	//else std::strcpy(buffer, "/v1/unified/betradar/en/sport_events/sr:stage:");
-	else std::strcpy(buffer, "/v1/sports/en/sport_events/sr:stage:");
+	else if (event->type_radar == 1 ) std::strcpy(buffer, "/v1/sports/en/sport_events/sr:stage:");
+	else if (event->type_radar == 3) std::strcpy(buffer, "/v1/sports/en/sport_events/vf:match:");
+	else { delete[] recvbuf;  return -1; };
 	std::strcat(buffer, buf);
 	std::strcat(buffer, "/fixture.xml");
 	//printf("getEventFixture0=%s\r\n", buffer);
@@ -19394,10 +19418,13 @@ int getEventFixture(Event* event, bool b) {
 	memset(&tm, 0, sizeof(tm));
 	Category** categories_id;
 	Category* categories;
-	Tournament** seasons_id;
-	Tournament** simples_id;
-	Tournament** tournaments_id;
+	//Tournament** seasons_id;
+	//Tournament** simples_id;
+	//Tournament** tournaments_id;
 	Tournament* tournaments;
+	Tournament* _tournament;
+	unordered_map<string, Tournament*>* rtournaments_id;
+	unordered_map<string, Tournament*>* rseasons_id;
 	//Event** events_id;
 	unordered_map<string, Event*>* revents_id;
 	int* rcategories_l;
@@ -19415,10 +19442,10 @@ int getEventFixture(Event* event, bool b) {
 		categories = ::bcategories;
 		rcategories_l = &::bcategories_l;
 		revents_id = &::bevents_id;
-		tournaments_id = ::btournaments_id;
+		rtournaments_id = &::btournaments_id;
 		tournaments = ::btournaments;
-		seasons_id = ::bseasons_id;
-		simples_id = ::bsimples_id;
+		rseasons_id = &::bseasons_id;
+		//simples_id = ::bsimples_id;
 		rtournaments_l = &::btournaments_l;
 		competitors_id = ::bcompetitors_id;
 		competitors = ::bcompetitors;
@@ -19429,10 +19456,10 @@ int getEventFixture(Event* event, bool b) {
 		categories = ::categories;
 		rcategories_l = &::categories_l;
 		revents_id = &::events_id;
-		tournaments_id = ::tournaments_id;
+		rtournaments_id = &::tournaments_id;
 		tournaments = ::tournaments;
-		seasons_id = ::seasons_id;
-		simples_id = ::simples_id;
+		rseasons_id = &::seasons_id;
+		//simples_id = ::simples_id;
 		rtournaments_l = &::tournaments_l;
 		competitors_id = ::competitors_id;
 		competitors = ::competitors;
@@ -19450,10 +19477,12 @@ int getEventFixture(Event* event, bool b) {
 
 	//printf("getEventFixture01\r\n");
 	root_node = doc.first_node("fixtures_fixture");
-	if (root_node == nullptr) {
+	if (!root_node || !root_node->first_node("fixture") || ! root_node->first_node("fixture")->first_node("tournament") || ! root_node->first_node("fixture")->first_node("tournament")->first_node("sport") || !root_node->first_node("fixture")->first_node("tournament")->first_node("category")) {
 		delete[] recvbuf;  doc.clear(); //printf("getEventFixture end -1\r\n");  
 		return -1;
 	}
+
+
 	//printf("2 getEventFixture b=%d\r\n", b);;
 	if (root_node->first_node("fixture")->first_attribute("start_time")) {
 		std::strcpy(buf, root_node->first_node("fixture")->first_attribute("start_time")->value());
@@ -19493,6 +19522,40 @@ int getEventFixture(Event* event, bool b) {
 
 	//printf("getEventFixture03\r\n");
 
+	if (root_node->first_node("fixture")->first_node("tournament") && root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")) {
+
+		if (strncmp(root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value(), "sr:tournament:", 14) == 0) {
+			event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 14));
+			event->type_radar = 0;
+		}
+		else
+			if (strncmp(root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value(), "vf:tournament:", 14) == 0) {
+				event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 14));
+				event->type_radar = 3;
+			}	
+			else
+			if (strncmp(root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value(), "sr:simple_tournament:", 21) == 0) {
+				event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 21));
+				event->type_radar = 2;
+			}
+			else
+					if (strncmp(root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value(), "sr:stage:", 9) == 0) {
+						event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 9));
+						event->type_radar = 1;
+
+					}
+		event->sport_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
+		event->category_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
+
+
+	}
+
+
+	string key = event->getTournamentKey();
+	
+	
+
+	
 	if (event->type_radar == 1) {
 
 		if (root_node->first_node("fixture")->first_attribute("type") && root_node->first_node("fixture")->first_attribute("type")->value()[0] == 'p')
@@ -19519,71 +19582,10 @@ int getEventFixture(Event* event, bool b) {
 			std::strcpy(event->away_name, root_node->first_node("fixture")->first_node("parent")->first_attribute("name")->value());
 		}
 
-		//printf("getEventFixture2\r\n");
-
-		if (root_node->first_node("fixture")->first_node("tournament"))
-		{
-			event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 9));//sr:stage:;
-																																						//event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 19));
-			event->sport_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
-			event->category_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
-
-
-			if (event->tournament_id >= MAX_TOURNAMENTS) std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id);
-			else {
-				if (tournaments_id[event->tournament_id] == nullptr) {
-					ret_value = 1;
-					tournaments_id[event->tournament_id] = &tournaments[*rtournaments_l];
-					tournaments_id[event->tournament_id]->type_radar = event->type_radar;
-					tournaments_id[event->tournament_id]->id = event->tournament_id;
-					(*rtournaments_l)++;
-					if (getTournament(tournaments_id[event->tournament_id], false, b) != -1) ret_fixture = 1;
-				}
-				if (ret_fixture == 0) {
-					tournaments_id[event->tournament_id]->type_radar = event->type_radar;
-					tournaments_id[event->tournament_id]->id = event->tournament_id;
-					tournaments_id[event->tournament_id]->category_id = event->category_id;
-					tournaments_id[event->tournament_id]->sport_id = event->sport_id;
-
-					if (tournaments_id[event->tournament_id]->name != nullptr) delete[] tournaments_id[event->tournament_id]->name;
-					tournaments_id[event->tournament_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
-					std::strcpy(tournaments_id[event->tournament_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
-				}
-			}
-
-
-
-
-			if (event->category_id >= MAX_CATEGORIES) std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getEventFixture %d\r\n", event->category_id);
-			else {
-				if (categories_id[event->category_id] == nullptr) {
-					i = (*rcategories_l); (*rcategories_l)++;
-					categories_id[event->category_id] = &categories[i];
-
-				}
-				categories_id[event->category_id]->id = event->category_id;
-				categories_id[event->category_id]->sport_id = event->sport_id;
-
-				if (categories_id[event->category_id]->name != nullptr) { delete[] categories_id[event->category_id]->name; categories_id[event->category_id]->name = nullptr; }
-				categories_id[event->category_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("name")->value()) + 1];
-				std::strcpy(categories_id[event->category_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("name")->value());
-
-			}
-
-
-
-
-
-
-
-
-
-		}
 	}
 
-	//printf("4 getEventFixture b=%d\r\n", b);;
 
-	if (event->type_radar == 0 || event->type_radar == 2) {
+	if (event->type_radar == 0 || event->type_radar == 2 || event->type_radar == 3) {
 
 		//printf("5 getEventFixture b=%d\r\n", b);;
 		if (root_node->first_node("fixture")->first_attribute("liveodds")) {
@@ -19614,7 +19616,7 @@ int getEventFixture(Event* event, bool b) {
 		///	sr:competitor: or sr:simpleteam
 
 		//printf("8 getEventFixture b=%d\r\n", b);
-		if (event->type_radar == 0) {//	sr:competitor:
+		if (event->type_radar == 0 || event->type_radar == 3) {//	sr:competitor:
 
 			if (root_node->first_node("fixture")->first_node("competitors")->first_node("competitor")->first_attribute("id")->value()[3] == 'c') {
 
@@ -19664,97 +19666,61 @@ int getEventFixture(Event* event, bool b) {
 			event->away_reference_id = event->away_id; //event->away_id = 0;
 		}
 
-		event->tournament_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 14));
-		if (event->tournament_id == 0) { event->simple_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_attribute("id")->value() + 21)); event->type_radar = 2; }
-		else  event->type_radar = 0;
-
-		event->sport_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("sport")->first_attribute("id")->value() + 9));
-		event->category_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("id")->value() + 12));
-
-		//printf("getEventFixture08\r\n");
-
-		//		printf("10 getEventFixture b=%d\r\n", b);
+	}
 
 
-		if (event->tournament_id >= MAX_TOURNAMENTS) {
-			std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMENTS in getEventFixture %d\r\n", event->tournament_id);
-			delete[] recvbuf;  doc.clear(); return -1;
-		}
-		else {
-			if (event->type_radar == 0) {
-
-				if (tournaments_id[event->tournament_id] == nullptr) {
+	
+				if ((*rtournaments_id).find(key) == (*rtournaments_id).end()) {
 					ret_value = 1;
-					tournaments_id[event->tournament_id] = &tournaments[*rtournaments_l];
-					tournaments_id[event->tournament_id]->type_radar = event->type_radar;
-					tournaments_id[event->tournament_id]->id = event->tournament_id;
+					(*rtournaments_id)[key] = &tournaments[*rtournaments_l];
+					_tournament = &tournaments[*rtournaments_l];
+					_tournament->type_radar = event->type_radar;
+					_tournament->id = event->tournament_id;
 					(*rtournaments_l)++;
-					if (getTournament(tournaments_id[event->tournament_id], false, b) != -1) ret_fixture = 1;
-
+					if (getTournament(_tournament, false, b) != -1) ret_fixture = 1;
 				}
-
 				if (ret_fixture == 0) {
+					_tournament = (*rtournaments_id)[key];
+					_tournament->type_radar = event->type_radar;
+					_tournament->id = event->tournament_id;
+					_tournament->category_id = event->category_id;
+					_tournament->sport_id = event->sport_id;
 
-					tournaments_id[event->tournament_id]->type_radar = event->type_radar;
-					tournaments_id[event->tournament_id]->id = event->tournament_id;
-					tournaments_id[event->tournament_id]->category_id = event->category_id;
-					tournaments_id[event->tournament_id]->sport_id = event->sport_id;
-
-					if (tournaments_id[event->tournament_id]->name != nullptr) delete[] tournaments_id[event->tournament_id]->name;
-					tournaments_id[event->tournament_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
-					std::strcpy(tournaments_id[event->tournament_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
+					if (_tournament->name != nullptr) delete[] _tournament->name;
+					_tournament->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
+					std::strcpy(_tournament->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
 				}
-			}
+		
 
-			if (event->type_radar == 2) {
+				if (event->category_id >= MAX_CATEGORIES) {
+					std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getEventFixture %d\r\n", event->category_id); return -1; }
+			else {
+				if (categories_id[event->category_id] == nullptr) {
+					i = (*rcategories_l); (*rcategories_l)++;
+					categories_id[event->category_id] = &categories[i];
 
-				if (simples_id[event->simple_id] == nullptr) {
-					ret_value = 1;
-					simples_id[event->simple_id] = &tournaments[*rtournaments_l];
-					simples_id[event->simple_id]->type_radar = event->type_radar;
-					simples_id[event->simple_id]->simple_id = event->simple_id;
-					simples_id[event->simple_id]->id = 0;
-					(*rtournaments_l)++;
-					if (getTournament(simples_id[event->simple_id], false, b) != -1) ret_fixture = 1;
 				}
+				categories_id[event->category_id]->id = event->category_id;
+				categories_id[event->category_id]->sport_id = event->sport_id;
 
-				if (ret_fixture == 0) {
-					simples_id[event->simple_id]->type_radar = event->type_radar;
-					simples_id[event->simple_id]->id = 0;
-					simples_id[event->simple_id]->simple_id = event->simple_id;
-					simples_id[event->simple_id]->category_id = event->category_id;
-					simples_id[event->simple_id]->sport_id = event->sport_id;
+				if (categories_id[event->category_id]->name != nullptr) { delete[] categories_id[event->category_id]->name; categories_id[event->category_id]->name = nullptr; }
+				categories_id[event->category_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("name")->value()) + 1];
+				std::strcpy(categories_id[event->category_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("name")->value());
 
-					if (simples_id[event->simple_id]->name != nullptr) delete[] simples_id[event->simple_id]->name;
-					simples_id[event->simple_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value()) + 1];
-					std::strcpy(simples_id[event->simple_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_attribute("name")->value());
-				}
 			}
 
 
 
-		}
+		if (root_node->first_node("fixture")->first_node("season")) {
+			if (_tournament->season_name != nullptr) { delete[] _tournament->season_name; _tournament->season_name = nullptr; }
+			_tournament->season_name = new char[strlen(root_node->first_node("fixture")->first_node("season")->first_attribute("name")->value()) + 1];
+			std::strcpy(_tournament->season_name, root_node->first_node("fixture")->first_node("season")->first_attribute("name")->value());
+			
+			
+			_tournament->season_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("season")->first_attribute("id")->value() + 10));
+		if(_tournament->season_id > 0) 	(*rseasons_id)[_tournament->getSeasonKey()] = _tournament;
 
-		//printf("11 getEventFixture b=%d\r\n", b);
-
-
-
-		if (root_node->first_node("fixture")->first_node("season") && event->type_radar == 0) {
-			if (tournaments_id[event->tournament_id]->season_name != nullptr) { delete[] tournaments_id[event->tournament_id]->season_name; tournaments_id[event->tournament_id]->season_name = nullptr; }
-			tournaments_id[event->tournament_id]->season_name = new char[strlen(root_node->first_node("fixture")->first_node("season")->first_attribute("name")->value()) + 1];
-			std::strcpy(tournaments_id[event->tournament_id]->season_name, root_node->first_node("fixture")->first_node("season")->first_attribute("name")->value());
-
-
-
-			tournaments_id[event->tournament_id]->season_id = atoi((char*)((char*)root_node->first_node("fixture")->first_node("season")->first_attribute("id")->value() + 10));
-			seasons_id[tournaments_id[event->tournament_id]->season_id] = tournaments_id[event->tournament_id];
-
-
-			if (tournaments_id[event->tournament_id]->season_id > 0) {
-				if (tournaments_id[event->tournament_id]->season_id < MAX_TOURNAMENTS) seasons_id[tournaments_id[event->tournament_id]->season_id] = tournaments_id[event->tournament_id]; else std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getEventFixture %d\r\n", tournaments_id[event->tournament_id]->season_id);
-			}
-
-
+		
 
 			if (root_node->first_node("fixture")->first_node("season")->first_attribute("start_date")) {
 				strcpy(buf, root_node->first_node("fixture")->first_node("season")->first_attribute("start_date")->value());
@@ -19764,7 +19730,7 @@ int getEventFixture(Event* event, bool b) {
 				tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
 				tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
 				start = mktime(&tm);
-				tournaments_id[event->tournament_id]->start_date = (int)start;
+				_tournament->start_date = (int)start;
 
 			}
 
@@ -19776,7 +19742,7 @@ int getEventFixture(Event* event, bool b) {
 				tm.tm_year = st.wYear - 1900; // EDIT 2 : 1900's Offset as per comment
 				tm.tm_mon = st.wMonth - 1; tm.tm_mday = st.wDay;	tm.tm_hour = st.wHour;	tm.tm_min = st.wMinute;	tm.tm_sec = st.wSecond; tm.tm_isdst = -1; // Edit 2: Added as per comment
 				start = mktime(&tm);
-				tournaments_id[event->tournament_id]->end_date = (int)start;
+				_tournament->end_date = (int)start;
 
 			}
 
@@ -19788,28 +19754,7 @@ int getEventFixture(Event* event, bool b) {
 
 
 
-		if (event->category_id >= MAX_CATEGORIES) std::printf("ERROR DATA!\r\ncategory id out of MAX_CATEGORIES in getEventFixture %d\r\n", event->category_id);
-		else {
-			if (categories_id[event->category_id] == nullptr) {
-				i = (*rcategories_l); (*rcategories_l)++;
-				categories_id[event->category_id] = &categories[i];
-
-			}
-			categories_id[event->category_id]->id = event->category_id;
-			categories_id[event->category_id]->sport_id = event->sport_id;
-
-			if (categories_id[event->category_id]->name != nullptr) { delete[] categories_id[event->category_id]->name; categories_id[event->category_id]->name = nullptr; }
-			categories_id[event->category_id]->name = new char[strlen(root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("name")->value()) + 1];
-			std::strcpy(categories_id[event->category_id]->name, root_node->first_node("fixture")->first_node("tournament")->first_node("category")->first_attribute("name")->value());
-
-		}
-
-
-
-
-
-		//printf("13 getEventFixture b=%d\r\n", b);
-
+	
 
 
 		if (root_node && root_node->first_node("fixture") && root_node->first_node("fixture")->first_node("extra_info"))
@@ -19817,7 +19762,7 @@ int getEventFixture(Event* event, bool b) {
 			{
 				if (info_node->first_attribute("key")->value())
 
-					if (strcmp("period_length", info_node->first_attribute("key")->value()) == 0) event->period_length = atoi(info_node->first_attribute("value")->value());
+				if (strcmp("period_length", info_node->first_attribute("key")->value()) == 0) event->period_length = atoi(info_node->first_attribute("value")->value());
 				if (strcmp("overtime_length", info_node->first_attribute("key")->value()) == 0)	event->overtime_length = atoi(info_node->first_attribute("value")->value());
 				if (strcmp("austrian_district", info_node->first_attribute("key")->value()) == 0)	event->austrian_district = atoi(info_node->first_attribute("value")->value());
 				if (strcmp("neutral_ground", info_node->first_attribute("key")->value()) == 0 && strcmp("true", info_node->first_attribute("key")->value()) == 0)event->neutral_ground = 1;
@@ -19882,7 +19827,7 @@ int getEventFixture(Event* event, bool b) {
 
 		//printf("11 getEventFixture b=%d\r\n", b);
 
-	}
+	
 
 
 
@@ -19913,18 +19858,16 @@ int getEventFixture(Event* event, bool b) {
 
 	//printf("16 getEventFixture b=%d\r\n", b);
 
-	if (event->type_radar < 2 && event->tournament_id == 0) { printf("event->tournament_id = 0 event->id=%d event->type_radar=%d  timestamp=%d\r\n", event->id, event->type_radar, timestamp() / 100); doc.clear();  return -1; }
-	if (event->type_radar == 2 && event->simple_id == 0) { printf("event->simple_id = 0 event->id=%d event->type_radar=%d  timestamp=%d\r\n", event->id, event->type_radar, timestamp() / 100); doc.clear();  return -1; }
+	if ( event->tournament_id == 0) { printf("event->tournament_id = 0 event->id=%d event->type_radar=%d  timestamp=%d\r\n", event->id, event->type_radar, timestamp() / 100); doc.clear();  return -1; }
 	if (event->sport_id == 0) { doc.clear();  return -1; }
 	if (event->category_id == 0) { doc.clear(); return -1; }
 
 	
 	if (b == false) {
 
-		if (ret_value == 0) {
+		if (ret_value == 1) {
 
-			if (event->type_radar == 2) saveTournamentToDB(simples_id[event->simple_id]);
-			else saveTournamentToDB(tournaments_id[event->tournament_id]);
+			saveTournamentToDB(_tournament);
 			saveCategoryToDB(categories_id[event->category_id]);
 
 		}
@@ -20160,9 +20103,11 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 	std::memset(&st, 0, sizeof(st));
 	std::memset(&tm, 0, sizeof(tm));
 	Category** categories_id;
-	Tournament** seasons_id;
-	Tournament** simples_id;
-	Tournament** tournaments_id;
+	//Tournament** seasons_id;
+	//Tournament** simples_id;
+	//Tournament** tournaments_id;
+	unordered_map<string, Tournament*>* rtournaments_id;
+	unordered_map<string, Tournament*>* rseasons_id;
 	Competitor** competitors_id;
 	Competitor* competitors;
 	int* rcategories_l;
@@ -20173,9 +20118,9 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 	if (b == true) {
 		categories_id = ::bcategories_id;
 		rcategories_l = &::bcategories_l;
-		simples_id = ::bsimples_id;
-		seasons_id = ::bseasons_id;
-		tournaments_id = ::btournaments_id;
+		//simples_id = ::bsimples_id;
+		rseasons_id = &::bseasons_id;
+		rtournaments_id = &::btournaments_id;
 		competitors_id = ::bcompetitors_id;
 		competitors = ::bcompetitors;
 		rcompetitors_l = &::bcompetitors_l;
@@ -20183,9 +20128,9 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 	else {
 		categories_id = ::categories_id;
 		rcategories_l = &::categories_l;
-		simples_id = ::simples_id;
-		seasons_id = ::seasons_id;
-		tournaments_id = ::tournaments_id;
+		//simples_id = ::simples_id;
+		rseasons_id = &::seasons_id;
+		rtournaments_id = &::tournaments_id;
 		competitors_id = ::competitors_id;
 		competitors = ::competitors;
 		rcompetitors_l = &::competitors_l;
@@ -20193,15 +20138,14 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 	}
 
 
-	if (tournament->id == 0 && tournament->season_id == 0 && tournament->simple_id == 0) {
+	if (tournament->id == 0 && tournament->season_id == 0) {
 		delete[] recvbuf;  return -1;
 	};
 
 
 
 	if ((tournament->type_radar == 0 || tournament->type_radar == 3) && tournament->id == 0) _itoa(tournament->season_id, buf, 10);
-	else if (tournament->type_radar == 2 && tournament->id == 0) _itoa(tournament->simple_id, buf, 10);
-	else _itoa(tournament->id, buf, 10);
+	else  _itoa(tournament->id, buf, 10);
 
 
 	std::strcpy(buffer, "/v1/sports/en/tournaments/");
@@ -20242,9 +20186,10 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 				}
 				if (tournament_node->first_attribute("id")) {
 					if (tournament->type_radar == 0)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14)); else
-						if (tournament->type_radar == 1)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));//sr:stage:
-																																					 // tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
-					if (tournament->type_radar == 2)  tournament->simple_id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
+					if (tournament->type_radar == 1)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9)); else //sr:stage:// tournament->id = atoi((char*)((chatournament_node->first_attribute("id")->value() + 19));
+					if (tournament->type_radar == 2)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21)); else
+					if (tournament->type_radar == 3)  tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
+
 				}
 
 				if (tournament->name != nullptr) {
@@ -20383,22 +20328,13 @@ int getTournament(Tournament* tournament, bool extended, bool b) {
 
 				}
 
+				(*rtournaments_id)[tournament->getCatKey()] = tournament;
+				if (tournament->season_id > 0) 
+				(*rseasons_id)[tournament->getSeasonKey()] = tournament;
 
-				if (tournament->type_radar == 2) {
-					simples_id[tournament->simple_id] = tournament;
+		
 
-				}
-				else {
-					if (tournament->id < MAX_TOURNAMENTS) tournaments_id[tournament->id] = tournament;
-					else {
-						std::printf("ERROR DATA!\r\ntournament id out of MAX_TOURNAMANETS in getTournaments %d\r\n", tournament->id); delete[] recvbuf;  doc.clear(); return -1;
-					}
 
-					if (tournament->season_id > 0) {
-						if (tournament->season_id < MAX_TOURNAMENTS) seasons_id[tournament->season_id] = tournament; else { std::printf("ERROR DATA!\r\ntournament season_id out of MAX_TOURNAMANETS in getTournaments %d\r\n", tournament->season_id); delete[] recvbuf;  doc.clear(); return -1; }
-					}
-
-				}
 
 
 				if (b == false) {
@@ -20474,23 +20410,23 @@ int getTournamentTranslate(Tournament* tournament, int l) {
 	char buf[MAX_PATH];
 	char buffer[1024];
 	char* recvbuf = new char[EXTRA];
-	if (tournament->id == 0 && tournament->season_id == 0 && tournament->simple_id == 0) {
+	if (tournament->id == 0 && tournament->season_id == 0) {
 		delete[] recvbuf;  return -1;
 	};
 
 
-
-	if (tournament->type_radar == 0 && tournament->id == 0) _itoa(tournament->season_id, buf, 10);
-	else if (tournament->type_radar == 2 && tournament->id == 0) _itoa(tournament->simple_id, buf, 10);
+	if (tournament->id == 0) _itoa(tournament->season_id, buf, 10);
 	else _itoa(tournament->id, buf, 10);
 
 	std::strcpy(buffer, "/v1/sports/");
 	std::strcat(buffer, lang[l].c_str());
 	std::strcat(buffer, "/tournaments/");
-	if (tournament->type_radar == 0 && tournament->id >0) 	std::strcat(buffer, "sr:tournament:"); else
+	if (tournament->type_radar == 0 && tournament->id > 0) 	std::strcat(buffer, "sr:tournament:"); else
 		if (tournament->type_radar == 1) 	std::strcat(buffer, "sr:race_tournament:"); else
 			if (tournament->type_radar == 2) 	std::strcat(buffer, "sr:simple_tournament:"); else
-				if (tournament->type_radar == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:");
+				if (tournament->type_radar == 0 && tournament->id == 0) 	std::strcat(buffer, "sr:season:"); else
+					if (tournament->type_radar == 3 && tournament->id > 0) 	std::strcat(buffer, "vf:tournament:");  else
+						if (tournament->type_radar == 3 && tournament->season_id > 0) 	std::strcat(buffer, "vf:season:");
 				else {
 					delete[] recvbuf;  return -1;
 				};
@@ -20525,10 +20461,12 @@ int getTournamentTranslate(Tournament* tournament, int l) {
 				int simple_id = 0;
 				if (tournament_node->first_attribute("id")) {
 					if (tournament->type_radar == 0)  id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14)); else
-						if (tournament->type_radar == 1) id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9));//sr:stage:
-																																		// tournament->id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 19));
-					if (tournament->type_radar == 2)  simple_id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21));
-				}
+						if (tournament->type_radar == 1) id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 9)); else
+							if (tournament->type_radar == 2)  id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 21)); else
+								if (tournament->type_radar == 3)  id = atoi((char*)((char*)tournament_node->first_attribute("id")->value() + 14));
+
+				};
+
 
 
 				if (tournament_node->first_attribute("name")) {
