@@ -900,6 +900,7 @@ public:
 	void operator = (const Event&);
 	string getCatKey();
 	string getTournamentKey();
+	int getLineTypeRadar();
 
 };
 void Event:: operator = (const Event & rhs) {
@@ -1231,6 +1232,24 @@ string Event::getCatKey() {
 }
 string Event::getTournamentKey() {
 	return to_string(type_radar) + to_string(tournament_id);
+}
+int Event::getLineTypeRadar() {
+	switch (type_radar) {
+	case 0:
+		return 0;
+		break;
+	case 1:
+		return 1;
+		break;
+	case 2:
+		return 0;
+		break;
+	case 3:
+		return 5;
+		break;
+
+	};
+
 }
 
 
@@ -5200,7 +5219,7 @@ void bdelete_line_cat(int, LineCat);
 unordered_map<int, unordered_set<int>*> market2lines, bmarket2lines;   // lookup based on market_id
 																	   // lookups based on event_id | tournament_id | simple_id
 unordered_map<string, unordered_set<int>*> event2lines, bevent2lines;
-//unordered_map<string, unordered_set<int>*> tourn2lines, btourn2lines;
+unordered_map<string, unordered_set<int>*> tourn2lines, btourn2lines;
 //unordered_map<int, unordered_set<int>*> simple2lines, bsimple2lines;
 unordered_map<string, int> compound2line_index, bcompound2line_index;    // (event_id | tournament_id | simple_id) + market_id + specifiers_value
 																		 // whenever a new Line is created call this function to update reverse lookup tables
@@ -5212,11 +5231,21 @@ void insert_line(Line* line, const int line_index) {
 		market2lines[market_id] = new unordered_set<int>();  // so create an empty vector
 	}
 	market2lines[market_id]->insert(line_index);   // insert new line's index to the set
-    auto cat_it = event2lines.find(line->getCatKey());   // cat_id is the key
-	if (cat_it == event2lines.end()) {   // key not found, we are seeing this cat_id the first time.
-		event2lines[line->getCatKey()] = new unordered_set<int>();  // so create an empty set
-	}
-	event2lines[line->getCatKey()]->insert(line_index);   // insert new line to the set
+	if (line->type_radar == 0 || line->type_radar == 1 || line->type_radar == 5) {
+		auto cat_it = event2lines.find(line->getEventKey());   // cat_id is the key
+		if (cat_it == event2lines.end()) {   // key not found, we are seeing this cat_id the first time.
+			event2lines[line->getEventKey()] = new unordered_set<int>();  // so create an empty set
+		}
+		event2lines[line->getEventKey()]->insert(line_index);   // insert new line to the set
+	} else
+		if (line->type_radar == 2 || line->type_radar == 3 || line->type_radar == 4 || line->type_radar == 6) {
+			auto cat_it = tourn2lines.find(line->getTournamentKey());   // cat_id is the key
+			if (cat_it == tourn2lines.end()) {   // key not found, we are seeing this cat_id the first time.
+				tourn2lines[line->getTournamentKey()] = new unordered_set<int>();  // so create an empty set
+			}
+			tourn2lines[line->getTournamentKey()]->insert(line_index);   // insert new line to the set
+		}
+
 	compound2line_index[line->getCompoundKey()] = line_index;   // insert new line's index as value
 	return;
 }
@@ -5228,11 +5257,25 @@ void binsert_line(Line* line, const int line_index) {
 		bmarket2lines[market_id] = new unordered_set<int>();  // so create an empty vector
 	}
 	bmarket2lines[market_id]->insert(line_index);   // insert new line's index to the set
-	auto cat_it = bevent2lines.find(line->getCatKey());   // cat_id is the key
-	if (cat_it == bevent2lines.end()) {   // key not found, we are seeing this cat_id the first time.
-		bevent2lines[line->getCatKey()] = new unordered_set<int>();  // so create an empty set
+	
+	if (line->type_radar == 0 || line->type_radar == 1 || line->type_radar == 5) {
+		auto cat_it = bevent2lines.find(line->getEventKey());   // cat_id is the key
+		if (cat_it == bevent2lines.end()) {   // key not found, we are seeing this cat_id the first time.
+			bevent2lines[line->getEventKey()] = new unordered_set<int>();  // so create an empty set
+		}
+		bevent2lines[line->getEventKey()]->insert(line_index);   // insert new line to the set
 	}
-	bevent2lines[line->getCatKey()]->insert(line_index);   // insert new line to the set
+	else
+		if (line->type_radar == 2 || line->type_radar == 3 || line->type_radar == 4 || line->type_radar == 6) {
+			auto cat_it = btourn2lines.find(line->getTournamentKey());   // cat_id is the key
+			if (cat_it == btourn2lines.end()) {   // key not found, we are seeing this cat_id the first time.
+				btourn2lines[line->getTournamentKey()] = new unordered_set<int>();  // so create an empty set
+			}
+			btourn2lines[line->getTournamentKey()]->insert(line_index);   // insert new line to the set
+		}
+
+
+
 	bcompound2line_index[line->getCompoundKey()] = line_index;   // insert new line's index as value
 	return;
 }
@@ -9006,14 +9049,13 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					writeInteger(buffer, t_offset, 0, 2);
 					writeInteger(buffer, t_offset, 0, 2);
 					writeInteger(buffer, t_offset, 1, 2);
-					writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].type_radar, 1);
-					writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].id, 4);
-					writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].season_id, 4);
-					//writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].simple_id, 4);
-					writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].sport_id, 2);
-					writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].category_id, 2);
-					writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].sort, 2);
-					writeString(buffer, t_offset, tournaments[tournaments_l - 1].name);
+					writeInteger(buffer, t_offset, _tournament->type_radar, 1);
+					writeInteger(buffer, t_offset, _tournament->id, 4);
+					writeInteger(buffer, t_offset, _tournament->season_id, 4);
+				    writeInteger(buffer, t_offset, _tournament->sport_id, 2);
+					writeInteger(buffer, t_offset, _tournament->category_id, 2);
+					writeInteger(buffer, t_offset, _tournament->sort, 2);
+					writeString(buffer, t_offset, _tournament->name);
 					writeInteger(buffer, t_offset, 0, 2);
 					zip_len = gzip(buffer, t_offset, zip_message, 1);
 					if (zip_len > 1)
@@ -9053,7 +9095,7 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 					writeInteger(buffer, offset, 0, 1); //0 sistem request_id
 					writeInteger(buffer, offset, 1, 2);
 					writeInteger(buffer, offset, type_radar, 1);
-					writeInteger(buffer, offset, event_id, 4);
+					writeInteger(buffer, offset, _tournament->id, 4);
 					writeInteger(buffer, offset, _tournament->end_date, 4);
 					retry_offset = offset;
 					offset += 2;
@@ -9888,7 +9930,6 @@ DWORD WINAPI BetradarProcessThread(LPVOID lparam)
 							writeInteger(buffer, t_offset, 1, 2);
 							writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].type_radar, 1);
 							writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].id, 4);
-							writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].season_id, 4);
 							writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].sport_id, 2);
 							writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].category_id, 2);
 							writeInteger(buffer, t_offset, tournaments[tournaments_l - 1].sort, 2);
@@ -11982,6 +12023,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 						for (int i = 0; i < wsclient->tickets_number; i++) {
 							wsclient->tickets[i] = new Ticket();
 							ticket = wsclient->tickets[i];
+							ticket->client_id = wsclient->client_id;
 							if (type == 3 && (system_selected > bets_number - 1 || system_selected < 2 || bets_number < 3)) type = 2;
 							ticket->type = type;
 							ticket->device = device;
@@ -12121,6 +12163,7 @@ DWORD WINAPI BetsProcessThread(LPVOID lparam)
 					int bet_ready_counter = 0;
 					Line* bline;
 					Event* bevent;
+
 					for (int i = 0; i < wsclient->tickets_number; i++) {
 						ticket = wsclient->tickets[i];
 						if (ticket->accept_code < 0 || ticket->is_live == false) { ticket_ready_counter++; continue; }
@@ -20492,8 +20535,8 @@ char* CreateStep_2(int& len) {
 		}
 
 		events_send_l++;
-		writeInteger(buffer, offset, 0, 1);
-		writeInteger(buffer, offset, events_show[i]->id, 4);
+		writeInteger(buffer, offset, events_show[i]->getLineTypeRadar(), 1);
+        writeInteger(buffer, offset, events_show[i]->id, 4);
 		writeInteger(buffer, offset, events_show[i]->home_id, 4);
 		writeInteger(buffer, offset, events_show[i]->away_id, 4);
 		writeInteger(buffer, offset, events_show[i]->type_radar, 1);
@@ -20728,7 +20771,7 @@ void CreatePlus_2(wsClient* wsclient) {
 	events_send_l = 1;
 	writeInteger(buffer, offset, wsclient->plus_request_id, 1);
 	writeInteger(buffer, offset, events_send_l, 2);
-	writeInteger(buffer, offset, 15, 1); //15 response for rospis command
+	writeInteger(buffer, offset, _event->getLineTypeRadar()+10, 1); //15 response for rospis command
 	writeInteger(buffer, offset, event_id, 4);
 	//writeInteger(buffer, offset, event2lines[event_id]->size(), 2);
 	event_lines_l = 0;
