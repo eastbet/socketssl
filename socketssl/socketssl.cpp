@@ -163,7 +163,7 @@ typedef void(*messageCallback)(int, string);
 #define PRINT false
 #define PROBABILITIES 0
 #define VIRTUAL 0
-#define USER 2
+#define USER 1
 #define REPLAY 0
 #define WRITE_NEW_DATA_TO_MONGO  true
 
@@ -5928,6 +5928,7 @@ int registerClient(string name, string surname, int day, int month, int year, st
 
 		if (sms.length() < 2) return 5;
 		if (sms != wsclient->sms) return 5;
+
 
 		break; }
 	case 4: {
